@@ -1,0 +1,9 @@
+{
+  "$comment": "ブランチ戦略の機械可読な単一ソース。人間向けの説明は docs/development-guidelines.md に置き、機械が読む値はこのファイルだけを正とする。SessionStart hook / PreToolUse hook / CI / スラッシュコマンドがここを参照する。既定はテンプレート自身の運用に合わせた GitHub Flow(main 単一)。develop 統合ブランチを採るプロジェクトでは baseBranch を develop に、protectedBranches に develop を追加し、releasePrefixes で develop→main のリリース PR を許可すること(/kickoff で実態に更新する)。allowedPrefixes には人間・Claude が切るブランチに加え、ボットが自動生成するブランチ(dependabot/*)も含める。ここに無いと依存更新 PR が CI の branch-policy で必ず落ちる。",
+  "baseBranch": "main",
+  "releaseBase": "main",
+  "protectedBranches": ["main"],
+  "allowedPrefixes": ["feature/", "fix/", "release/", "hotfix/", "claude/", "dependabot/"],
+  "releasePrefixes": [],
+  "remoteSessionPrefix": "claude/"
+}

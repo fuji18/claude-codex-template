@@ -1,0 +1,57 @@
+{
+  "name": "claude-code-template",
+  "version": "0.1.0",
+  "description": "Spec-driven development template for Claude Code",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "prepare": "husky",
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "keywords": [
+    "spec-driven-development",
+    "claude-code",
+    "template"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "@secretlint/secretlint-rule-preset-recommend": "^13.0.4",
+    "@types/node": "^26.2.0",
+    "@vitest/coverage-v8": "^4.1.0",
+    "@vitest/ui": "^4.1.0",
+    "eslint": "^10.8.1",
+    "eslint-config-prettier": "^10.1.0",
+    "husky": "^9.1.0",
+    "lint-staged": "^17.3.0",
+    "prettier": "^3.9.6",
+    "secretlint": "^13.0.4",
+    "typescript": "~6.0.0",
+    "typescript-eslint": "^8.66.0",
+    "vitest": "^4.1.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{js,mjs,cjs,json,md,yml,yaml}": [
+      "prettier --write"
+    ],
+    "*": [
+      "secretlint"
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "template-project",
+  "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/node:2": {
+      "version": "24"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "containerEnv": {
+    "LOCAL_GH_TOKEN": "${localEnv:GH_TOKEN}"
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "chat.mcp.autoStart": "newAndOutdated"
+      },
+      "extensions": ["GitHub.vscode-pull-request-github"]
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/post_create.sh"
+}

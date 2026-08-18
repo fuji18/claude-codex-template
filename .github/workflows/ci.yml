@@ -1,0 +1,119 @@
+name: CI
+
+# 機械的な品質ゲート(lint / 型チェック / フォーマット / テスト)。
+# Claude によるレビュー(claude-code-review.yml)とは独立して常に走る。
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ブランチ戦略の最終防衛線。hook はセッション内でしか効かず、クライアント
+  # (CLI / アプリのリモートセッション / GitHub 上の操作)によって挙動が揺れるため、
+  # マージ前に必ず通るこの層で base ブランチとブランチ名を機械的に検証する。
+  branch-policy:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Validate branch policy
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          POLICY=.claude/branch-policy.json
+          if [ ! -f "$POLICY" ]; then
+            echo "::notice::$POLICY が無いためブランチポリシー検査をスキップします"
+            exit 0
+          fi
+
+          BASE=$(jq -r '.baseBranch // "main"' "$POLICY")
+          RELEASE_BASE=$(jq -r '.releaseBase // "main"' "$POLICY")
+
+          # リリース系ブランチ(develop / release/* / hotfix/*)からの PR は releaseBase が正
+          EXPECTED="$BASE"
+          while IFS= read -r p; do
+            [ -z "$p" ] && continue
+            case "$HEAD_REF" in "$p"*) EXPECTED="$RELEASE_BASE" ;; esac
+          done < <(jq -r '.releasePrefixes // [] | .[]' "$POLICY")
+
+          # ポリシー上のベースが未作成のリポジトリでは検査しない(テンプレート導入直後など)
+          if ! git ls-remote --exit-code --heads origin "$EXPECTED" >/dev/null 2>&1; then
+            echo "::notice::ベースブランチ '$EXPECTED' が存在しないため base 検査をスキップします"
+          elif [ "$BASE_REF" != "$EXPECTED" ]; then
+            echo "::error::PR のベースが '$BASE_REF' ですが、ポリシー上は '$EXPECTED' です($POLICY)。アプリのリモートセッションは既定ブランチ起点でセッションを作るため base の指定漏れが起きやすい点に注意してください。意図的な変更ならポリシーファイル側を更新してください。"
+            exit 1
+          fi
+
+          # ブランチ名の接頭辞(claude/* はプラットフォーム生成ブランチとして正規に許可する)
+          if ! jq -e --arg h "$HEAD_REF" '[.allowedPrefixes[] | . as $p | select($h | startswith($p))] | length > 0' "$POLICY" >/dev/null; then
+            ALLOWED=$(jq -r '.allowedPrefixes | join(", ")' "$POLICY")
+            echo "::error::ブランチ名 '$HEAD_REF' がポリシーの接頭辞に一致しません(許可: $ALLOWED)"
+            exit 1
+          fi
+
+          echo "ブランチポリシー OK: $HEAD_REF -> $BASE_REF"
+
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Test
+        run: npm test
+
+      - name: Secret scan
+        run: npx secretlint "**/*"
+
+      # 上流の advisory 公開で依存と無関係な PR が赤くならないよう非ブロッキングにする
+      # (依存更新自体は dependabot が担う。警告は Actions の annotation で確認できる)
+      - name: Dependency audit
+        continue-on-error: true
+        run: npm audit --audit-level=high
+
+      # ハーネスの自壊検知: hook スクリプトの実行権限と settings.json の構文を検証する
+      # (PreToolUse hook は実行失敗時にフェイルオープンになるため、CI で機械的に担保する)
+      - name: Harness integrity
+        run: |
+          jq . .claude/settings.json > /dev/null
+          for s in .claude/scripts/*.sh .claude/hooks/*.sh; do
+            [ -f "$s" ] || continue
+            if [ ! -x "$s" ]; then
+              echo "::error::hook スクリプトに実行権限がありません: $s"
+              exit 1
+            fi
+            bash -n "$s"
+          done

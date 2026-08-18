@@ -1,0 +1,26 @@
+# テンプレートの鮮度維持: 依存関係・Actions・devcontainer を週次でチェックする
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # devDependencies は 1 PR にまとめてレビューコストを下げる
+    groups:
+      dev-dependencies:
+        dependency-type: development
+    ignore:
+      # typescript-eslint の peer 制約(TS 6 系まで)を超える major 更新は
+      # ツールチェーン側が追随するまで受け付けない(npm ci が ERESOLVE で失敗する)
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: devcontainers
+    directory: /
+    schedule:
+      interval: weekly

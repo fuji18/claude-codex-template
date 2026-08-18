@@ -1,0 +1,113 @@
+{
+  "model": "opus",
+  "permissions": {
+    "allow": [
+      "Skill(prd-writing)",
+      "Skill(functional-design)",
+      "Skill(architecture-design)",
+      "Skill(repository-structure)",
+      "Skill(development-guidelines)",
+      "Skill(glossary-creation)",
+      "Skill(steering)",
+      "Skill(implement-ticket)",
+      "Bash(npm test:*)",
+      "Bash(npm run:*)",
+      "Bash(npm ci:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx vitest:*)",
+      "Bash(npx eslint:*)",
+      "Bash(npx prettier:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(git show:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout -b:*)",
+      "Bash(git switch:*)",
+      "Bash(git fetch:*)",
+      "Bash(git merge:*)",
+      "Bash(git push:*)",
+      "Bash(gh issue list:*)",
+      "Bash(gh issue view:*)",
+      "Bash(gh issue edit:*)",
+      "Bash(gh issue comment:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr checks:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__query-docs",
+      "mcp__github__issue_read",
+      "mcp__github__list_issues",
+      "mcp__github__search_issues",
+      "mcp__github__pull_request_read",
+      "mcp__github__list_pull_requests",
+      "mcp__github__get_file_contents"
+    ],
+    "deny": [
+      "Bash(npm publish:*)",
+      "Bash(pnpm publish:*)",
+      "Bash(yarn publish:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)"
+    ],
+    "ask": [
+      "Bash(npm install:*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/scripts/block-dangerous-cmds.sh"
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/scripts/check-branch-policy.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/scripts/check-implementation-phase.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_response.filePath // .tool_input.file_path' | { read -r f; npx --no-install prettier --write --ignore-unknown \"$f\"; } 2>/dev/null || true"
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/scripts/lint-on-edit.sh",
+            "async": true,
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  }
+}

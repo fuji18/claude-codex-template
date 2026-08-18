@@ -1,0 +1,890 @@
+---
+name: harness-setup
+description: Claude Opus 4.7 向けに最適化された Claude Code ハーネス(CLAUDE.md / subagents / hooks / pr-prep skill / .harness/ 状態管理 / Agent Teams 有効化)をベストプラクティスに沿って対話的に自動生成する。新規プロジェクトでハーネスエンジニアリングを始めたい時、または既存プロジェクトに導入したい時に使う。Opus 4.7 の特性(literal instruction following、xhigh デフォルト、adaptive thinking、task_budget、ファイルシステムメモリ強化)と Agent Teams (experimental, peer-to-peer multi-agent collaboration) を前提とした設計。状態管理は Git ではなく `.harness/` 配下のテキストファイルで行う。
+user-invocable: true
+disable-model-invocation: true
+tools: Read, Write, Edit, Bash, Glob, Grep
+---
+
+# Harness Setup Skill (Opus 4.7 + Agent Teams 対応版)
+
+このスキルは、対話形式でユーザーのプロジェクト情報を収集し、**Claude Opus 4.7 向けに最適化された** Claude Code のハーネス設定一式(CLAUDE.md / subagents / hooks / pr-prep skill / `.harness/` / **Agent Teams 有効化**)を自動生成します。
+
+## 設計思想 (Opus 4.7 + Agent Teams 対応)
+
+ハーネスエンジニアリングのベストプラクティス(Anthropic 公式 2025/11、2026/03、Opus 4.7 リリース 2026/04、Agent Teams 公式 docs)に基づく:
+
+### 普遍原則
+
+- **CLAUDE.md は 50〜80 行以内**(コンテキスト膨張を防ぐ)
+- **必ず起こすべきことは Hook**(プロンプトでの「お願い」は忘れられる)
+- **レビューは別 subagent**(フレッシュな目で評価)
+- **検証手段を必ず提供**(lint / typecheck / test の合否シグナル)
+- **状態管理は Git を使わず `.harness/` 配下のテキストファイルで行う**
+
+### Opus 4.7 固有の設計原則(5 つ)
+
+**原則 1: 引き算から始める**
+Opus 4.7 は Opus 4.5/4.6 時代のハーネスが足場で補っていたものの多くを内蔵している。「進捗報告を強制するプロンプト」「冗長な sprint 分割」「subagent の念のため起動促し」「自己評価を促すメタプロンプト」は削除対象。新規追加より先に**引き算を検討**する。
+
+**原則 2: 「指示通りに」を逆手に取る**
+Opus 4.7 は指示により忠実(特に低 effort 時)。CLAUDE.md のルールは **「when X, do Y」の条件ペア形式** で書く。
+- ❌ 悪い例: 「コードは綺麗に書くこと」
+- ✅ 良い例: 「`Edit` / `Write` 後は `pnpm lint` を実行し、失敗したら STOP して報告する。自分で抑制しない」
+
+**原則 3: effort と task_budget を明示する**
+Claude Code のデフォルト effort は `xhigh` に引き上がった。`extended_thinking` の固定予算は廃止、adaptive thinking のみ。CLAUDE.md にタスク別 effort 指針を入れる:
+- 設計 / 大規模リファクタ / スキーマ変更 → `xhigh`〜`max`
+- 日常の差分編集 / テスト修正 → `high`(同品質で安い)
+- 長時間自律ループ → API で `task_budget` を設定
+
+**原則 4: ファイルベースメモリに全体重を乗せる**
+Opus 4.7 はファイルの読み書きメモリが明確に改善された。`.harness/` を積極的に使う:
+- セッション冒頭に `.harness/progress.md` を**必ず**読ませる(UserPromptSubmit hook で強制)
+- 意思決定は `.harness/decisions.jsonl` に 1 行 JSON で追記
+- 破壊的編集の前に `.harness/snapshots/<timestamp>/` にコピー
+
+**原則 5: Agent Teams で水平展開する(experimental)**
+複数の独立した観点や並行実装、競合仮説の検証など**水平方向に分割可能なタスク**は、subagent ではなく Agent Teams を使う。Subagent は結果を返すだけだが、Agent Teams は teammates 同士が peer-to-peer で対話・自己調整できる。
+- subagents が向くもの: 結果のみ必要な focused task(レビュー結果報告など)
+- Agent Teams が向くもの: 議論・相互チャレンジ・並行実装が必要な複雑タスク
+- token 消費は teammates 数に比例するため、**安易に使わない**
+
+---
+
+## 実行フロー
+
+以下を **順番に、必ず** 実行すること。各フェーズの完了をユーザーに確認してから次へ進む。
+
+### Phase 1: ディスカバリー(自動検出)
+
+ユーザーに質問する前に、以下を bash で自動検出:
+
+```bash
+# 場所とファイル構造
+pwd && ls -la
+
+# Claude Code バージョン(Agent Teams は v2.1.32+ が必要)
+claude --version 2>/dev/null
+
+# 言語・フレームワーク検出
+ls package.json pyproject.toml Cargo.toml go.mod pom.xml build.gradle 2>/dev/null
+test -f package.json && cat package.json | head -80
+test -f pyproject.toml && head -50 pyproject.toml
+
+# パッケージマネージャ
+ls pnpm-lock.yaml yarn.lock package-lock.json bun.lockb uv.lock poetry.lock 2>/dev/null
+
+# 既存のハーネス / Claude 設定
+ls -la .claude/ 2>/dev/null
+ls -la .harness/ 2>/dev/null
+test -f CLAUDE.md && echo "既存 CLAUDE.md あり:" && head -30 CLAUDE.md
+
+# 検証コマンドの手がかり
+test -f package.json && cat package.json | grep -E '"(lint|typecheck|test|build)":'
+test -f Makefile && grep -E "^(lint|test|check|build):" Makefile
+
+# テスト基盤
+find . -maxdepth 3 \( -name "vitest.config.*" -o -name "jest.config.*" -o -name "playwright.config.*" -o -name "pytest.ini" \) 2>/dev/null | head -10
+
+# Agent Teams 表示モード関連の検出
+which tmux 2>/dev/null && echo "tmux 利用可能(split-pane mode 可)"
+test -n "$TMUX" && echo "tmux セッション内で実行中"
+```
+
+**注意**: Git リポジトリかどうかは検出しない。このハーネスは Git に依存しない設計。
+
+検出結果をユーザーに **箇条書きで提示** し、認識が正しいか確認する。Claude Code バージョンが v2.1.32 未満の場合は Agent Teams が使えない旨を伝える。
+
+### Phase 2: インタビュー
+
+検出できなかった、または確認が必要な項目だけを **1 問ずつ** 質問する。Opus 4.7 は literal なので、曖昧な回答は曖昧なハーネスを生む。各回答は具体的に。
+
+**Q1. プロジェクトの性質(単一選択)**
+- `A` グリーンフィールド(0→1 の新規)
+- `B` 既存大規模プロジェクトへの AI 導入
+- `C` レガシー移行
+- `D` ライブラリ / SDK 開発
+- `E` 研究 / 実験コード
+
+**Q2. 想定する主なタスク時間(単一選択)**
+- `1` 短時間差分編集中心(< 30 分)
+- `2` 中時間機能追加(1〜4 時間)
+- `3` 長時間自律実装(数時間〜数日)
+- `4` コードレビュー / 調査中心
+
+(→ `2` `3` は `planner` subagent と `feature_list.json` を追加、`3` は `task_budget` 指針を CLAUDE.md に入れる)
+
+**Q3. 検証コマンドの確認(具体的なコマンド文字列で)**
+- Lint(例: `pnpm lint`)
+- 型チェック(例: `pnpm typecheck`)
+- Unit test(例: `pnpm test --run`)
+- E2E test(任意)
+- Build(任意)
+
+空の項目は CLAUDE.md から除く。
+
+**Q4. プロジェクト固有の絶対ルール(最大 5 つ)**
+原則 2 に従い **条件と行動のペア**で書く。
+- 例: 「DB スキーマを変える時は必ず `migrations/` 配下に migration ファイルを作る」
+- 例: 「`.env*` の内容をログ / console / コミットに出さない」
+
+**Q5. 必要な subagent(複数可)**
+Opus 4.7 は subagent を自動で起動しにくくなったので、**必要なものだけ**明示的に作る。Agent Teams を有効化する場合、これらは teammate type としても再利用される。
+
+- ✅ `code-reviewer` **必須**(evaluator パターン)
+- ⬜ `planner`(Q2 = `3` なら強く推奨)
+- ⬜ `test-runner`
+- ⬜ `security-reviewer`(Agent Teams での並行 PR レビューに有用)
+- ⬜ `performance-reviewer`(同上)
+- ⬜ `docs-writer`
+- ⬜ `explorer`(大規模既存プロジェクト向け)
+
+**Q6. ブロックしたい危険コマンド**
+- デフォルト: `rm -rf /`, `DROP TABLE`, `DROP DATABASE`, `npm publish`, `pnpm publish`
+- 追加候補: `git push --force`, `git reset --hard origin/*`
+
+**Q7. PR 提出前ワークフロー** — `/pr-prep` skill を作るか
+
+**Q8. Agent Teams を有効化するか(experimental)**
+
+複数 Claude Code セッションが peer-to-peer で協調する experimental 機能。token 消費が teammates 数に比例して増えることに注意。
+
+- ✅ **有効化する**(デフォルト推奨。下記いずれかに該当する開発者向け)
+  - 大規模プロジェクトで複数モジュールを並行開発する
+  - PR を多角的(security / performance / test)にレビューしたい
+  - バグの根本原因について複数仮説を並行検証したい
+  - frontend / backend / tests を別 teammates が担当する形を取りたい
+- ⬜ 有効化しない(個人開発・小規模・コスト重視)
+
+有効化する場合のみ Q9 へ。
+
+**Q9. Agent Teams 表示モード(Q8 = 有効化した場合のみ)**
+- `auto`(デフォルト推奨。tmux セッション内なら split-pane、それ以外は in-process)
+- `in-process`(任意のターミナルで動作。Shift+Down で teammate 切替)
+- `tmux`(split-pane で全 teammate を同時表示。tmux または iTerm2 が必要)
+
+**注意**: Phase 1 で tmux が見つからず、ユーザが `tmux` を選んだ場合は警告を出す。VS Code 統合ターミナル / Windows Terminal / Ghostty では split-pane が動かないことも伝える。
+
+---
+
+### Phase 3: 生成
+
+**生成前に必ず全体プランをユーザーに見せて承認を取る**。
+
+```
+.claude/
+├── CLAUDE.md
+├── settings.json                     (Agent Teams 有効化設定含む)
+├── agents/
+│   ├── code-reviewer.md              (必須、teammate としても再利用可)
+│   ├── planner.md                    (Q2 = 3 の時)
+│   ├── security-reviewer.md          (Q5 で選択時、Agent Teams で有用)
+│   └── performance-reviewer.md       (Q5 で選択時、Agent Teams で有用)
+├── skills/
+│   └── pr-prep/SKILL.md              (Q7 = yes の時)
+└── scripts/
+    └── block-dangerous-cmds.sh
+
+.harness/
+├── README.md
+├── progress.md
+├── changelog.md
+├── decisions.jsonl
+├── state.json
+├── team_runbook.md                   (Q8 = yes の時、Agent Teams 起動例集)
+└── snapshots/.gitkeep
+```
+
+既存の `.claude/` や `.harness/` がある場合、**上書きせず** diff を見せて統合。
+
+#### CLAUDE.md テンプレート (Opus 4.7 + Agent Teams 対応版)
+
+```markdown
+# {プロジェクト名}
+
+{Q1 から生成する 1 行ミッション}
+
+## アーキテクチャ
+- 言語 / FW: {検出した言語/フレームワーク}
+- パッケージ管理: {検出結果}
+- テスト基盤: {検出結果}
+
+## Task Intake Protocol
+新しいタスクを受けたら、作業開始前に必ず以下を echo back すること:
+
+1. **Goal**: 自分の言葉で言い換えたゴール
+2. **Constraints**: 守るべき制約(下の「必須ルール」を含む)
+3. **Acceptance criteria**: 何を満たせば完了か
+4. **Files to touch**: 編集予定のファイル一覧
+5. **Verification plan**: どのコマンドで成功を確認するか
+
+echo back なしでコードを書き始めないこと。スコープを黙って広げないこと。
+
+## 必須ルール(条件と行動のペアで記述)
+{Q4 のルール一覧}
+
+## 検証
+- Lint: `{Q3 lint}`
+- Type check: `{Q3 typecheck}`
+- Unit test: `{Q3 test}`
+
+検証のいずれかが失敗したら、修正を試みる前に `.harness/changelog.md` に失敗内容を記録する。
+
+## 永続メモリ(`.harness/`)
+- セッション開始時: 必ず `.harness/progress.md` を読む
+- 作業進捗: `.harness/progress.md` を上書き更新
+- 変更履歴: `.harness/changelog.md` に追記(削除禁止)
+- 判断ログ: `.harness/decisions.jsonl` に 1 行 JSON で追記
+- 破壊的編集の前: `.harness/snapshots/$(date +%Y%m%d-%H%M%S)/` にバックアップ
+
+## レビュー方針
+コードレビューは **必ず `code-reviewer` subagent** を read-only で起動。
+大きな PR は `/ultrareview` または **Agent Teams 並行レビュー**を推奨。
+
+## Agent Teams ガイド(experimental, 有効化済み)
+**使うべき時**: 多角的 PR レビュー / 競合仮説デバッグ / クロスレイヤー実装 / 独立モジュール並行開発
+**使わない時**: 1 ファイル編集 / シーケンシャルなタスク / 同ファイルを複数 teammate が触る作業
+
+**運用ルール**
+- 推奨サイズ: 3〜5 teammates、teammate あたり 5〜6 タスク
+- まず plan mode で計画 → 計画を team に渡して並列実行
+- 既存 subagent (`code-reviewer` / `planner` 等)は teammate type として再利用可
+- 完了後は必ず lead に「Clean up the team」を指示
+- 起動例は `.harness/team_runbook.md` を参照
+
+## ツール使用の規律
+- 「念のため」の冗長なツール呼び出しをしない
+- subagent / Agent Team を "just in case" で起動しない
+
+## Effort の使い分け(Opus 4.7)
+- 設計 / 大規模リファクタ → **xhigh〜max**
+- 日常の差分編集 / テスト修正 → **high**
+
+## ハーネス構成
+- subagents: {生成した agent 一覧}
+- hooks: PostToolUse / PreToolUse / UserPromptSubmit / TeammateIdle / TaskCompleted
+- skills: {生成した skill 一覧}
+- Agent Teams: 有効(experimental, mode={Q9})
+
+## Out of Scope
+{Q1 に基づき明示する、このリポジトリで扱わないこと}
+```
+
+#### code-reviewer.md テンプレート (Agent Teams で teammate type として再利用可能)
+
+```markdown
+---
+name: code-reviewer
+description: 直近のコード変更を読み取り専用でレビューし、優先度付きの指摘を返す。編集はしない。Agent Teams の teammate type としても利用可。
+tools: Read, Grep, Glob, Bash
+model: sonnet
+---
+
+あなたはシニアコードレビュアーです。**編集は一切しません**。
+
+## チェック観点(優先順)
+1. **セキュリティ**: XSS / CSRF / 認可漏れ / SQL injection / 機密情報のログ出力 / PII の扱い
+2. **正しさ**: 仕様・エッジケース・例外処理・非同期処理の race condition
+3. **設計**: 単一責任・依存方向・抽象化レベル・命名
+4. **プロジェクト固有ルール**: {Q4 のルール}
+5. **テスト**: 重要パスにテストがあるか、カバー漏れ
+
+## 手順
+1. `git diff` または指定された範囲の差分を読む
+2. 上の観点で問題を列挙
+3. **一度自分の指摘を再読**し、単なる好みの問題を除外、重要度を再評価する(self-verify)
+4. 下記の形式で出力
+
+## 出力形式
+各指摘:
+- `[Critical]` / `[Major]` / `[Minor]` ラベル
+- `path/to/file:行番号`
+- 問題の説明(1〜2 文)
+- 修正案(コードでも文でも)
+
+最後にサマリ 1 行を `.harness/changelog.md` に追記:
+`YYYY-MM-DD HH:MM Review by code-reviewer: N critical / M major / L minor`
+
+## Agent Teams 内で動く時の追加ルール
+- 自分が teammate として起動された時は、レビュー結果を**チームのタスクリスト** にコメントとして残す
+- 他の teammate(security-reviewer / performance-reviewer 等)の発見と矛盾する指摘は、メッセージで照会する
+
+## 重要
+- 自信がない指摘は `[Minor]` 以下に留める
+- 完了宣言の甘さを避ける: 指摘があるなら「全体的には良い」と書かない
+- 好意的に評価しすぎない(LLM evaluator 共通の傾向への対策)
+```
+
+#### security-reviewer.md(Q5 で選択時、Agent Teams で並行レビューに有用)
+
+```markdown
+---
+name: security-reviewer
+description: セキュリティ観点専門のレビュアー。OWASP Top 10、認証認可、暗号、機密情報漏洩を専門に見る。Agent Teams の teammate type として並行レビューに使う。
+tools: Read, Grep, Glob, Bash
+model: sonnet
+---
+
+あなたはアプリケーションセキュリティの専門家です。**編集はしない**。
+
+## チェック観点
+1. **認証・認可**: 認可漏れ、特権昇格、セッション固定、CSRF
+2. **入力検証**: XSS、SQL injection、コマンドインジェクション、SSRF、Path traversal
+3. **機密情報**: API キー / 秘密鍵 / トークンのハードコード、ログへの出力、`.env` 漏れ
+4. **暗号**: 弱い algorithm、独自実装、鍵管理、TLS 設定
+5. **依存関係**: 既知 CVE のあるパッケージバージョン
+6. **プロジェクト固有のセキュリティルール**: {Q4 のルール}
+
+## 出力形式
+[code-reviewer と同形式。重大度ラベル + ファイル位置 + 説明 + 修正案]
+末尾に `.harness/changelog.md` へ 1 行サマリを追記。
+
+## Agent Teams 内で動く時
+- 同時に走っている `performance-reviewer` / `code-reviewer` と発見が競合した場合、**security の指摘を優先**する
+- 不確実な脆弱性は `[Minor]` でも構わないので**必ず報告する**(false negative より false positive を許容)
+```
+
+#### performance-reviewer.md(Q5 で選択時、Agent Teams で並行レビューに有用)
+
+```markdown
+---
+name: performance-reviewer
+description: パフォーマンス観点専門のレビュアー。N+1 / メモリリーク / バンドルサイズ / レンダリング性能を見る。Agent Teams の teammate type として並行レビューに使う。
+tools: Read, Grep, Glob, Bash
+model: sonnet
+---
+
+あなたはパフォーマンスエンジニアです。**編集はしない**。
+
+## チェック観点
+1. **データアクセス**: N+1 クエリ、不要な full scan、index 不在、ループ内 I/O
+2. **メモリ**: リーク、不要な大きなオブジェクト、closures による hold
+3. **フロントエンド**: 再レンダリング、bundle size、code splitting 漏れ、画像最適化
+4. **非同期**: 不要な await sequencing、Promise.all 化の機会
+5. **キャッシュ**: 不適切な cache 戦略、stale-while-revalidate の未活用
+
+## 出力形式
+[code-reviewer と同形式]
+末尾に `.harness/changelog.md` へ 1 行サマリを追記。
+
+## Agent Teams 内で動く時
+- security-reviewer の指摘で、性能と安全がトレードオフの場合は**安全を優先する**前提で代案を提示
+- 重大度の閾値は **Critical = 100ms 以上の劣化や OOM リスクのみ**、それ以下は Major / Minor
+```
+
+#### planner.md テンプレート (Q2 = `3` の時のみ)
+
+```markdown
+---
+name: planner
+description: 短い要望を受け取り、実装可能な製品仕様と feature_list を生成する。コードは書かない。Agent Teams の teammate type としても利用可。
+tools: Read, Write, Grep, Glob, Bash
+model: opus
+---
+
+あなたは製品仕様を書くプロダクトアーキテクトです。
+
+## 入力
+- ユーザの 1〜4 文程度の要望
+- 既存コードベース(読んで理解する)
+
+## 出力先
+- `.harness/product_spec.md`(製品仕様)
+- `.harness/feature_list.json`(機能一覧)
+
+## feature_list.json の構造
+配列、各要素は:
+- `id`: "F001" 形式
+- `category`: "functional" | "ui" | "non-functional"
+- `title`: 短いタイトル
+- `description`: 1〜2 文
+- `acceptance_steps`: テスト可能な手順の配列
+- `priority`: "P0" | "P1" | "P2"
+- `depends_on`: 依存する feature ID の配列
+- `status`: "pending" | "in-progress" | "passing" | "failing"
+
+## 指針
+- スコープには野心的であってよい。ただし技術的な詳細実装には立ち入らない
+- 機能は**端から端まで(end-to-end)** の粒度で書く
+- 依存関係を明示し、P0 から P2 の順で実装可能にする
+- 初期状態は全て `"status": "pending"`
+- 30〜200 件程度が目安
+
+## 厳守
+- コードは書かない
+- 未確定点は `[TBD: ...]` で明示
+- 既存機能の調査は Grep/Glob/Read で行う
+```
+
+#### settings.json テンプレート (Agent Teams 有効化版)
+
+既存がある場合は **必ず diff を見せて統合**。
+
+```json
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "teammateMode": "{Q9 で選択した値、デフォルト auto}",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [{
+          "type": "command",
+          "command": "{Q3 lint} 2>&1 | tail -30 && {Q3 typecheck} 2>&1 | tail -30"
+        }]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{
+          "type": "command",
+          "command": "./.claude/scripts/block-dangerous-cmds.sh"
+        }]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [{
+          "type": "command",
+          "command": "test -f .harness/progress.md && echo '--- .harness/progress.md ---' && cat .harness/progress.md"
+        }]
+      }
+    ],
+    "TeammateIdle": [
+      {
+        "hooks": [{
+          "type": "command",
+          "command": "echo \"$(date '+%Y-%m-%dT%H:%M:%S%z') Teammate idle\" >> .harness/changelog.md"
+        }]
+      }
+    ],
+    "TaskCreated": [
+      {
+        "hooks": [{
+          "type": "command",
+          "command": "echo \"$(date '+%Y-%m-%dT%H:%M:%S%z') Task created\" >> .harness/changelog.md"
+        }]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "hooks": [{
+          "type": "command",
+          "command": "echo \"$(date '+%Y-%m-%dT%H:%M:%S%z') Task completed\" >> .harness/changelog.md"
+        }]
+      }
+    ]
+  }
+}
+```
+
+**設定意図**:
+- `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` で Agent Teams を有効化(experimental flag)
+- `teammateMode` で Agent Teams の表示モードを指定(auto / in-process / tmux)
+- `UserPromptSubmit` hook: Opus 4.7 のファイルメモリ得意さを活かし、毎回 progress.md を注入
+- `TeammateIdle` / `TaskCreated` / `TaskCompleted` hook: Agent Teams の活動を `.harness/changelog.md` に自動記録(監査ログ)
+
+**TeammateIdle hook の発展形**: exit code 2 で feedback を送ると teammate の作業を継続させられる。例えば「lint が通るまで idle にしない」を強制したい場合は、`{Q3 lint} || (echo "Lint failed, please fix" >&2; exit 2)` のように書く(advanced; デフォルトでは記録のみ)。
+
+#### block-dangerous-cmds.sh テンプレート
+
+```bash
+#!/bin/bash
+INPUT=$(cat)
+CMD=$(echo "$INPUT" | jq -r '.tool_input.command // ""')
+
+PATTERNS=(
+  "rm -rf /"
+  "rm -rf /\*"
+  "rm -rf ~"
+  "DROP (TABLE|DATABASE|SCHEMA)"
+  "TRUNCATE TABLE"
+  "npm publish"
+  "pnpm publish"
+  "yarn publish"
+  # Q6 で追加されたもの:
+  # "git push --force"
+)
+
+for p in "${PATTERNS[@]}"; do
+  if echo "$CMD" | grep -qEi "$p"; then
+    echo "🚫 危険コマンドをブロックしました: $CMD" >&2
+    echo "   パターン一致: $p" >&2
+    exit 2
+  fi
+done
+exit 0
+```
+
+生成後、`chmod +x .claude/scripts/block-dangerous-cmds.sh` を忘れずに。
+
+#### .harness/team_runbook.md テンプレート (Q8 = yes の時のみ)
+
+Agent Teams は `~/.claude/teams/{team-name}/config.json` に**自動生成**され、手で書くべきものではない。代わりに**起動 prompt の例集**を runbook として保持する。
+
+```markdown
+# Agent Teams Runbook
+
+このファイルは、このプロジェクトで実証済みの Agent Teams 起動プロンプト集。
+
+## 起動の前提
+- `.claude/settings.json` で `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` 有効化済み
+- Claude Code v2.1.32+
+- 表示モード: {Q9 で選択した値}
+- 推奨サイズ: 3〜5 teammates、teammate あたり 5〜6 タスク
+- 同じファイルを複数 teammate が編集しない設計にする
+- 完了後は必ず lead に「Clean up the team」を指示
+
+## パターン 1: 並行 PR レビュー
+最も安全で効果が高い「最初の Agent Teams タスク」。**書き込みなし**なので衝突の心配がない。
+
+>Create an agent team to review PR #{番号}. Spawn three reviewers using existing
+>subagent definitions:
+>- security-reviewer: focused on security implications
+>- performance-reviewer: checking performance impact
+>- code-reviewer: validating overall code quality and test coverage
+>
+>Have them each review and report findings. Then synthesize a unified report.
+
+## パターン 2: 競合仮説デバッグ
+原因不明のバグに対して、複数の仮説を並行検証する。「議論」させるのがコツ。
+
+>Bug: {症状を具体的に書く。例: "API returns 500 on second request only"}
+>Spawn 3-4 agent teammates to investigate different hypotheses. Have them talk
+>to each other to disprove each other's theories, like a scientific debate.
+>Update .harness/decisions.jsonl with whatever consensus emerges.
+
+## パターン 3: クロスレイヤー実装
+frontend / backend / tests を独立 teammates が担当。
+
+>Create an agent team to implement {機能名}. Spawn three teammates:
+>- frontend-impl: implements UI components in src/components/{path}/
+>- backend-impl: implements API in src/api/{path}/
+>- test-impl: writes tests in tests/{path}/
+>
+>Coordinate through the shared task list. Frontend should wait for backend's
+>type definitions before implementing the integration. Use Sonnet for each.
+>Require plan approval before any teammate makes destructive changes.
+
+## パターン 4: 独立モジュール並行開発
+独立性の高い複数モジュールを並行開発。
+
+>Create an agent team to refactor these {N} modules in parallel:
+>{モジュールのリスト}
+>Spawn one teammate per module. Each teammate owns its module exclusively
+>(no shared file edits). Use existing planner subagent to break down each
+>module first, then implement.
+
+## チーム終了時のクリーンアップ
+**必ず lead に明示的に指示する**(忘れるとセッション残留する)。
+
+>Wait for all teammates to finish their current tasks, then clean up the team.
+
+## トラブルシューティング
+- **teammate が表示されない**: in-process モードなら Shift+Down で巡回。split-pane なら `which tmux` 確認
+- **task が stuck**: 実際は完了している場合がある。lead に「nudge the teammate」と指示するか、手動で task status を更新
+- **lead が teammate を待たず実装開始**: 「Wait for your teammates to complete their tasks before proceeding」と指示
+- **権限プロンプトが多すぎる**: 一般操作を `.claude/settings.json` の permissions で pre-approve
+- **session 終了が遅い**: teammate が現在の tool call を完了するまで待つ仕様
+```
+
+#### .harness/README.md テンプレート
+
+```markdown
+# .harness/ - ハーネス状態管理ディレクトリ
+
+このディレクトリは Claude Code ハーネス(Opus 4.7)の状態を保持する。
+**Git に依存せず、全てテキストファイルで管理する。**
+
+## ファイル一覧
+
+| ファイル | 用途 | 更新方法 |
+|---|---|---|
+| `progress.md` | 現在の作業状況(人間用ダッシュボード) | 上書き可 |
+| `changelog.md` | 全変更の追記ログ | 追記のみ、削除禁止 |
+| `decisions.jsonl` | 機械可読な判断ログ(1 行 1 JSON) | 追記のみ |
+| `state.json` | 構造化状態 | 上書き可 |
+| `snapshots/` | ロールバック用ファイルバックアップ | 編集前にコピー |
+| `product_spec.md` | (任意)製品仕様書 | planner が生成 |
+| `feature_list.json` | (任意)機能一覧 | planner が生成、coding agent は status のみ更新 |
+| `team_runbook.md` | (Agent Teams 有効時)起動プロンプト集 | 手動更新 |
+
+## Agent Teams のデータ位置(参考)
+
+Agent Teams が有効化されている場合、以下は Claude Code が**自動管理**する:
+- Team config: `~/.claude/teams/{team-name}/config.json`
+- Task list: `~/.claude/tasks/{team-name}/`
+
+これらはユーザーが**手で編集してはいけない**(自動上書きされる)。
+チームの起動プロンプトと運用知見だけが `.harness/team_runbook.md` に蓄積される。
+
+## ロールバック方法
+
+編集前にスナップショットを作る:
+```
+mkdir -p .harness/snapshots/$(date +%Y%m%d-%H%M%S)/
+cp path/to/file .harness/snapshots/$(date +%Y%m%d-%H%M%S)/
+```
+
+戻す:
+```
+cp .harness/snapshots/<timestamp>/file path/to/file
+```
+
+## .gitignore 推奨設定
+
+```
+.harness/snapshots/
+```
+
+`progress.md` と `changelog.md` はチームで共有する場合のみコミット。
+```
+
+#### .harness/progress.md(初期状態)
+
+```markdown
+# Progress
+
+**初期化**: {YYYY-MM-DD HH:MM}
+**モデル**: claude-opus-4-7
+**Agent Teams**: 有効 (mode={Q9}) / 無効
+**ステータス**: 🟢 セットアップ完了
+
+## いま進行中
+(なし)
+
+## 次にやること
+(なし)
+
+## ブロッカー
+(なし)
+
+## 直近の Agent Teams 起動履歴
+(なし)
+
+---
+
+*このファイルは自由に上書きする。履歴は `changelog.md` を参照。*
+```
+
+#### .harness/changelog.md(初期状態)
+
+```markdown
+# Changelog
+
+このファイルは**追記オンリー**。古い記録を削除しないでください。
+
+---
+
+## {YYYY-MM-DD HH:MM} Initial Setup
+- ハーネス構成を `/harness-setup` skill(Opus 4.7 + Agent Teams 版)で初期化
+- 生成ファイル: CLAUDE.md, .claude/agents/, .claude/skills/, .harness/
+- model: claude-opus-4-7
+- Agent Teams: {有効 / 無効}, mode={Q9}
+- 検証コマンド: lint=`{Q3 lint}` / typecheck=`{Q3 typecheck}` / test=`{Q3 test}`
+```
+
+#### .harness/state.json(初期状態)
+
+```json
+{
+  "version": 1,
+  "model": "claude-opus-4-7",
+  "agent_teams_enabled": true,
+  "teammate_mode": "{Q9}",
+  "initialized_at": "{ISO8601}",
+  "last_updated_at": "{ISO8601}",
+  "active_task": null,
+  "active_subagent": null,
+  "active_team": null,
+  "task_history": []
+}
+```
+
+#### pr-prep skill テンプレート (Q7 = yes の時のみ)
+
+`.claude/skills/pr-prep/SKILL.md`:
+
+```markdown
+---
+name: pr-prep
+description: PR を出す前に lint / typecheck / test / 並行レビュー / diff サマリを順に実行し、結果を `.harness/changelog.md` に記録する
+user-invocable: true
+tools: Read, Write, Bash, Task
+---
+
+以下を順に実行し、**失敗があれば STOP** して報告すること:
+
+1. `{Q3 lint}` 実行
+2. `{Q3 typecheck}` 実行
+3. `{Q3 test}` 実行
+4. **レビュー実行**:
+   - 小さな PR(< 200 行差分): `code-reviewer` subagent を read-only 起動
+   - 大きな PR(>= 200 行差分): **Agent Team による並行レビュー**を起動
+     `Create an agent team to review this PR. Spawn security-reviewer,
+      performance-reviewer, and code-reviewer. Synthesize their findings.`
+5. 差分のサマリ(変更ファイル数、追加・削除行数、主要な変更点 3〜5 点)
+6. 結果を `.harness/changelog.md` に追記
+7. (Agent Team を起動した場合)`Clean up the team` で必ず後片付け
+
+出力形式:
+
+```
+## PR Preparation Summary
+
+✅ Lint: passed
+✅ Type check: passed
+✅ Unit test: 42 passed, 0 failed
+📋 Code review: {single | parallel(N teammates)} — 0 critical, 2 major, 3 minor
+📦 Diff: 12 files, +340/-85
+
+### 主要な変更
+1. ...
+
+### Reviewer が挙げた要対応
+- [Major] ...
+```
+```
+
+---
+
+### Phase 4: 検証
+
+```bash
+# ファイル存在確認
+ls -la .claude/ .claude/agents/ .harness/ 2>/dev/null
+ls -la .claude/scripts/block-dangerous-cmds.sh 2>/dev/null
+
+# JSON バリデーション
+cat .claude/settings.json | jq . > /dev/null && echo "✅ settings.json valid"
+cat .harness/state.json | jq . > /dev/null && echo "✅ state.json valid"
+
+# hook スクリプトの実行権限
+test -x .claude/scripts/block-dangerous-cmds.sh && echo "✅ hook executable"
+
+# 検証コマンドが実在するか
+{Q3 lint の最初の単語} --version 2>/dev/null && echo "✅ lint OK"
+{Q3 typecheck の最初の単語} --version 2>/dev/null && echo "✅ typecheck OK"
+
+# Agent Teams 有効化確認
+jq -r '.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS' .claude/settings.json | \
+  grep -q "1" && echo "✅ Agent Teams enabled in settings.json"
+
+# Agent Teams 用 hook 確認
+jq -r '.hooks | keys[]' .claude/settings.json | grep -E "Teammate|Task" \
+  && echo "✅ Agent Teams hooks configured"
+
+# Claude Code バージョン(v2.1.32+ 必要)
+claude --version 2>/dev/null
+```
+
+最後に **次のステップ** を提示:
+
+```
+✅ ハーネス構成が完成しました(Opus 4.7 + Agent Teams 版)。
+
+次にやること:
+1. Claude Code を**再起動**して環境変数 (CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS) を反映
+   - 起動画面に "Agent Teams: enabled" が表示されることを確認
+2. 試しに何か小さい編集を依頼(PostToolUse hook が走るはず)
+3. 何か質問を投げる(UserPromptSubmit hook で progress.md が自動注入される)
+4. **Agent Teams を試す**: `.harness/team_runbook.md` のパターン 1(並行 PR レビュー)から
+5. /pr-prep を試す(作成した場合)
+6. `.harness/progress.md` を週 1 で確認
+7. Opus 4.8 / 次モデル GA 時は、このスキルの「モデル更新時の棚卸し」を実行
+
+.gitignore に追加推奨: `.harness/snapshots/`
+
+⚠️ Agent Teams の注意点:
+- token 消費が teammates 数に比例して増える
+- 1 セッションに 1 チームまで(終了時は必ず "Clean up the team")
+- 同じファイルを複数 teammate が編集しないよう設計する
+- /resume / /rewind は in-process teammates を復元しない(experimental の制約)
+```
+
+---
+
+## モデル更新時の棚卸しチェックリスト
+
+Opus 4.8 / Mythos GA 時、あるいは他社モデルへの切り替え時に**必ず**実行する。
+
+### チェックリスト
+
+```
+モデルの新特性を把握:
+[ ] 新モデルのリリースノート / migration guide を読んだ
+[ ] デフォルトの effort / thinking 仕様の変化を確認した
+[ ] tokenizer が変わっていないか確認した
+[ ] task_budget 等の新パラメータを確認した
+[ ] Agent Teams の制約変更(experimental → stable / 新 hook 追加 等)を確認
+
+ハーネスから load-bearing でなくなったものを削除:
+[ ] CLAUDE.md の「必須ルール」で新モデルが言わなくても守れるようになったものを削除
+[ ] PostToolUse hook の検証で、モデルが自発的にやるようになったものを削除
+[ ] subagent のうち、本体モデルが十分こなせるようになったものを退役
+[ ] Agent Teams のユースケースで、単一セッションで足りるようになったものを `.harness/team_runbook.md` から削除
+[ ] /pr-prep 等の skill の各ステップが引き続き load-bearing か確認
+
+状態の更新:
+[ ] `.harness/state.json` の `model` を新モデル名に更新
+[ ] settings.json の model 指定を更新
+[ ] Agent Teams が GA 化していたら experimental flag を外す
+[ ] 変更内容を `.harness/changelog.md` と `.harness/decisions.jsonl` に記録
+
+新機能を取り込む:
+[ ] 新モデルだからできるようになった新機能 / 新 workflow を 1 つ追加
+[ ] Agent Teams の新パターンを `.harness/team_runbook.md` に追記
+[ ] 新しいベンチマーク(自分の実タスクで)で旧ハーネスと新ハーネスを比較
+```
+
+---
+
+## 重要な注意事項
+
+1. **Git に依存しない**: 状態は `.harness/` 配下のテキストファイルで管理。`git commit` / `git push` を含む生成・指示を出さない。
+2. **既存設定を破壊しない**: `.claude/` や `.harness/` がある場合、必ず diff を見せて統合。
+3. **質問は 1 問ずつ**
+4. **デフォルトを必ず提示**(Q8 のデフォルトは「有効化」推奨)
+5. **生成前に全体プランを承認させる**
+6. **80 行ルールを守る**(CLAUDE.md)
+7. **YAGNI**: 要らないと言われたものは作らない
+8. **ロールバック手段を必ず提供**
+9. **Opus 4.7 + Agent Teams の性質を前提**
+10. **Agent Teams config を手で書かない**: `~/.claude/teams/{team-name}/config.json` は自動生成・自動上書き。プロジェクト側に置けるのは subagent 定義(teammate type として参照)と起動プロンプト集(`team_runbook.md`)のみ。
+11. **Agent Teams の clean up を忘れない**: lead に「Clean up the team」を必ず指示。teammate 自身が cleanup を実行すると不整合状態になる。
+
+## 参考一次情報
+
+### ハーネスエンジニアリング
+- Effective harnesses for long-running agents (Anthropic, 2025/11/26)
+  <https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents>
+- Harness design for long-running application development (Anthropic Labs, 2026/03/24)
+  <https://www.anthropic.com/engineering/harness-design-long-running-apps>
+- Building Effective Agents
+  <https://www.anthropic.com/research/building-effective-agents>
+
+### Opus 4.7
+- Introducing Claude Opus 4.7 (2026/04/16)
+  <https://www.anthropic.com/news/claude-opus-4-7>
+- Best practices for using Claude Opus 4.7 with Claude Code (2026/04)
+  <https://claude.com/blog/best-practices-for-using-claude-opus-4-7-with-claude-code>
+
+### Agent Teams (experimental)
+- Orchestrate teams of Claude Code sessions (Anthropic 公式 docs)
+  <https://code.claude.com/docs/en/agent-teams>
+- Hooks reference (TeammateIdle / TaskCreated / TaskCompleted)
+  <https://code.claude.com/docs/en/hooks>
+- Subagent definitions reusable as teammate types
+  <https://code.claude.com/docs/en/sub-agents>
+
+## このスキルが扱わないこと
+
+- MCP サーバーの設定
+- CI/CD パイプラインとの統合
+- マルチプロジェクトの管理
+- Git 操作(明示的に対象外)
+- Agent Teams の team config の手書き(自動生成・自動上書きされるため)

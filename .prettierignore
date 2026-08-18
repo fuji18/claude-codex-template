@@ -1,0 +1,14 @@
+# ドキュメント・設定ディレクトリ
+.claude/
+.steering/
+docs/
+CLAUDE.md
+
+# ログファイル
+*log.json
+
+# 依存関係
+node_modules/
+
+# ビルド成果物
+dist/

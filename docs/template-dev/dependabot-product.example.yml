@@ -1,0 +1,58 @@
+# プロダクト向け Dependabot プロファイル(記入例)
+#
+# テンプレート本体の .github/dependabot.yml は「テンプレートの鮮度維持」を目的に
+# 週次(weekly)で更新をかける攻めの設定になっている。
+# 一方、テンプレートから作った実プロダクトでは、毎週の依存更新PRのトリアージが
+# レビュー負荷・CI コストになるため、守りの設定に切り替える。
+#
+# 方針:
+#   - 通常の依存更新は monthly に落とす(ノイズを 1/4 に)
+#   - minor / patch はグループ化して 1 PR にまとめる
+#   - major は個別PRのまま(破壊的変更は人がレビューする)
+#   - セキュリティ更新は interval と無関係に即時PRが出る(Dependabot security updates は
+#     別系統)ので、monthly に落としてもセキュリティ対応は遅れない
+#
+# 使い方: /kickoff フェーズ4 で、この内容を .github/dependabot.yml に反映する。
+# プロダクトの実態(モノレポの directory、追加エコシステム等)に合わせて調整すること。
+
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      # minor / patch は本番・開発それぞれ 1 PR に集約
+      production-deps:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      dev-deps:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+    # major はグループ外なので個別PRになり、破壊的変更を人がレビューできる
+    ignore:
+      # 例: ツールチェーンの peer 制約に縛られる依存は major を抑止する
+      #   (テンプレート既定では typescript-eslint が TS の major に追随するまで
+      #    typescript の major を無視している。プロダクトの構成に応じて見直す)
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  # devcontainer を使う場合のみ残す(使わないプロダクトでは削除してよい)
+  - package-ecosystem: devcontainers
+    directory: /
+    schedule:
+      interval: monthly

@@ -1,0 +1,50 @@
+{
+  "$comment": "テンプレート追従の単一ソース。/sync-template と .github/workflows/template-update-check.yml が参照する。owned=上書き / merge=手動統合 / never=触らない。判定の優先順位は owned > merge > never(パスが複数に該当する場合は上位が勝つ)。末尾が / のエントリはディレクトリ配下すべてを指す。syncedAt はテンプレート側の commit SHA(未同期なら null)。",
+  "templateRepo": "https://github.com/fuji18/claude-template.git",
+  "templateBranch": "main",
+  "syncedAt": null,
+  "syncedDate": null,
+  "owned": [
+    ".claude/rules/",
+    ".claude/commands/",
+    ".claude/skills/",
+    ".claude/agents/",
+    ".claude/hooks/",
+    ".claude/scripts/",
+    ".claude/docs/",
+    ".github/workflows/ci.yml",
+    ".github/workflows/claude.yml",
+    ".github/workflows/claude-code-review.yml",
+    ".github/workflows/template-update-check.yml",
+    ".github/pull_request_template.md",
+    "docs/ui-design-request-template.md"
+  ],
+  "merge": [
+    "docs/ui-design-guidelines.md",
+    ".claude/settings.json",
+    ".claude/branch-policy.json",
+    ".claude/template-manifest.json",
+    ".github/dependabot.yml",
+    ".husky/pre-commit",
+    ".secretlintrc.json",
+    ".gitattributes",
+    ".gitignore"
+  ],
+  "never": [
+    "CLAUDE.md",
+    "README.md",
+    "LICENSE",
+    "docs/",
+    ".steering/",
+    "src/",
+    "package.json",
+    "package-lock.json",
+    ".devcontainer/",
+    ".claude/settings.local.json",
+    ".mcp.json",
+    "tsconfig.json",
+    "vitest.config.ts",
+    "eslint.config.js",
+    ".prettierrc"
+  ]
+}

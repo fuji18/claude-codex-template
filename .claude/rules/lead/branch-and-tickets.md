@@ -1,0 +1,18 @@
+<!-- テンプレート所有ファイル: /sync-template で上書きされます。プロジェクト固有のルールは CLAUDE.md の「プロジェクト固有ルール」節に書いてください。 -->
+<!-- 司令塔専用: SessionStart hook がメインセッションにのみ注入します。サブエージェントには読み込まれません。 -->
+
+## ブランチ戦略とチケット運用
+
+### ブランチ戦略(単一ソース = `.claude/branch-policy.json`)
+
+ブランチ戦略の判断は**推測せず、必ず `.claude/branch-policy.json` を読む**(`baseBranch` / `protectedBranches` / `allowedPrefixes`)。人間向けの説明は `docs/development-guidelines.md` に置くが、hook・CI・スラッシュコマンドが参照する値はポリシーファイルが正。
+
+- **アプリ/web のリモートセッションは `claude/*` ブランチが先に作られた状態で始まる**。これは `feature/*` と同格の正規ブランチとして扱い、**リネームしない**(セッションとブランチの紐付けが壊れる)。新しいブランチも切らずそのまま作業する
+- リモートセッションはプラットフォーム既定ブランチ(通常 `main`)起点で作られるため、`baseBranch` が `develop` のプロジェクトでは**乖離が起きる**。PR 作成前に `git merge origin/[baseBranch]` で追従し、`gh pr create --base [baseBranch]` を必ず明示する
+- 保護ブランチ上での作業は禁止。強制層は 3 段: SessionStart hook(現在地とベースを注入)→ PreToolUse hook(直接コミット・base 誤りをブロック)→ CI の `branch-policy` ジョブ(クライアント非依存の最終検証)
+
+### チケット運用(GitHub Issues)
+
+チケットは GitHub Issues(`ticket` + 優先度ラベル)で管理する(`/setup-tickets` が発行)。着手時に `in-progress` ラベルを付け、PR ボディの `Closes #N` でマージ時に自動クローズさせる。PR 作成後は Issue にコメントで `.steering/` ディレクトリ名とPR URLを記録する(`/next-ticket` が担当)。チケットファイルのステータス編集・コミットは行わない。
+
+**`gh` CLI が使えない環境(Claude Code on the web のリモート実行等)では、コマンド・スキル内の `gh` 操作を同等の GitHub MCP ツール(`mcp__github__*`)で代替する。**

@@ -1,0 +1,113 @@
+name: Template Update Check
+
+# テンプレート(claude-code-template)側の更新を検知して Issue で知らせる。
+# Claude は一切起動しない(枠を消費しない)。実際の取り込みは、通知を見た人が
+# ローカルで `/sync-template` を実行して行う。
+on:
+  schedule:
+    # 毎月1日 00:00 UTC(JST 09:00)。テンプレート更新は緊急性が低く、
+    # 同期1回あたりに検証・PR の固定コストがかかるため、差分をまとめてから取り込む。
+    # 急ぐときは workflow_dispatch で手動実行するか、直接 /sync-template を叩く。
+    - cron: '0 0 1 * *'
+  workflow_dispatch:
+
+concurrency:
+  group: template-update-check
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Check for template updates
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          MANIFEST=".claude/template-manifest.json"
+          if [ ! -f "$MANIFEST" ]; then
+            echo "::notice::$MANIFEST が無いためスキップします(テンプレート同期に未対応のリポジトリ)"
+            exit 0
+          fi
+
+          TEMPLATE_REPO=$(jq -r '.templateRepo' "$MANIFEST")
+          TEMPLATE_BRANCH=$(jq -r '.templateBranch // "main"' "$MANIFEST")
+          SYNCED_AT=$(jq -r '.syncedAt // ""' "$MANIFEST")
+
+          # テンプレート本体では実行しない
+          ORIGIN_URL=$(git remote get-url origin)
+          if [ "${ORIGIN_URL%.git}" = "${TEMPLATE_REPO%.git}" ]; then
+            echo "::notice::ここはテンプレート本体のためスキップします"
+            exit 0
+          fi
+
+          if [ -z "$SYNCED_AT" ] || [ "$SYNCED_AT" = "null" ]; then
+            echo "::warning::syncedAt が未設定です。ローカルで /sync-template を一度実行して基準 SHA を記録してください"
+            exit 0
+          fi
+
+          git remote add template "$TEMPLATE_REPO"
+          if ! git fetch --quiet template "$TEMPLATE_BRANCH"; then
+            echo "::warning::テンプレートリポジトリを取得できませんでした($TEMPLATE_REPO)"
+            exit 0
+          fi
+
+          HEAD_SHA=$(git rev-parse "template/$TEMPLATE_BRANCH")
+          if [ "$HEAD_SHA" = "$SYNCED_AT" ]; then
+            echo "テンプレートは最新です($HEAD_SHA)"
+            exit 0
+          fi
+
+          # 同期対象(owned + merge)のパスに絞って差分を数える
+          mapfile -t PATHS < <(jq -r '(.owned + .merge)[]' "$MANIFEST")
+          COMMITS=$(git log --no-merges --format='- %h %s' \
+            "${SYNCED_AT}..template/${TEMPLATE_BRANCH}" -- "${PATHS[@]}" || true)
+
+          if [ -z "$COMMITS" ]; then
+            echo "同期対象パスに変更はありません(テンプレート側の更新はプロジェクトに無関係)"
+            exit 0
+          fi
+
+          FILES=$(git diff --name-only "${SYNCED_AT}..template/${TEMPLATE_BRANCH}" -- "${PATHS[@]}" | head -50)
+
+          # ヒアドキュメントはインデントがそのまま本文に入るため printf で組み立てる
+          BODY=$(printf '%s\n' \
+            "テンプレート(${TEMPLATE_REPO%.git})に未取り込みの更新があります。" \
+            "" \
+            "- 前回同期: \`${SYNCED_AT}\`" \
+            "- 最新: \`${HEAD_SHA}\`" \
+            "" \
+            "## 取り込み方法" \
+            "" \
+            "ローカル(または Claude Code のセッション)で **\`/sync-template\`** を実行してください。差分の提示 → 適用 → \`/check\` → PR 作成まで案内されます。" \
+            "" \
+            "## 同期対象パスに触れているコミット" \
+            "" \
+            "${COMMITS}" \
+            "" \
+            "## 変更ファイル(最大50件)" \
+            "" \
+            '```' \
+            "${FILES}" \
+            '```')
+
+          gh label create template-sync --color 0E8A16 --description "テンプレート更新の取り込み" 2>/dev/null || true
+
+          EXISTING=$(gh issue list --label template-sync --state open \
+            --json number --jq '.[0].number // empty')
+
+          if [ -n "$EXISTING" ]; then
+            gh issue edit "$EXISTING" --body "$BODY"
+            echo "既存 Issue #${EXISTING} を更新しました"
+          else
+            gh issue create --title "テンプレートの更新を取り込む (${HEAD_SHA:0:7})" \
+              --label template-sync --body "$BODY"
+          fi
