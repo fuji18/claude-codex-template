@@ -46,3 +46,9 @@ coverage/
 
 # devcontainer が features 解決時に生成するロックファイル(環境ごとに揺れるため追跡しない)
 .devcontainer/devcontainer-lock.json
+
+# Codex 併用ハーネスのローカル状態
+# .harness/ を丸ごと無視しないこと: .harness/decisions.jsonl は
+# 「削除禁止・追記のみ」の永続ログで、追跡対象に残す必要がある。
+.harness/mode
+.harness/codex-runs/

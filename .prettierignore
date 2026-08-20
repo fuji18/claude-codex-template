@@ -12,3 +12,11 @@ node_modules/
 
 # ビルド成果物
 dist/
+
+# Codex 併用ハーネス
+# Prettier は .gitignore を参照しないため、gitignore 済みでも run record の
+# JSON を検査対象にしてローカルの format:check だけが落ちる。
+.harness/
+
+# AGENTS.md は CLAUDE.md と同じくドキュメント扱い(表の整形差分がノイズになる)
+AGENTS.md

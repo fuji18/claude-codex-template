@@ -13,6 +13,21 @@
 
 ---
 
+## 2026-08-20
+
+Codex 併用ハーネスの**最小構成(読み取り委託)**。実装委託(書き込み)はまだ入っていないので、取り込んでも既存の運用は変わりません。**Codex を使わないプロジェクトは、取り込んでも何も起きません**(`delegate-codex.sh` は `codex` コマンドが無ければ exit 3 で止まるだけ)。
+
+- **[manual]** ⚠️ **`AGENTS.md` を新設**(新規ファイル / `merge` 区分)。Codex は `CLAUDE.md` も hooks も permissions も読まないため、**規約の写像がこのファイルだけ**になる。検証コマンド・モード別の禁止事項・スコープガード・コミットメッセージ規約・起動時手順を含む。**取り込む側の作業**: `merge` 対象なので手作業。テンプレート側の `AGENTS.md` をコピーし、**「2. 検証コマンド」の表と `<!-- verify-probe: ... -->` の 1 行を自分のスタックに書き換える**(既定は Node.js / TypeScript)。`verify-probe` は「依存が入っているか」だけを見る速いコマンドで、`--no-install` 相当を外さないこと(sandbox はネットワーク無効なので取得を試みた時点で失敗する)
+- **[manual]** **`.codex/config.toml` を新設**(新規ファイル / `merge` 区分)。sandbox は `workspace-write` + ネットワーク無効が既定。**このファイルは防衛線ではない** — CLI フラグが優先し、プロジェクトを untrusted にすると `.codex/` レイヤは丸ごと読まれない。位置づけは「人間が `codex` を直接叩くときの既定」。**取り込む側の作業**: テンプレート側をコピーし、`model` / `model_reasoning_effort` を使うなら自分で設定する
+- **[auto]** **`.claude/scripts/delegate-codex.sh` を新設**。Codex への委託経路の唯一の入口。今回入るのは読み取り専用の 2 モード(`explore` / `review`)だけで、`impl` / `fix-ci` / `--background` は明示的に「段階3 で実装します」と返す。終了コード契約は `0` 完了 / `2` 失敗 / `3` Codex 利用不可(恒久フォールバック)/ `4` レート上限(一時フォールバック)。**`3` と `4` を混ぜないこと**(前者は環境の欠落、後者は枠切れで回復手段が違う)
+- **[auto]** `delegate-codex.sh` は**委託前に機密ファイル**(`.env` / `*.pem` / `id_rsa*` / `credentials*`)を検出し、`CODEX_DELEGATE_ACK_SECRETS=1` が無ければ止まる。**Codex にはパス単位の読み取り除外が存在しない**(公式仕様を確認済み。sandbox は書き込みの制限のみ)ため、この入口検査が機密の送信を止める唯一の層になる。`.env.example` 等は除外される
+- **[manual]** `.gitignore` に `.harness/mode` と `.harness/codex-runs/` を追加。**`.harness/` を丸ごと無視しないこと** — `.harness/decisions.jsonl` は「削除禁止・追記のみ」の永続ログで追跡対象に残す。**取り込む側の作業**: `.gitignore` は `merge` 対象なので、自分の `.gitignore` に該当 2 行を足す
+- **[manual]** `.prettierignore` に `.harness/` と `AGENTS.md` を追加。Prettier は `.gitignore` を参照しないため、gitignore 済みでも run record の JSON を検査対象にして**ローカルの `format:check` だけが落ちる**(CI はクリーンなクローンなので影響を受けず、原因が分かりにくい)。**取り込む側の作業**: 自分の `.prettierignore` に 2 行を足す
+- **[auto]** `.claude/template-manifest.json` に Codex 関連を登録(`AGENTS.md` と `.codex/config.toml` は `merge`、`.codex/prompts/` は `owned`、`.harness/` は `never`)
+- **[auto]** `/sync-docs` の検査対象に「`CLAUDE.md` ↔ `AGENTS.md` の乖離」を追加。`AGENTS.md` が古いと**Codex だけが古い規約で動く**のに、Claude 側は何も壊れないため気づけない
+
+> **この段階で検証できていないこと**: Codex CLI 自体はまだ導入していないため、確かめられたのは「委託経路が正しく壊れること」(入口検査・終了コード契約・run record・スタブ 6 シナリオ)までです。**Codex が実際に有用なサマリーを返すか = 委託の品質は未検証**で、判定は実装委託(段階3)に持ち越しています。
+
 ## 2026-08-19
 
 保護ブランチへの直接コミットを止める層の**ベンダー非依存化**。従来この層は Claude の PreToolUse hook だけが持っており、Codex・手動 `git`・その他のツールからのコミットには一切効かなかった。

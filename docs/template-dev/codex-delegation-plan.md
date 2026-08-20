@@ -212,7 +212,11 @@ Codex 側の中断は §12.6 で扱うが、**Claude が計画途中で上限に
 
   **`3` と `4` を混ぜないこと。** 前者は環境の欠落(恒久)、後者は枠切れ(一時)で回復手段が違う。`4` のときは `resetAt` を run record に残し、次セッションで「あと何時間で復帰するか」を提示できるようにする。
 
-  **上限の検出そのものが脆い点に注意する。** Codex CLI が上限に固有の終了コードを返すかは未確認(§13)。返さない場合は stderr のパターン(`rate` / `quota` / `429` / `limit`)で判定することになり、文言変更で壊れる。**生のエラー 3 行を必ず run record に保存**し、検出をすり抜けても人間が判断できる状態にしておく
+  **上限の検出方法(2026-08-20 に確定。実装済み)**: Codex CLI は上限に固有の**終了コードは返さない**。代わりに `codex exec --json` の改行区切りイベントに `rate_limit_reached` / `usage_limit_reached` / `credits_depleted`(および `workspace_owner_*` / `workspace_member_*` の変種)という**構造化された識別子**が流れる。これを一次判定にする。文言そのものより変化しにくい。
+
+  二次の保険として文言パターン(`rate limit` / `usage limit` / `quota` / `429`)も残す。**識別子が改名されたときに上限を「タスク起因の失敗(exit 2)」と誤分類すると、司令塔が原因分析に入ってさらに枠を溶かす**ため、誤検知より見逃しの方が高くつくという非対称に合わせる。誤検知は run record の生エラーで人間が判定できる。
+
+  **生のエラー 3 行を必ず run record に保存**し、検出をすり抜けても人間が判断できる状態にしておく。`resetAt` はログ中の `"resets_at"` 形式のフィールドから拾う(実機で取得できるかは §13 #6 として未確認)
 - **出力はサマリーのみ**: 生ログは `.harness/codex-runs/[timestamp].log` に落とし、標準出力には固定フォーマットの要約だけを出す。司令塔のコンテキストに長いログを積まない(`implementer` の報告フォーマットと同じ思想)。生ログは既存の `.gitignore`(`*.log`)で自動的に除外される
 - **`design.md` の完成マーカーを検査する**: `<!-- status: ready -->` が無ければ **exit 5** で拒否し「計画が未完成」と報告する(§2.5)。書きかけの設計で Codex の枠を溶かさないための入口検査。**`2`(タスク起因の失敗)と分けるのが要点** — 回復手段が「司令塔が設計を書き切る」と「原因分析」で全く違う
 - **run record を残す**: 起動時と終了時に `.harness/codex-runs/[id].json` を書く。**これが状態の正**であり、会話に依存しない。これがあるから委託を挟んで `/clear` できる(§3.4)
@@ -225,7 +229,7 @@ Codex 側の中断は §12.6 で扱うが、**Claude が計画途中で上限に
     "branch": "feature/issue12-user-crud",
     "codexSessionId": "01JQ...",
     "pid": 48213,
-    "status": "running | completed | failed | rate-limited",
+    "status": "running | completed | failed | rate-limited | unavailable",
     "resetAt": null,
     "summary": "tasklist 3/3 完了・変更 3 ファイル・lint/型/関連テスト pass",
     "error": null,
@@ -480,6 +484,19 @@ Codex は CLAUDE.md も hooks も permissions も読まない。**規約の写�
 - sandbox は `workspace-write` + **ネットワーク無効**を既定にする
 - model / reasoning_effort は既定のままとし、コメントで変更点だけ示す
 
+**このファイルは防衛線ではない(2026-08-20 の実仕様確認で判明。実装済み)。** 当初は「`.codex/config.toml` が唯一の防衛線」(§9)と書いていたが、Codex の設定解決順は次のとおりで、**project config は上から 2 番目でしかない**:
+
+```
+CLI フラグ / -c  >  project config(.codex/config.toml)  >  profile
+>  user config(~/.codex/config.toml)  >  system  >  既定
+```
+
+さらに**プロジェクトを untrusted にすると `.codex/` レイヤが丸ごと読まれない**(project-local の config・hooks・rules がすべて無効化される)。つまり「ここに書いたから sandbox が効いている」は成り立たない。
+
+- `delegate-codex.sh` は sandbox を**必ず `--sandbox` フラグで明示的に**渡す(最優先レイヤ)
+- `.codex/config.toml` の位置づけは「**人間が `codex` を直接叩くとき(モード C)の既定**」に下げる
+- なお project-local で無視されるキーは `openai_base_url` / `chatgpt_base_url` / `model_provider` / `model_providers` / `notify` / `profile` / `profiles` / `otel` 等。`sandbox_mode` と `[sandbox_workspace_write]` 自体は project でも設定できるが、**上のレイヤに負ける**という別の理由で当てにならない
+
 ### 7.3 `.codex/prompts/`(モード C 用ワークフロー)
 
 `/next-ticket` 相当の手順を Codex 側に複製する。**project スコープのカスタムプロンプトに Codex CLI が対応しているかは着手時に要検証**(`~/.codex/prompts/` のユーザースコープは対応が確認できている)。対応していない場合は `docs/playbook/codex-standalone.md` に手順書を置き、人間が起動時に参照させる形へ降格する。
@@ -652,7 +669,7 @@ AGENTS.md も `.codex/` も現在マニフェストに**未登録**で、`/sync-
 ## 9. リスクと注意点
 
 - **サブスク併用の限界**: ChatGPT Plus も Codex 側のレート制限を持つ。**両方枯れれば止まる**。モード C は数日しのぎであり、恒久解は「モード B で Claude 枠の実効寿命を延ばす」こと
-- **サンドボックスの穴**: Codex の内部コマンドは Claude の hooks / permissions を通らない。`.codex/config.toml` が唯一の防衛線(§7.2 / §8)
+- **サンドボックスの穴**: Codex の内部コマンドは Claude の hooks / permissions を通らない。**防衛線は `delegate-codex.sh` が渡す `--sandbox` フラグ**であり、`.codex/config.toml` ではない(CLI フラグに負け、untrusted では読まれもしない。§7.2)。加えて **Codex にはパス単位の読み取り除外が存在しない**ため、機密の送信を止める層は `delegate-codex.sh` の入口検査だけになる(§3.2)
 - **コストの見え方が二系統になる**: Claude(サブスク/API)と OpenAI(ChatGPT サブスク)。監視は利用者責任(README 免責に追記)
 - **委託を挟んだ `/clear` は「してよい」**(初版から方針を反転): run record(§3.2)+ SessionStart 注入(§3.4)があれば、状態は会話ではなくファイルに載っているため復帰できる。むしろ**計画フェーズ直後はコンテキストが最も膨らんでいるので、そこで捨てるのが最大の節約**になる
   - ただし条件がある: **`design.md` に書けていない知見を context に抱えたまま clear しない。** 先に `design.md` へ書いてから clear する(「design.md は実装者が設計判断なしで進められる粒度まで」という既存要件は、`/clear` を安全にする条件でもある)
@@ -723,7 +740,7 @@ Codex が「並行実装」と「第二意見レビュー」を担うなら、�
 | --- | --- | --- | --- |
 | **0. 前提** | ChatGPT Plus 契約、`codex login`、データガバナンス判断(§10.2) | — | そもそも使ってよいか |
 | **1. ベンダー中立ガードレール** ✅ **完了(2026-08-18)** | `.husky/pre-commit` に保護ブランチ検査を移植(§8)+ 自壊検知を SessionStart と **CI の両方**に置く(§8.1)+ 完成マーカーの規約を steering テンプレート/スキルに載せる(§2.5) | `.claude/scripts/check-protected-branch.sh` + `.husky/pre-commit` + `ci.yml` + steering テンプレート/スキル | **Codex にコミットを許す前提条件。ここだけは先に必須** |
-| **2. 最小ハーネス** | AGENTS.md・`.codex/config.toml`・`delegate-codex.sh`(`explore` / `review` のみ) | 3 ファイル | 読み取り委託の品質。書き込みが無いので安全 |
+| **2. 最小ハーネス** ✅ **完了(2026-08-20)** | AGENTS.md・`.codex/config.toml`・`delegate-codex.sh`(`explore` / `review` のみ)+ マニフェスト登録(§8.2) | 3 ファイル + `template-manifest.json` / `.gitignore` / `.prettierignore` / `/sync-docs` 改訂 | 読み取り委託の品質。書き込みが無いので安全。**ただし Codex CLI 未導入のため検証できたのは「経路が正しく壊れること」まで**(下記) |
 | **3. 実装委託** | `delegate-codex.sh impl` + 終了コード契約(§3.2)+ run record + `/next-ticket` の分岐(§4.1) | スクリプト + コマンド改訂 | 検収の往復回数(§10.7 に記録)/ 中断からの回復(§12.6) |
 | **4. モード B** | `.harness/mode` + **未検収委託の SessionStart 注入(§3.4)** + モード B の司令塔作法 | hook 改訂 | **週枠の実効寿命がどれだけ延びたか** / 委託を挟んだ `/clear` が破綻しないか |
 | **5. モード C** | `.codex/prompts/` or `docs/playbook/codex-standalone.md` + `codex-log.md` 運用 | プロンプト集 | Claude 不在で 1 チケット完走できるか |
@@ -732,6 +749,17 @@ Codex が「並行実装」と「第二意見レビュー」を担うなら、�
 - 各段階で価値が確認できなければ**そこで止めてよい**(段階 2 の読み取り用途だけでも第二意見としての価値は成立する)
 - 段階 2 以降はテンプレート自身の開発フローに乗せる: **各項目を GitHub Issues として発行し(根拠: 本ドキュメント)、`/next-ticket` で消化する**
 - 本ドキュメントは調査時点の Codex CLI 仕様に基づく。着手前に **§13 の未確認項目を一括で検証する**
+
+**段階2 で検証できたこと / できなかったこと(2026-08-20)**
+
+Codex CLI が未インストール(段階0 が未達)のため、確かめられたのは**委託経路が正しく壊れること**までである。
+
+| | 内容 |
+| --- | --- |
+| 検証済み | 入口検査 4 段(機密 / AGENTS.md / 検証プローブ / CLI 不在・未認証)、終了コード契約 0・2・3・4、run record の生成、jq 不在時のフォールバック。`codex` スタブを PATH に置いた 6 シナリオを含め 21 ケース |
+| **未検証** | **Codex が実際に指示どおりのサマリーを返すか(= 委託の品質そのもの)**。devcontainer で CLI が動くか(§13 #5)。`resetAt` が実機で取れるか(§13 #6) |
+
+**したがって段階2 の「価値が確認できたか」はまだ判定できない。** 判定は段階0(契約 + インストール)を済ませた直後に行う。
 
 ---
 
@@ -808,17 +836,19 @@ Codex が「並行実装」と「第二意見レビュー」を担うなら、�
 
 **うち #2 と #3 は骨格に効くので最初に潰す。** #3(ネットワーク無効が CLI 自身の通信を妨げるか)が崩れると §7.2 / §8 の「ネットワーク無効を既定にする」という防衛線の前提ごと差し替えになる。#2(上限に固有の終了コード)が崩れると §3.2 の終了コード契約のうち `4` が文言マッチに降格し、モード間の自動フォールバックが**壊れていることに気づけない形で**壊れる。他の 5 件は代替手段が軽い。
 
-| # | 確かめること | 崩れた場合の代替 |
-| --- | --- | --- |
-| 1 | `codex exec` のオプション体系と sandbox の指定方法 | 実仕様に合わせて `delegate-codex.sh` を書き直す(§3.1) |
-| 2 | **レート上限に固有の終了コードを返すか** | stderr のパターンマッチに降格(§3.2)。誤検知するので生エラーを run record に必ず残す |
-| 3 | サンドボックスのネットワーク無効が **CLI 自身の通信を妨げないか** | 妨げるならネットワーク無効を諦め、防衛線を §8 に寄せる |
-| 4 | `.codex/prompts/` の project スコープ対応 | `docs/playbook/codex-standalone.md` に降格(§7.3) |
-| 5 | Codex CLI がこの devcontainer で動くか | `post_create.sh` にインストール手順を追加(§10.6) |
-| 6 | レート上限のリセット単位(5 時間枠 / 週次)と `resetAt` の取得可否 | 取得できなければ「待つ」判断を人間に委ねる(§12.6) |
-| 7 | **`.codex/config.toml` にパス単位の読み取り除外があるか** | 無ければ `delegate-codex.sh` の事前チェック(§3.2)だけが防衛線になる。当てにせず 1 段目を必ず実装する |
+| # | 確かめること | 結果(2026-08-20 に公開仕様で一括確認) | 崩れた場合の代替 |
+| --- | --- | --- | --- |
+| 1 | `codex exec` のオプション体系と sandbox の指定方法 | ✅ **確定**。`codex exec [--cd,-C] [--sandbox,-s read-only\|workspace-write\|danger-full-access] [--json] [--output-last-message,-o PATH] [--model,-m] [-c key=value] [--color] PROMPT`。再開は `codex exec resume [SESSION_ID] [--last]`。認証確認は `codex login status`(**ログイン済みなら exit 0** と公式が自動化向けに明記) | 実仕様に合わせて `delegate-codex.sh` を書き直す(§3.1) |
+| 2 | **レート上限に固有の終了コードを返すか** | ✅ **返さない**。ただし `--json` のイベントに `rate_limit_reached` / `usage_limit_reached` / `credits_depleted` という**識別子**が流れる。文言マッチより良い材料が使える(§3.2 に反映済み) | stderr のパターンマッチに降格(§3.2)。誤検知するので生エラーを run record に必ず残す |
+| 3 | サンドボックスのネットワーク無効が **CLI 自身の通信を妨げないか** | ✅ **妨げない**。sandbox はエージェントが実行する**コマンド**に掛かる層で、CLI 自身のモデル API 通信は外側 | 妨げるならネットワーク無効を諦め、防衛線を §8 に寄せる |
+| 4 | `.codex/prompts/` の project スコープ対応 | ⏳ **未確定**。project スコープの `.codex/` レイヤに config・hooks・rules があることは確認できたが、prompts の記載が見つからない。段階5 で実機確認する | `docs/playbook/codex-standalone.md` に降格(§7.3) |
+| 5 | Codex CLI がこの devcontainer で動くか | ⏳ **未検証**(段階0 が未達) | `post_create.sh` にインストール手順を追加(§10.6) |
+| 6 | レート上限のリセット単位(5 時間枠 / 週次)と `resetAt` の取得可否 | 🔶 **単位は確定**(5 時間枠 + 週次)。`resetAt` の機械的取得は**未確定** — スクリプトはログ中の `"resets_at"` を拾う実装にしてあるが、実機で出るかは未確認 | 取得できなければ「待つ」判断を人間に委ねる(§12.6) |
+| 7 | **`.codex/config.toml` にパス単位の読み取り除外があるか** | ✅ **存在しない**。sandbox は**書き込み**の制限であり、読み取りの deny-list は無い。`delegate-codex.sh` の機密事前チェックが**唯一の層**として確定した(段階2 で実装済み) | 無ければ `delegate-codex.sh` の事前チェック(§3.2)だけが防衛線になる。当てにせず 1 段目を必ず実装する |
 
-**現状(2026-08-18): Codex CLI はこの devcontainer に未インストール**(`codex` コマンド・`~/.codex` ともに無い)。上記はすべて未検証。
+**現状(2026-08-20): Codex CLI はこの devcontainer に未インストール**(`codex` コマンド・`~/.codex` ともに無い)。#1〜#3 と #7 は公開仕様で確定、#6 は半分確定。**#4 と #5、および #6 の残りは実機でしか確かめられない**ため段階0 の直後に回す。
+
+> **公開仕様での確定は実機検証の代わりにならない点に注意する。** #1 は「ドキュメントに書かれたフラグ体系」が確定しただけで、`delegate-codex.sh` が実際に Codex を正しく駆動できるかは段階3 で初めて分かる。段階2 のスタブ検証は**自分が書いた契約を自分で満たしているか**しか見ていない。
 
 ---
 
