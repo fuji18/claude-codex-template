@@ -561,8 +561,8 @@ Codex は CLAUDE.md も hooks も permissions も読まない。**規約の写�
 | 穴 | 内容 | 補う層 |
 | --- | --- | --- |
 | husky は `npm install` 後にしか効かない | `prepare: "husky"` が `core.hooksPath` を設定する仕組みのため、依存未インストールのクローン直後は git hook 自体が動かない | 環境構築手順(README)+ CI + SessionStart hook の警告 |
-| ~~`--no-verify` で素通しできる~~ → **コミットについては塞がった** | `--no-verify` は `pre-commit` / `commit-msg` しか無効化せず、`prepare-commit-msg` は迂回できない(実測)。ただし `git push` の直接実行など、コミット以外の経路は依然として塞げない | リモートのブランチ保護設定 + CI |
-| CI は「直接コミットされたか」を見ない | `branch-policy` ジョブが検査するのは PR の base とブランチ名のみ | リモートのブランチ保護設定 |
+| ~~`--no-verify` で素通しできる~~ → **コミットについては塞がった** | `--no-verify` は `pre-commit` / `commit-msg` しか無効化せず、`prepare-commit-msg` は迂回できない(実測)。ただし `git push` の直接実行など、コミット以外の経路は依然として塞げない | リモートのブランチ保護設定 + CI(→ public 化 + ルールセットで実体化。下記の決定を参照) |
+| CI は「直接コミットされたか」を見ない | `branch-policy` ジョブが検査するのは PR の base とブランチ名のみ | リモートのブランチ保護設定(→ 同上) |
 
 いずれも**ローカルのガードレールをセキュリティ境界として扱わない**という前提で許容している。権限境界は GitHub 側のブランチ保護で張ること。
 
@@ -585,9 +585,23 @@ $ gh api repos/{owner}/{repo}/branches/main/protection
 
 | 選択肢 | 効果 | コスト |
 | --- | --- | --- |
-| リポジトリを public にする | ルールセットが無料で使える(public リポジトリは Free でも可) | テンプレートなので公開自体は自然。ただし公開判断が要る |
+| **リポジトリを public にする** ← **採用(2026-08-20 決定)** | ルールセットが無料で使える(public リポジトリは Free でも可) | テンプレートなので公開自体は自然。ただし公開判断が要る |
 | GitHub Pro / Team に上げる | private のままブランチ保護 + required checks | 課金 |
-| **ローカル hook が唯一の層だと認める** | 追加コストゼロ | 上の表の「補う層」列を書き換え、`--no-verify` を使わない運用規律に頼ることになる。**モード C で Codex にコミットさせる前提としては最も弱い** |
+| ローカル hook が唯一の層だと認める | 追加コストゼロ | 上の表の「補う層」列を書き換え、`--no-verify` を使わない運用規律に頼ることになる。**モード C で Codex にコミットさせる前提としては最も弱い** |
+
+#### 決定: public 化(2026-08-20)
+
+MIT ライセンス済みのテンプレートであり、公開して困る資産が無いこと・課金を増やさずに権限境界を張れることから public を選んだ。**public にしただけでは何も変わらない**(ルールセットは自分で作る必要がある)。公開直後に以下を設定して初めて上の表の「補う層」が実体を持つ:
+
+1. `main` にルールセットを作成 — 直接 push の禁止 / PR 必須 / force push・削除の禁止
+2. required status checks に **`branch-policy`・`harness-integrity`・`quality`** の 3 ジョブを指定(ジョブ名は `.github/workflows/ci.yml` のもの)
+3. bypass list を空にする(自分自身も含めて例外にしない。ここを緩めると空手形に戻る)
+
+public 化に伴う副次的な影響は「公開時の確認事項」として別途監査済み。要点は次の 3 つ:
+
+- **`claude.yml` は `author_association` で OWNER / MEMBER / COLLABORATOR に限定済み**。第三者のコメントで `@claude` が起動してトークンを消費する経路は塞がっている(public 化を見越した既存の作り)
+- **fork からの PR にシークレットは渡らない**ため、`claude-code-review.yml` は fork PR では自動スキップされる(`CLAUDE_TOKEN != ''` の判定に落ちる)。`pull_request_target` は一切使っていないので、fork PR のコードが特権実行される経路も無い
+- **コミットの author email が恒久的に公開される**。公開前に GitHub の「Keep my email address private」を有効化し、必要なら履歴を書き換えること(現在 8 コミットと短く、やるなら今が最も安い)
 
 **プロダクト側のプロジェクトでこのテンプレートを使う場合も同じ検査が要る。** `/kickoff` で「ブランチ保護が使えるプランか」を確認し、使えないなら上の 3 択をユーザーに提示する導線を段階6 で入れること。
 
