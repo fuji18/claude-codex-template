@@ -81,7 +81,7 @@ main (本番環境)
 - 値の正は `.claude/branch-policy.json`(ベースブランチ・許可接頭辞・保護ブランチ)。この文書は人間向けの説明
 - SessionStart hook がセッション冒頭にベースブランチと乖離警告を注入する(推測させない)
 - PreToolUse hook が保護ブランチへの直接コミットと `gh pr create` の base 誤りをブロックする(**Claude 経由のみ**)
-- `.husky/` の git hook が保護ブランチへの直接コミットをブロックする(**ベンダー非依存**。手動 `git` や Claude 以外の AI ツールにも効く)。`pre-commit` が `git commit` / `--amend` を、`prepare-commit-msg` が `git revert` / `git cherry-pick` を止める(後者は `pre-commit` が発火しないため)。`git merge` / `git pull` は通す。判定の実体は PreToolUse hook と共有(`.claude/scripts/check-protected-branch.sh`)しており、経路によらず同じ結果になる
+- `.husky/` の git hook が保護ブランチへの直接コミットをブロックする(**ベンダー非依存**。手動 `git` や Claude 以外の AI ツールにも効く)。`pre-commit` が `git commit` / `--amend` を、`prepare-commit-msg` が `git revert` / `git cherry-pick` を止める(後者は `pre-commit` が発火しないため)。`git merge` / `git pull` の取り込みだけを通す(`.git/MERGE_HEAD` の有無で判別する。フックの第 2 引数だけで判断すると `git revert -e` / `git cherry-pick -e` がすり抜ける)。判定の実体は PreToolUse hook と共有(`.claude/scripts/check-protected-branch.sh`)しており、経路によらず同じ結果になる
 - CI の `branch-policy` ジョブが、クライアント(CLI / アプリ / GitHub UI)によらずマージ前に最終検証する
 
 **Git Flowのメリット**:

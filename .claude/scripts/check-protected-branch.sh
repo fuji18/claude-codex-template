@@ -24,7 +24,9 @@ POLICY=".claude/branch-policy.json"
 [ -f "$POLICY" ] || exit 0
 command -v jq >/dev/null 2>&1 || exit 0
 
-# detached HEAD(rebase / bisect / merge 中)は空を返す → 判定しない
+# detached HEAD(rebase / bisect 中など)は空を返す → 判定しない。
+# なお merge / revert / cherry-pick 中は detached にならずブランチに留まるため、
+# ここではなく呼び出し元(.husky/prepare-commit-msg)が出所を見て判別する。
 CUR="$(git branch --show-current 2>/dev/null || true)"
 [ -n "$CUR" ] || exit 0
 

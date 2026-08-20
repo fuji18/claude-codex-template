@@ -182,7 +182,7 @@ flowchart TD
 - **ブランチ戦略は `.claude/branch-policy.json` が単一ソース**。アプリ/web のリモートセッションはプラットフォームが `claude/*` ブランチを既定ブランチ起点で先に作るため、規約から乖離しやすい。対策は 4 段構え:
   1. `claude/*` を `feature/*` と同格の正規ブランチとして**追認**する(リネームするとセッションとの紐付けが壊れるため禁止)
   2. SessionStart hook がベースブランチを事実として注入し、PreToolUse hook が保護ブランチへの直接コミットと `gh pr create --base` の誤りをブロックする(**Claude 経由のみ**)
-  3. `.husky/` の git hook が保護ブランチへの直接コミットをブロックする(**ベンダー非依存**なので、手動 `git` や Claude 以外の AI ツールにも効く)。`pre-commit` が `git commit` / `--amend` を、`prepare-commit-msg` が `git revert` / `git cherry-pick` を止め(後者は `pre-commit` が発火しない)、`git merge` / `git pull` は通す。判定の実体は 2 と共有(`.claude/scripts/check-protected-branch.sh`)なので経路によらず同じ結果になる
+  3. `.husky/` の git hook が保護ブランチへの直接コミットをブロックする(**ベンダー非依存**なので、手動 `git` や Claude 以外の AI ツールにも効く)。`pre-commit` が `git commit` / `--amend` を、`prepare-commit-msg` が `git revert` / `git cherry-pick` を止め(後者は `pre-commit` が発火しない)、`git merge` / `git pull` の取り込みだけを通す(`.git/MERGE_HEAD` の有無で判別する。フックの第 2 引数だけで判断すると `git revert -e` / `git cherry-pick -e` がすり抜ける)。判定の実体は 2 と共有(`.claude/scripts/check-protected-branch.sh`)なので経路によらず同じ結果になる
   4. CI の `branch-policy` ジョブがクライアント(CLI / アプリ / GitHub UI)によらずマージ前に最終検証する
   - **アプリからセッションを作るときは、セッションのベースブランチにポリシーの `baseBranch` を選ぶ**と 1 段目から乖離しない(テンプレート既定は `main` の GitHub Flow。`develop` 統合ブランチを採るプロジェクトは `/kickoff` でポリシーファイルを更新する)
 - **チケット完了(PR 作成)ごとに `/clear`** してから次の `/next-ticket` を始める。作業状態は Issue・`.steering/`・git に永続化済みなので、コンテキストを持ち越す必要がない(トークン消費の最大の削減ポイント)

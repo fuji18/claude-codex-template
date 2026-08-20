@@ -529,16 +529,25 @@ Codex は CLAUDE.md も hooks も permissions も読まない。**規約の写�
 
 **`pre-commit` だけでは足りなかった(2026-08-19 追加)。** 実測すると、`pre-commit` フックが発火するのは **`git commit` と `git commit --amend` だけ**で、**`git revert` と `git cherry-pick` では発火しない**(git の仕様)。どちらも保護ブランチへの直接コミットそのものであり、しかも「main の悪いコミットを revert して」はエージェントに最も自然に発生する指示なので、**モード C で Codex にコミット権を渡すと確実に踏む穴**だった。Claude 側の `check-branch-policy.sh` も `git commit` にしかマッチしておらず、CI の `branch-policy` ジョブは PR の base とブランチ名しか見ないため、**4 層すべてを素通りしていた**。
 
-`.husky/prepare-commit-msg` を追加して塞いだ。このフックは commit / amend / revert / cherry-pick / merge の**全てで発火**し、第 2 引数で出所を判別できる:
+`.husky/prepare-commit-msg` を追加して塞いだ。このフックは commit / amend / revert / cherry-pick / merge の**全てで発火**する。
 
-| 操作 | `$2` | 扱い |
-| --- | --- | --- |
-| commit / amend / revert / cherry-pick | `message` | 検査する |
-| merge(`git pull` の統合コミット) | `merge` | **通す** — ここを塞ぐと保護ブランチで `git pull` すらできなくなる。取り込みは違反ではない |
+**ただし第 2 引数だけでは出所を判別できない(2026-08-20 修正)。** 当初は `$2 = merge` を無条件に素通ししていたが、実測(git 2.53)すると **`git revert -e` と `git cherry-pick -e` も `$2` に `merge` を渡してくる**。しかも両者は `pre-commit` を発火させないため、`-e` を付けるだけで**ローカル 2 層をまとめてすり抜けられる**状態だった。判別には `.git/MERGE_HEAD` の有無を使う:
+
+| 操作 | `$2` | `MERGE_HEAD` | 扱い |
+| --- | --- | --- | --- |
+| commit / amend | `message` / 空 | なし | 検査する(`pre-commit` も発火) |
+| revert / cherry-pick(既定) | `message` | なし | 検査する |
+| **revert -e / cherry-pick -e** | **`merge`** | **なし** | **検査する** — ここが穴だった |
+| merge(クリーン) | `merge` | あり | **通す** — ここを塞ぐと保護ブランチで `git pull` すらできなくなる。取り込みは違反ではない |
+| merge(コンフリクト解決後の `git commit`) | `merge` | あり | このフックは通すが `pre-commit` が発火してブロックされる |
+
+最終行のとおり、「`git merge` / `git pull` は通す」が厳密に成り立つのは**コンフリクトしないマージだけ**。保護ブランチ上でコンフリクトまで進む状況はそもそもガードで防がれているため実害は無いが、ドキュメントの表現は「取り込みだけを通す」に統一した。
 
 **副次効果として `--no-verify` が塞がった(重要)。** git の `--no-verify` が無効化するのは `pre-commit` と `commit-msg` だけで、**`prepare-commit-msg` は迂回できない**。実測でも保護ブランチ上の `--no-verify` 付きコミットがブロックされることを確認した。§8「残る穴」の 3 件のうち 1 件が、ローカル層だけで塞がったことになる(ただし `git push` の直接実行は依然として塞げない)。
 
 **脱出弁は残してある。** `--abort` / `--quit` / `--skip` / `--continue` は Claude 側の検査対象から除外し、git hook 側もブロックされた revert / cherry-pick が状態を残さないことを確認済み(`REVERT_HEAD` / `CHERRY_PICK_HEAD` が生成されない)。保護ブランチで revert を試みて詰むことはない。
+
+なお Claude 側の除外正規表現はコマンド文字列**全体**に当たるため、コミットメッセージに `--skip` 等を含むと Claude 層だけすり抜ける。git hook 層が拾うので多層防御としては保たれる(`check-branch-policy.sh` 冒頭が宣言する「ベストエフォート」の範囲内)。
 
 **検知側も 1 ファイルに集約した。** 層が 2 ファイルに増えたことで、SessionStart と CI が別々に「どのフックを必須とみなすか」を持つと必ずずれる。判定の実体を `.claude/scripts/check-guard-integrity.sh` に集約し、SessionStart は警告として、CI はエラーとして同じ結果を使う。あわせて 2 つの穴も塞いだ:
 
