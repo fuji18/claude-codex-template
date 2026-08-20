@@ -1,0 +1,1925 @@
+<title>Codex 併用ハーネス</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+  :root {
+    --ground: #eef0f4;
+    --surface: #ffffff;
+    --surface-2: #e7eaf0;
+    --ink: #0f1622;
+    --ink-2: #414c5c;
+    --ink-3: #6d7787;
+    --rule: #d5dae2;
+    --rule-strong: #b6bec9;
+    --accent: #3a5ba0;
+    --accent-soft: #e2e8f5;
+    --claude: #a8621b;
+    --claude-soft: #f6e9da;
+    --codex: #1e7a70;
+    --codex-soft: #daeeea;
+    --ok: #2e7d5b;
+    --ok-soft: #dcefe4;
+    --gap: #b0422e;
+    --gap-soft: #f7e2dd;
+    --shadow: 0 1px 2px rgba(15, 22, 34, 0.06), 0 8px 24px -16px rgba(15, 22, 34, 0.28);
+
+    --step--1: 0.8125rem;
+    --step-0: 1rem;
+    --step-1: 1.1875rem;
+    --step-2: 1.4375rem;
+    --step-4: 2.5rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #10141b;
+      --surface: #171c25;
+      --surface-2: #1d232e;
+      --ink: #e6e9ee;
+      --ink-2: #b3bac5;
+      --ink-3: #838c9a;
+      --rule: #29313d;
+      --rule-strong: #3a4351;
+      --accent: #93abe2;
+      --accent-soft: #1e2740;
+      --claude: #dc9a58;
+      --claude-soft: #2f2318;
+      --codex: #55b8ab;
+      --codex-soft: #142a28;
+      --ok: #63c294;
+      --ok-soft: #14291f;
+      --gap: #e28d7b;
+      --gap-soft: #2e1a16;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -16px rgba(0, 0, 0, 0.8);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #10141b;
+    --surface: #171c25;
+    --surface-2: #1d232e;
+    --ink: #e6e9ee;
+    --ink-2: #b3bac5;
+    --ink-3: #838c9a;
+    --rule: #29313d;
+    --rule-strong: #3a4351;
+    --accent: #93abe2;
+    --accent-soft: #1e2740;
+    --claude: #dc9a58;
+    --claude-soft: #2f2318;
+    --codex: #55b8ab;
+    --codex-soft: #142a28;
+    --ok: #63c294;
+    --ok-soft: #14291f;
+    --gap: #e28d7b;
+    --gap-soft: #2e1a16;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -16px rgba(0, 0, 0, 0.8);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+    font-size: var(--step-0);
+    line-height: 1.7;
+    margin: 0;
+    padding: 0 1.25rem 6rem;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 62rem; margin: 0 auto; }
+
+  /* ---------- masthead ---------- */
+
+  .masthead {
+    padding: 3.5rem 0 2rem;
+    border-bottom: 2px solid var(--ink);
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: var(--step--1);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 0;
+  }
+
+  h1 {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-weight: 600;
+    font-size: var(--step-4);
+    line-height: 1.15;
+    text-wrap: balance;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+
+  .standfirst { font-size: var(--step-1); color: var(--ink-2); max-width: 46ch; margin: 0; }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: var(--step--1);
+    color: var(--ink-3);
+  }
+  .meta b { color: var(--ink-2); font-weight: 500; }
+
+  /* ---------- sections ---------- */
+
+  section { padding: 3.25rem 0 0; }
+
+  .sec-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.875rem;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 0.625rem;
+    margin-bottom: 1.5rem;
+  }
+  .sec-num {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: var(--step--1);
+    color: var(--accent);
+    font-weight: 600;
+    flex: none;
+  }
+  h2 {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-weight: 600;
+    font-size: var(--step-2);
+    margin: 0;
+    line-height: 1.3;
+    text-wrap: balance;
+  }
+
+  h3 {
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    font-weight: 600;
+    font-size: var(--step-0);
+    margin: 2rem 0 0.75rem;
+    color: var(--ink);
+  }
+
+  p { margin: 0 0 1rem; max-width: 68ch; }
+  p:last-child { margin-bottom: 0; }
+
+  ul { margin: 0 0 1rem; padding-left: 1.25rem; max-width: 68ch; }
+  li { margin-bottom: 0.45rem; }
+  li:last-child { margin-bottom: 0; }
+
+  code, .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.875em; }
+  code { background: var(--surface-2); padding: 0.1em 0.35em; border-radius: 3px; color: var(--ink); }
+  pre {
+    background: var(--surface-2);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--rule-strong);
+    padding: 0.9rem 1rem;
+    overflow-x: auto;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.75rem;
+    line-height: 1.65;
+    margin: 1rem 0;
+    color: var(--ink);
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  pre .hl { color: var(--codex); font-weight: 600; }
+
+  strong { font-weight: 600; }
+
+  /* ---------- callout ---------- */
+
+  .callout {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    padding: 1.125rem 1.25rem;
+    margin: 1.5rem 0;
+    box-shadow: var(--shadow);
+  }
+  .callout.warn { border-left-color: var(--gap); }
+  .callout.done { border-left-color: var(--ok); }
+  .callout p { margin-bottom: 0.5rem; }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout-label {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: var(--step--1);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  /* ---------- tables ---------- */
+
+  .scroller { overflow-x: auto; margin: 1.25rem 0; border: 1px solid var(--rule); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: var(--step--1); min-width: 34rem; }
+  th, td { text-align: left; padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  thead th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-weight: 500;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.is-changed { background: var(--codex-soft); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .center { text-align: center; }
+
+  /* ---------- chips ---------- */
+
+  .chip {
+    display: inline-block;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.6875rem;
+    letter-spacing: 0.04em;
+    padding: 0.15em 0.5em;
+    border-radius: 3px;
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+  .chip.claude { background: var(--claude-soft); color: var(--claude); border-color: var(--claude); }
+  .chip.codex  { background: var(--codex-soft); color: var(--codex); border-color: var(--codex); }
+  .chip.ok     { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
+  .chip.gap    { background: var(--gap-soft); color: var(--gap); border-color: var(--gap); }
+  .chip.todo   { background: var(--surface-2); color: var(--ink-3); border-color: var(--rule-strong); }
+  .chip.ci     { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+
+  .yes { color: var(--ok); font-weight: 600; }
+  .no  { color: var(--gap); font-weight: 600; }
+  .na  { color: var(--ink-3); }
+
+  /* ---------- lifecycle rail ---------- */
+
+  .rail { list-style: none; margin: 1.25rem 0; padding: 0 0 0 1.75rem; border-left: 2px solid var(--rule-strong); display: flex; flex-direction: column; gap: 0.9rem; }
+  .rail li { position: relative; font-size: var(--step--1); max-width: none; margin: 0; }
+  .rail li::before {
+    content: "";
+    position: absolute;
+    left: -2.19rem;
+    top: 0.55rem;
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    background: var(--ground);
+    border: 2px solid var(--rule-strong);
+  }
+  .rail li.is-loop::before { border-color: var(--accent); background: var(--accent); }
+  .rail b { display: block; font-weight: 600; font-size: var(--step-0); }
+  .rail span { color: var(--ink-2); }
+  .rail .cmd { font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--accent); }
+
+  /* ---------- flow lanes ---------- */
+
+  .flow { margin: 1.25rem 0; border: 1px solid var(--rule); background: var(--surface); overflow-x: auto; }
+  .flow-row {
+    display: grid;
+    grid-template-columns: 2.25rem minmax(14rem, 1fr) minmax(9rem, auto);
+    gap: 0.5rem 1rem;
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid var(--rule);
+    align-items: baseline;
+    font-size: var(--step--1);
+    min-width: 30rem;
+  }
+  .flow-row:last-child { border-bottom: none; }
+  .flow-row.is-changed { background: var(--codex-soft); }
+  .flow-row.is-loop { background: var(--surface-2); font-style: italic; }
+  .flow-n { font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .flow-what b { display: block; font-weight: 600; }
+  .flow-what span { color: var(--ink-2); }
+  .flow-who { justify-self: start; }
+
+  /* ---------- route diagram ---------- */
+
+  .route { margin: 1.5rem 0; display: flex; flex-direction: column; gap: 0; }
+  .route-callers { display: grid; gap: 0.5rem; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
+  .node { background: var(--surface); border: 1px solid var(--rule-strong); padding: 0.75rem 0.9rem; font-size: var(--step--1); line-height: 1.45; }
+  .node b { display: block; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.15rem; }
+  .node span { color: var(--ink-2); }
+  .node.claude { border-left: 3px solid var(--claude); }
+  .node.human { border-left: 3px solid var(--ink-3); }
+  .node.codex { border-left: 3px solid var(--codex); }
+  .node.hub { border: 2px solid var(--accent); background: var(--accent-soft); text-align: center; padding: 1rem; }
+  .node.hub b { font-size: 0.9375rem; }
+  .node.sink { border: 1px dashed var(--rule-strong); text-align: center; background: var(--surface-2); }
+  .spine { height: 1.75rem; display: flex; align-items: center; justify-content: center; color: var(--rule-strong); font-size: 1.1rem; line-height: 1; }
+  .spine::before { content: "↓"; }
+
+  /* ---------- mode cards ---------- */
+
+  .modes { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); margin: 1.25rem 0; }
+  .mode { background: var(--surface); border: 1px solid var(--rule); border-top: 3px solid var(--rule-strong); padding: 1.125rem; display: flex; flex-direction: column; gap: 0.625rem; box-shadow: var(--shadow); }
+  .mode.b { border-top-color: var(--accent); }
+  .mode.c { border-top-color: var(--gap); }
+  .mode-id { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: var(--step--1); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
+  .mode-name { font-family: "IBM Plex Serif", Georgia, serif; font-size: var(--step-1); font-weight: 600; margin: 0; }
+  .mode-when { font-size: var(--step--1); color: var(--ink-2); margin: 0; }
+  .mode dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 0.75rem; font-size: var(--step--1); }
+  .mode dt { color: var(--ink-3); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.75rem; padding-top: 0.15rem; }
+  .mode dd { margin: 0; }
+  .flag { font-size: var(--step--1); color: var(--accent); font-weight: 600; margin: 0; }
+  .rb-pointer { font-size: var(--step--1); color: var(--ink-2); border-left: 3px solid var(--accent); padding-left: 0.75rem; }
+  .mode.c .flag { color: var(--gap); }
+
+  /* ---------- roadmap ---------- */
+
+  .stages { display: flex; flex-direction: column; margin: 1.25rem 0; border: 1px solid var(--rule); background: var(--surface); }
+  .stage { display: grid; grid-template-columns: 3.25rem 1fr auto; gap: 0.75rem 1rem; padding: 0.9rem 1rem; border-bottom: 1px solid var(--rule); align-items: start; }
+  .stage:last-child { border-bottom: none; }
+  .stage.is-done { background: var(--ok-soft); }
+  .stage-n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: var(--step--1); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .stage.is-done .stage-n { color: var(--ok); font-weight: 600; }
+  .stage-body b { display: block; font-weight: 600; margin-bottom: 0.15rem; }
+  .stage-body span { font-size: var(--step--1); color: var(--ink-2); }
+
+  /* ---------- legend ---------- */
+
+  .legend { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin: 1rem 0 0; font-size: var(--step--1); color: var(--ink-2); align-items: center; }
+
+  footer { margin-top: 3.5rem; padding-top: 1.25rem; border-top: 1px solid var(--rule); font-size: var(--step--1); color: var(--ink-3); font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+  a { color: var(--accent); text-underline-offset: 2px; }
+  a:focus-visible, :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  @media (max-width: 34rem) {
+    :root { --step-4: 1.9rem; --step-2: 1.25rem; }
+    .stage { grid-template-columns: 2.5rem 1fr; }
+    .stage > .chip { grid-column: 2; justify-self: start; }
+  }
+
+  /* ---------- runbook: 3 モード縦割り ---------- */
+
+  .rb-wrap { overflow-x: auto; margin: 1.5rem 0; border: 1px solid var(--rule-strong); background: var(--surface); }
+  .runbook { min-width: 58rem; display: grid; grid-template-columns: 7.5rem repeat(3, minmax(15rem, 1fr)); }
+  .runbook > * { border-bottom: 1px solid var(--rule); border-right: 1px solid var(--rule); padding: 0.7rem 0.85rem; }
+  .runbook > *:nth-child(4n) { border-right: none; }
+
+  .rb-corner { background: var(--surface-2); border-bottom-color: var(--rule-strong) !important; }
+  .rb-mode { background: var(--surface-2); border-bottom: 2px solid var(--rule-strong) !important; position: sticky; top: 0; z-index: 2; }
+  .rb-mode.a { box-shadow: inset 0 3px 0 var(--rule-strong); }
+  .rb-mode.b { box-shadow: inset 0 3px 0 var(--accent); }
+  .rb-mode.c { box-shadow: inset 0 3px 0 var(--gap); }
+  .rb-mode-id { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); display: block; }
+  .rb-mode-name { font-family: "IBM Plex Serif", Georgia, serif; font-size: var(--step-1); font-weight: 600; display: block; line-height: 1.3; }
+  .rb-mode-when { font-size: 0.75rem; color: var(--ink-2); display: block; margin-top: 0.15rem; }
+  .rb-mode-file { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.7rem; color: var(--ink-3); display: block; margin-top: 0.3rem; }
+  .rb-mode.b .rb-mode-name::after { content: "主力"; font-family: "IBM Plex Sans", sans-serif; font-size: 0.65rem; font-weight: 600; letter-spacing: 0.05em; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); padding: 0.05rem 0.35rem; margin-left: 0.4rem; vertical-align: middle; }
+
+  .rb-phase { background: var(--surface-2); font-size: 0.75rem; font-weight: 600; color: var(--ink-2); line-height: 1.35; }
+  .rb-phase small { display: block; font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 400; color: var(--ink-3); font-size: 0.7rem; }
+
+  .rb-cell { font-size: 0.8125rem; line-height: 1.5; }
+  .rb-cell .chip { margin-bottom: 0.3rem; }
+  .rb-cmd { display: block; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.75rem; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--rule); padding: 0.2rem 0.4rem; margin: 0.25rem 0; overflow-wrap: anywhere; }
+  .rb-note { display: block; color: var(--ink-2); font-size: 0.75rem; margin-top: 0.2rem; }
+  .rb-cell.is-none { background: var(--surface-2); }
+  .rb-cell.is-none .rb-dash { color: var(--ink-3); font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  .rb-cell.is-risk { background: var(--gap-soft); }
+  .rb-cell.is-key { background: var(--codex-soft); }
+  .rb-warn { display: block; color: var(--gap); font-weight: 600; font-size: 0.75rem; margin-top: 0.25rem; }
+  .rb-foot { background: var(--ink); color: var(--surface); font-size: 0.8125rem; }
+  .rb-foot b { color: var(--surface); }
+  .runbook > .rb-foot { border-bottom: none; border-right-color: var(--ink-2); }
+  .chip.human { background: var(--surface-2); color: var(--ink-2); border-color: var(--rule-strong); }
+
+  /* ---------- annotations ---------- */
+
+  mark.anno { background: var(--anno-soft, #fdf0c0); color: inherit; border-bottom: 2px solid var(--anno, #d19a00); padding: 0.05em 0; cursor: pointer; border-radius: 0; }
+  :root:not([data-theme="light"]) mark.anno { --anno-soft: #3a3218; --anno: #d6b44a; }
+  :root[data-theme="dark"] mark.anno { --anno-soft: #3a3218; --anno: #d6b44a; }
+  mark.anno.is-flash { animation: annoflash 1.2s ease; }
+  @keyframes annoflash { 0%, 100% { background: var(--anno-soft, #fdf0c0); } 30% { background: var(--anno, #d19a00); } }
+  body.anno-hidden mark.anno { background: none; border-bottom: none; cursor: auto; }
+
+  .anno-btn { font: inherit; font-size: 0.8125rem; font-family: "IBM Plex Sans", "Hiragino Sans", sans-serif; background: var(--surface); color: var(--ink); border: 1px solid var(--rule-strong); padding: 0.3rem 0.6rem; cursor: pointer; line-height: 1.3; }
+  .anno-btn:hover { background: var(--surface-2); }
+  .anno-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .anno-btn.danger { color: var(--gap); border-color: var(--gap); }
+
+  #anno-bar { position: fixed; right: 1rem; bottom: 1rem; z-index: 60; display: flex; gap: 0.35rem; align-items: center; background: var(--surface); border: 1px solid var(--rule-strong); padding: 0.35rem; box-shadow: var(--shadow); flex-wrap: wrap; max-width: calc(100vw - 2rem); }
+  #anno-count { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.75rem; color: var(--ink-3); padding: 0 0.3rem; }
+
+  #anno-add { position: absolute; z-index: 70; display: none; }
+  #anno-add.is-on { display: block; }
+
+  #anno-editor { position: absolute; z-index: 80; display: none; width: min(24rem, calc(100vw - 2rem)); background: var(--surface); border: 1px solid var(--rule-strong); box-shadow: var(--shadow); padding: 0.75rem; }
+  #anno-editor.is-on { display: block; }
+  #anno-editor blockquote { margin: 0 0 0.5rem; padding: 0.35rem 0.5rem; border-left: 3px solid var(--anno, #d19a00); background: var(--surface-2); font-size: 0.75rem; color: var(--ink-2); max-height: 5rem; overflow: auto; }
+  #anno-editor textarea { width: 100%; min-height: 5rem; font: inherit; font-size: 0.8125rem; font-family: "IBM Plex Sans", "Hiragino Sans", sans-serif; background: var(--ground); color: var(--ink); border: 1px solid var(--rule-strong); padding: 0.4rem; resize: vertical; }
+  .anno-row { display: flex; gap: 0.35rem; margin-top: 0.5rem; }
+  .anno-row .spacer { flex: 1; }
+
+  #anno-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(24rem, 100vw); background: var(--surface); border-left: 1px solid var(--rule-strong); box-shadow: var(--shadow); z-index: 65; transform: translateX(100%); transition: transform 0.18s ease; display: flex; flex-direction: column; }
+  #anno-drawer.is-on { transform: none; }
+  .anno-head { display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem; border-bottom: 1px solid var(--rule); }
+  .anno-head h2 { font-size: var(--step-0); margin: 0; flex: 1; font-family: "IBM Plex Serif", Georgia, serif; }
+  #anno-list { flex: 1; overflow-y: auto; margin: 0; padding: 0.5rem; list-style: none; }
+  #anno-list li { border: 1px solid var(--rule); background: var(--ground); padding: 0.6rem; margin: 0 0 0.5rem; font-size: 0.8125rem; max-width: none; }
+  #anno-list blockquote { margin: 0 0 0.35rem; padding-left: 0.5rem; border-left: 3px solid var(--anno, #d19a00); color: var(--ink-3); font-size: 0.75rem; }
+  #anno-list .anno-body { white-space: pre-wrap; margin-bottom: 0.4rem; }
+  #anno-list .anno-sec { font-size: 0.7rem; color: var(--ink-3); font-family: "IBM Plex Mono", ui-monospace, monospace; display: block; margin-bottom: 0.25rem; }
+  #anno-list li.is-orphan { border-color: var(--gap); }
+  #anno-list li.is-orphan .anno-sec::after { content: " / 位置不明(本文が変更された)"; color: var(--gap); }
+  .anno-empty { color: var(--ink-3); font-size: 0.8125rem; padding: 1rem; }
+
+  #anno-io { position: fixed; inset: 0; z-index: 90; display: none; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.45); padding: 1rem; }
+  #anno-io.is-on { display: flex; }
+  .anno-io-box { background: var(--surface); border: 1px solid var(--rule-strong); padding: 1rem; width: min(38rem, 100%); max-height: 80vh; display: flex; flex-direction: column; }
+  .anno-io-box h2 { margin: 0 0 0.5rem; font-size: var(--step-0); font-family: "IBM Plex Serif", Georgia, serif; }
+  .anno-io-box p { font-size: 0.8125rem; color: var(--ink-2); margin: 0 0 0.5rem; max-width: none; }
+  .anno-io-box textarea { width: 100%; flex: 1; min-height: 12rem; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.75rem; background: var(--ground); color: var(--ink); border: 1px solid var(--rule-strong); padding: 0.5rem; }
+
+  #anno-print { display: none; }
+
+  @media print {
+    #anno-bar, #anno-add, #anno-editor, #anno-drawer, #anno-io { display: none !important; }
+    #anno-print { display: block; break-before: page; }
+    #anno-print ol { padding-left: 1.25rem; }
+    #anno-print li { font-size: 0.8125rem; margin-bottom: 0.6rem; }
+    #anno-print blockquote { margin: 0; padding-left: 0.5rem; border-left: 2px solid #999; color: #555; font-size: 0.75rem; }
+    mark.anno { background: none; border-bottom: 1.5px solid #999; }
+  }
+
+  @media (max-width: 46rem) {
+    #anno-bar { right: 0.5rem; bottom: 0.5rem; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">claude-code-template / ハーネス改修</p>
+    <h1>Codex 併用ハーネス</h1>
+    <p class="standfirst">実装フェーズを Codex に移し、Claude が週間上限に当たっても作業が止まらない構成。設計・検収は Claude に残す。</p>
+    <div class="meta">
+      <span>改訂 <b>2026-08-19</b></span>
+      <span>段階 <b>1 / 6 完了</b></span>
+      <span>ブランチ <b>feature/vendor-neutral-branch-guard</b></span>
+      <span>正 <b>docs/template-dev/codex-delegation-plan.md</b></span>
+    </div>
+    <div class="legend">
+      <span class="chip claude">Claude</span>
+      <span class="chip codex">Codex</span>
+      <span class="chip ci">CI</span>
+      <span class="chip human">人間</span>
+      <span class="chip ok">実装済み</span>
+      <span class="chip todo">未着手</span>
+      <span>— 青緑の行が Codex 併用で変わる箇所</span>
+    </div>
+    <p class="standfirst" style="font-size: var(--step--1); margin-top: 1rem;">本文を選択すると <strong>「＋ メモ」</strong> が出ます。書き込んだメモはブラウザに保存され、右下のツールバーから一覧・書き出し・読み込みができます。<span style="color: var(--ink-3);">(別ブラウザや別マシンへ移すときは「書き出し」した JSON を「読み込み」してください)</span></p>
+  </header>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">01</span><h2>何を解こうとしているか</h2></div>
+
+    <p>トークンを最も食うのは「実装 → テスト → エラーを読む → 修正」のループ。実測では消費の 72% が 150k 超のコンテキストで発生しており、その主因がこのループのログ蓄積にある。<strong>この区間だけ外に出せれば、Claude の枠は大きく空く。</strong></p>
+
+    <p>同じ問題に Cursor 併用案が取り組んで保留になった。理由は「Composer をプログラム起動できず、受け渡しに人間の中継が必要」。<strong>Codex CLI は <code>codex exec</code> でヘッドレス起動できるため、この欠点が無い</strong> — これが Codex を採る決定的な理由。</p>
+
+    <div class="callout warn">
+      <span class="callout-label">前提の限界</span>
+      <p>認証は <strong>ChatGPT Plus サブスク</strong>。Codex 側にもレート制限があるため、<strong>両方枯れれば止まる</strong>。Codex 単独稼働(モード C)は恒久解ではなく数日しのぎであり、枠の実効寿命を伸ばす主力は<strong>モード B</strong> に置く。</p>
+    </div>
+  </section>
+  <section id="runbook">
+    <div class="sec-head"><span class="sec-num">02</span><h2>最終形: 3 モードの実行ランブック</h2></div>
+
+    <p><strong>この表がこのページの結論。</strong>縦が 1 チケットの進行、横が 3 つのモード。各セルは「<strong>誰(どのモデル)が・どのコマンドで</strong>」を示す。モードは <code>.harness/mode</code> を単一ソースとし、<strong>切替は人間が宣言する</strong>(Claude が自動で降格しない)。</p>
+
+    <div class="rb-wrap">
+      <div class="runbook">
+
+        <div class="rb-corner"></div>
+        <div class="rb-mode a">
+          <span class="rb-mode-id">Mode A</span>
+          <span class="rb-mode-name">通常</span>
+          <span class="rb-mode-when">Claude 枠に余裕がある</span>
+          <span class="rb-mode-file">.harness/mode = normal</span>
+        </div>
+        <div class="rb-mode b">
+          <span class="rb-mode-id">Mode B</span>
+          <span class="rb-mode-name">節約</span>
+          <span class="rb-mode-when">残枠がわずか</span>
+          <span class="rb-mode-file">.harness/mode = econ</span>
+        </div>
+        <div class="rb-mode c">
+          <span class="rb-mode-id">Mode C</span>
+          <span class="rb-mode-name">縮退</span>
+          <span class="rb-mode-when">Claude 上限に到達</span>
+          <span class="rb-mode-file">.harness/mode = degraded</span>
+        </div>
+
+        <div class="rb-phase">0 モード宣言<small>.harness/mode</small></div>
+        <div class="rb-cell">
+          <span class="chip human">人間</span>
+          <span class="rb-dash">操作不要</span>
+          <span class="rb-note">ファイルが無ければ normal とみなす</span>
+        </div>
+        <div class="rb-cell">
+          <span class="chip human">人間</span>
+          <code class="rb-cmd">echo econ &gt; .harness/mode</code>
+          <span class="rb-note"><code>/usage</code> の残枠を見て人間が判断する</span>
+        </div>
+        <div class="rb-cell is-risk">
+          <span class="chip human">人間</span>
+          <code class="rb-cmd">echo degraded &gt; .harness/mode</code>
+          <span class="rb-warn">書き忘れると Codex はモード A として振る舞い、コミットを拒否する = 縮退が成立しない</span>
+        </div>
+
+        <div class="rb-phase">1 事前条件<small>入口検査</small></div>
+        <div class="rb-cell is-none"><span class="rb-dash">—</span><span class="rb-note">司令塔がブランチを切るので不要</span></div>
+        <div class="rb-cell is-none"><span class="rb-dash">—</span><span class="rb-note">同左</span></div>
+        <div class="rb-cell is-risk">
+          <span class="chip human">人間</span><span class="chip codex">Codex</span>
+          <code class="rb-cmd">git switch -c feature/…
+git config core.hooksPath
+npm ci</code>
+          <span class="rb-note">保護ブランチにいたら切る / husky が有効か / 依存が入っているか。<strong>推奨: 人間が draft PR を先に開く</strong>(開かないとモード C 中は CI が一度も走らない)</span>
+        </div>
+
+        <div class="rb-phase">2 チケット選定<small>GitHub Issues</small></div>
+        <div class="rb-cell">
+          <span class="chip claude">Claude Opus</span>
+          <code class="rb-cmd">/next-ticket</code>
+          <span class="rb-note">Issue 選定 → <code>in-progress</code> ラベル → ブランチ作成</span>
+        </div>
+        <div class="rb-cell">
+          <span class="chip claude">Claude Opus</span>
+          <code class="rb-cmd">/next-ticket</code>
+          <span class="rb-note">選定とブランチ作成まで</span>
+        </div>
+        <div class="rb-cell">
+          <span class="chip codex">Codex</span>
+          <code class="rb-cmd">.codex/prompts の手順</code>
+          <span class="rb-note">sandbox はネットワーク無効で <code>gh</code> も無い。<strong>Issue 操作はしない</strong>(ラベル・コメントは Claude 復帰時にまとめて)</span>
+        </div>
+
+        <div class="rb-phase">3 計画<small>design.md</small></div>
+        <div class="rb-cell">
+          <span class="chip claude">Claude Opus</span>
+          <code class="rb-cmd">steering スキル(モード1)</code>
+          <span class="rb-note">書き切ったら <code>&lt;!-- status: ready --&gt;</code> に変える</span>
+        </div>
+        <div class="rb-cell is-key">
+          <span class="chip claude">Claude Opus</span>
+          <code class="rb-cmd">steering スキル → セッションを閉じる</code>
+          <span class="rb-note"><strong>ここだけ Claude に残すのがモード B の要点。</strong>設計はトークンが安く価値が最大で、安いモデルに任せると誤設計のまま実装が進みやり直しで高くつく</span>
+        </div>
+        <div class="rb-cell is-risk">
+          <span class="chip codex">Codex</span>
+          <code class="rb-cmd">AGENTS.md + .codex/prompts</code>
+          <span class="rb-warn">Codex が自分で書き自分で ready を立てる(自己認証)= 入口ゲートが効かない。復帰時に design.md 自体をレビュー対象に含めて回収する</span>
+        </div>
+
+        <div class="rb-phase">4 実装<small>tasklist の消化</small></div>
+        <div class="rb-cell is-key">
+          <span class="chip codex">Codex</span>
+          <code class="rb-cmd">delegate-codex.sh impl .steering/[dir]</code>
+          <span class="rb-note">司令塔が Bash ツールから叩く。<strong>exit 3(Codex 利用不可)なら <code>Skill('implement-ticket')</code> = Sonnet fork にフォールバック</strong></span>
+        </div>
+        <div class="rb-cell is-key">
+          <span class="chip codex">Codex</span>
+          <code class="rb-cmd">delegate-codex.sh impl .steering/[dir]</code>
+          <span class="rb-note"><strong>人間がターミナルから直接叩く。</strong>Claude を経由しないので起動コストが枠に乗らない</span>
+        </div>
+        <div class="rb-cell is-key">
+          <span class="chip codex">Codex</span>
+          <code class="rb-cmd">codex(直接起動)</code>
+          <span class="rb-note"><strong>delegate スクリプトを通らない唯一の経路。</strong>だから入口検査を <code>.codex/prompts</code> の冒頭にも複製する</span>
+        </div>
+
+        <div class="rb-phase">5 自己修復<small>変更ファイルのみ</small></div>
+        <div class="rb-cell">
+          <span class="chip codex">Codex</span>
+          <code class="rb-cmd">npm run lint / typecheck / 関連テスト</code>
+          <span class="rb-note">PostToolUse hook は Codex に効かないので自分で回す</span>
+        </div>
+        <div class="rb-cell">
+          <span class="chip codex">Codex</span>
+          <code class="rb-cmd">同左</code>
+          <span class="rb-note">フルスイートは回さない(CI の担当)</span>
+        </div>
+        <div class="rb-cell">
+          <span class="chip codex">Codex</span>
+          <code class="rb-cmd">同左(タスク単位)</code>
+          <span class="rb-note">コミット前に必ず通す。ここが唯一の品質ゲートになる</span>
+        </div>
+
+        <div class="rb-phase">6 検収<small>レビュー</small></div>
+        <div class="rb-cell">
+          <span class="chip claude">Haiku</span><span class="chip claude">Sonnet</span>
+          <code class="rb-cmd">/check + code-reviewer</code>
+          <span class="rb-note">フルスイート 1 回(test-runner = Haiku)+ スペック整合レビュー(Sonnet)</span>
+        </div>
+        <div class="rb-cell is-risk">
+          <span class="chip ci">CI のみ</span>
+          <span class="rb-dash">スキップ</span>
+          <span class="rb-warn">code-reviewer を飛ばすので、スペック整合とアーキテクチャ整合は未検査のまま残る → だから PR を draft で積む(下段)</span>
+        </div>
+        <div class="rb-cell is-risk">
+          <span class="rb-dash">自動ゲート無し</span>
+          <span class="rb-warn">CI のトリガは push:[main,develop] と pull_request のみ。PR を作らないモード C では<strong>起動する契機が無い</strong>。人間が push して初めて回る</span>
+        </div>
+
+        <div class="rb-phase">7 commit<small>ローカル</small></div>
+        <div class="rb-cell">
+          <span class="chip claude">Claude Opus</span>
+          <code class="rb-cmd">/commit</code>
+          <span class="rb-note">Codex にはコミットさせない(検収前の成果物を履歴に入れない)</span>
+        </div>
+        <div class="rb-cell">
+          <span class="chip claude">Claude Opus</span>
+          <code class="rb-cmd">/commit</code>
+          <span class="rb-note">最小コンテキストで実行する</span>
+        </div>
+        <div class="rb-cell is-key">
+          <span class="chip codex">Codex</span>
+          <code class="rb-cmd">git commit(Codex-authored: true トレーラー)</code>
+          <span class="rb-note"><strong>Codex にコミット権を渡す唯一のモード。</strong>上限で殺されるとログを書けないので、<strong>各コミットが自分で名乗る</strong>ことで識別手段が中断に耐える</span>
+        </div>
+
+        <div class="rb-phase">8 push<small>リモートへ</small></div>
+        <div class="rb-cell"><span class="chip claude">Claude</span><code class="rb-cmd">git push -u origin …</code></div>
+        <div class="rb-cell"><span class="chip claude">Claude</span><code class="rb-cmd">git push</code></div>
+        <div class="rb-cell is-risk">
+          <span class="chip human">人間</span>
+          <code class="rb-cmd">git push</code>
+          <span class="rb-warn">Codex はネットワーク無効かつ push 禁止。<strong>人間が区切りごとに押さない限り、コミットはローカルに留まり CI に永久に到達しない</strong></span>
+        </div>
+
+        <div class="rb-phase">9 PR<small>GitHub</small></div>
+        <div class="rb-cell">
+          <span class="chip claude">Claude Opus</span>
+          <code class="rb-cmd">gh pr create --base main</code>
+          <span class="rb-note">ボディに <code>Closes #N</code>。Issue にコメントで steering ディレクトリ名と PR URL を記録</span>
+        </div>
+        <div class="rb-cell is-key">
+          <span class="chip claude">Claude Opus</span>
+          <code class="rb-cmd">gh pr create --draft</code>
+          <span class="rb-note"><strong>draft は作法ではなく節約の実体。</strong>Claude レビュー(Actions)は <code>draft == false</code> 条件を持つので走らず、<code>ci.yml</code> は draft でも発火する = <strong>機械的検証は受けたままレビューだけ止められる</strong></span>
+        </div>
+        <div class="rb-cell is-none">
+          <span class="rb-dash">作らない</span>
+          <span class="rb-note">縮退は行き止まりではなく<strong>キュー</strong>。Claude 復帰後に通常フローへ合流する</span>
+        </div>
+
+        <div class="rb-phase">10 検証ゲート<small>自動</small></div>
+        <div class="rb-cell">
+          <span class="chip ci">CI</span><span class="chip claude">Claude Review</span>
+          <span class="rb-note">lint / 型 / テスト / secretlint / branch-policy / harness-integrity + main 向け PR で自動レビュー 1 回</span>
+        </div>
+        <div class="rb-cell">
+          <span class="chip ci">CI のみ</span>
+          <span class="rb-note">draft なので Claude レビューは走らない。<strong>PR を作った瞬間が CI の初回実行</strong> — 「CI が緑なら PR」は因果が逆</span>
+        </div>
+        <div class="rb-cell is-risk">
+          <span class="chip ci">CI(人間が push したときだけ)</span>
+          <span class="rb-note">事前に draft PR を開いていない場合、<strong>成果物は復帰時の検収まで一切検証されていない</strong></span>
+        </div>
+
+        <div class="rb-phase">11 合流<small>マージまで</small></div>
+        <div class="rb-cell">
+          <span class="chip claude">Claude Opus</span>
+          <span class="rb-note">レビュー指摘を判断・修正 → マージ → <code>/clear</code> して次のチケットへ</span>
+        </div>
+        <div class="rb-cell is-key">
+          <span class="chip claude">Claude Opus</span>
+          <code class="rb-cmd">gh pr ready(枠回復後)</code>
+          <span class="rb-note"><strong>モード B 中はマージしない。</strong>枠が戻って <code>ready_for_review</code> にすると <code>types: [opened, ready_for_review]</code> でレビューが自動起動する。溜めた PR をまとめて見てからマージ</span>
+        </div>
+        <div class="rb-cell is-key">
+          <span class="chip claude">Claude Opus</span>
+          <code class="rb-cmd">git log --grep 'Codex-authored'
+/check + code-reviewer → /commit → PR</code>
+          <span class="rb-note">① mode を normal に戻す ② Codex のコミットを特定 ③ <code>codex-log.md</code> を読む(差分全文は読まない)④ <strong>設計判断を design.md へ回収</strong> ⑤ 回収箇所を重点範囲として検収 ⑥ Issue のラベル・コメントもここで更新</span>
+        </div>
+
+        <div class="rb-phase rb-foot">枠の使いどころ</div>
+        <div class="rb-cell rb-foot"><b>計画 + 検収 + commit/PR</b><span class="rb-note">実装ループだけが外に出る</span></div>
+        <div class="rb-cell rb-foot"><b>計画のみ</b><span class="rb-note">検収を CI に委ね、Claude は「設計を書いて黙る」に絞る = 週枠の実効寿命が最も伸びる</span></div>
+        <div class="rb-cell rb-foot"><b>ゼロ(復帰後にまとめて)</b><span class="rb-note">Codex 側も上限に当たれば止まる。数日しのぎ</span></div>
+
+      </div>
+    </div>
+
+    <div class="callout warn">
+      <span class="callout-label">この表のうち、いま動くのは Mode A の Sonnet fork 経路だけ</span>
+      <p>段階 1(ベンダー中立ガードレール)のみ実装済み。<code>delegate-codex.sh</code>・<code>AGENTS.md</code>・<code>.codex/</code>・<code>.harness/mode</code> は<strong>すべて未実装</strong>で、Codex CLI もこの devcontainer に未インストール。したがって現時点で Claude の枠が尽きたら<strong>作業は止まる</strong> — 表は到達目標であって現状ではない。段階の内訳は §10 を参照。</p>
+    </div>
+
+    <div class="callout done">
+      <span class="callout-label">3 モードを貫く不変条件</span>
+      <p>実装者(Codex / Sonnet fork)は<strong>会話履歴を持たない</strong>。根拠は <code>design.md</code> と <code>tasklist.md</code> だけで、報告フォーマット(完了 / 判断待ち / 失敗)も共通。だから<strong>チケットの途中でも実装者を差し替えられる</strong> — Codex が 2/3 タスク目で上限に殺されても、Sonnet fork が 3 番目から続けられる。これは「あれば便利」ではなく満たすべき要件として扱う。</p>
+      <p>成立条件は <strong>1 タスク完了ごとに <code>tasklist.md</code> を <code>- [x]</code> へ更新する</strong>(まとめ更新の禁止)。ただし<strong>この 1 点だけは強制層を持てない</strong> — AGENTS.md も SKILL.md も散文であり hook ではない。だから回復時は tasklist を信じず <code>git diff --stat</code> と突き合わせる。</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">03</span><h2>実運用フロー(現行)</h2></div>
+
+    <p>README「実運用フロー」の内容。<strong>Codex 併用でもこの骨格は変えない。</strong> 変わるのは §03 に示す 1 ステップだけで、ライフサイクル・チケット運用・PR 規約はそのまま維持する。</p>
+
+    <h3>全体の流れ(プロジェクトライフサイクル)</h3>
+    <ol class="rail">
+      <li><b>アイデアを書く</b><span><code>docs/ideas/initial-requirements.md</code> に自由形式で</span></li>
+      <li><b>プロジェクト開始</b><span class="cmd">/kickoff</span></li>
+      <li><b>永続ドキュメント 6 つを承認制で作成</b><span><span class="cmd">/setup-project</span> — PRD / 機能設計 / 技術仕様 / リポジトリ構造 / 開発ガイドライン / 用語集</span></li>
+      <li><b>スポーク開発構成ルールの生成</b><span>ハブ &amp; スポーク構成のときのみ。<span class="cmd">/setup-spoke-standards</span> をハブ側リポジトリで実行</span></li>
+      <li><b>P0 チケットを GitHub Issues に発行</b><span><span class="cmd">/setup-tickets</span> — <code>ticket</code> + 優先度ラベル</span></li>
+      <li><b>ハーネス層の追加</b><span><span class="cmd">/harness-setup</span> — hooks / permissions</span></li>
+      <li class="is-loop"><b>開発サイクル</b><span><span class="cmd">/next-ticket</span> を繰り返す</span></li>
+      <li class="is-loop"><b>PR マージ</b><span><code>Closes #N</code> で Issue 自動クローズ → 未消化の Issue があれば開発サイクルへ戻る</span></li>
+      <li><b>docs と実装の乖離を解消</b><span>全 Issue クローズ後に <span class="cmd">/sync-docs</span></span></li>
+      <li><b>P1 チケットの発行を検討</b><span><span class="cmd">/setup-tickets</span> → 開発サイクルへ戻る</span></li>
+    </ol>
+
+    <h3>チケット 1 件の実装フロー(委譲構造)</h3>
+    <p>司令塔(Opus)は判断と統合に専念し、ログの長い作業・レビューはサブエージェントに委譲する。</p>
+
+    <div class="flow">
+      <div class="flow-row">
+        <span class="flow-n">1</span>
+        <div class="flow-what"><b>Issue 選定</b><span>依存クローズ済み・最優先を選ぶ</span></div>
+        <span class="flow-who"><span class="chip claude">司令塔 Opus</span></span>
+      </div>
+      <div class="flow-row">
+        <span class="flow-n">2</span>
+        <div class="flow-what"><b><code>in-progress</code> ラベル付与 + feature ブランチ作成</b></div>
+        <span class="flow-who"><span class="chip claude">司令塔 Opus</span></span>
+      </div>
+      <div class="flow-row">
+        <span class="flow-n">3</span>
+        <div class="flow-what"><b>steering 計画</b><span><code>.steering/</code> に requirements / design / tasklist</span></div>
+        <span class="flow-who"><span class="chip claude">司令塔 Opus</span></span>
+      </div>
+      <div class="flow-row is-changed">
+        <span class="flow-n">4</span>
+        <div class="flow-what"><b>実装の委譲</b><span><code>design.md</code> と <code>tasklist.md</code> だけを読んで実装 → サマリー 20 行を返す</span></div>
+        <span class="flow-who"><span class="chip claude">implementer Sonnet</span></span>
+      </div>
+      <div class="flow-row is-loop">
+        <span class="flow-n">↺</span>
+        <div class="flow-what"><b>判断待ち / 失敗なら <code>design.md</code> に追記して再実行</b><span>tasklist の途中から再開される</span></div>
+        <span class="flow-who"><span class="chip claude">司令塔 Opus</span></span>
+      </div>
+      <div class="flow-row">
+        <span class="flow-n">5</span>
+        <div class="flow-what"><b>検収を並列で委譲</b><span>差分レビュー + スペック整合 / lint・型・テスト実行と機械的修正</span></div>
+        <span class="flow-who"><span class="chip claude">code-reviewer Sonnet</span> <span class="chip claude">test-runner Haiku</span></span>
+      </div>
+      <div class="flow-row">
+        <span class="flow-n">6</span>
+        <div class="flow-what"><b>指摘・未解決問題の修正</b><span>設計判断を伴うもののみ司令塔が対応</span></div>
+        <span class="flow-who"><span class="chip claude">司令塔 Opus</span></span>
+      </div>
+      <div class="flow-row">
+        <span class="flow-n">7</span>
+        <div class="flow-what"><b>振り返り + 必要なら docs 更新</b><span>tasklist に申し送りを記録</span></div>
+        <span class="flow-who"><span class="chip claude">司令塔 Opus</span></span>
+      </div>
+      <div class="flow-row">
+        <span class="flow-n">8</span>
+        <div class="flow-what"><b>コミット → push</b><span class="cmd">/commit</span></div>
+        <span class="flow-who"><span class="chip claude">司令塔 Opus</span></span>
+      </div>
+      <div class="flow-row">
+        <span class="flow-n">9</span>
+        <div class="flow-what"><b>PR 作成</b><span><code>Closes #N</code> + Issue に steering / PR URL をコメント</span></div>
+        <span class="flow-who"><span class="chip claude">司令塔 Opus</span></span>
+      </div>
+      <div class="flow-row">
+        <span class="flow-n">10</span>
+        <div class="flow-what"><b>PR 自動レビュー</b><span>main 向け PR のオープン時に 1 回。再レビューは <code>@claude</code> メンション</span></div>
+        <span class="flow-who"><span class="chip ci">GitHub Actions</span></span>
+      </div>
+      <div class="flow-row">
+        <span class="flow-n">11</span>
+        <div class="flow-what"><b>マージ → Issue 自動クローズ</b><span>次のチケットに移る前に <span class="cmd">/clear</span></span></div>
+        <span class="flow-who"><span class="chip ci">GitHub</span></span>
+      </div>
+    </div>
+
+    <h3>この骨格を支えている規約</h3>
+    <ul>
+      <li><strong>広範囲のコード探索</strong>は組み込みの Explore サブエージェントに委譲し、司令塔は結論だけ受け取る</li>
+      <li><strong>実装フェーズの委譲は hook で強制される</strong> — 最新 <code>.steering/</code> の <code>tasklist.md</code> に未完了タスクがある状態で司令塔が実装コードを編集しようとすると <code>check-implementation-phase.sh</code> がブロックする。<code>.steering/</code> / <code>docs/</code> / <code>.claude/</code> は司令塔の仕事なので通る</li>
+      <li>「最新の <code>.steering/</code>」の判定は <code>latest-steering.sh</code> に集約(hook・fork・SessionStart が同じディレクトリを指すことが前提。<strong>自前で <code>ls | sort</code> しない</strong>)</li>
+      <li><strong>共通ルールは 2 層</strong> — <code>.claude/rules/*.md</code> は全サブエージェントに毎回ロードされる。司令塔専用は <code>.claude/rules/lead/*.md</code> に置き、SessionStart hook がメインセッションにのみ注入する</li>
+      <li><strong>チケット完了ごとに <code>/clear</code></strong> — 作業状態は Issue・<code>.steering/</code>・git に永続化済みで、持ち越す必要がない(トークン消費の最大の削減ポイント)</li>
+      <li>Edit / Write 直後に prettier が自動実行され、lint・型チェックも非同期で走る(PostToolUse hooks)</li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">04</span><h2>チケット 1 件フロー: 現行 → Codex 併用後</h2></div>
+
+    <p><strong>変わるのはステップ 4 の担当だけ。</strong> 選定・計画・検収・コミット・PR はすべて司令塔に残る。Codex から PR への直行ルートは作らない — 検収を通らない成果物がマージ候補にならない構造を守る。</p>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th class="center">#</th><th>ステップ</th><th>現行</th><th>Codex 併用後</th></tr></thead>
+        <tbody>
+          <tr><td class="center num">1–3</td><td>Issue 選定 → ブランチ → steering 計画</td><td><span class="chip claude">Opus</span></td><td><span class="chip claude">Opus</span> 変更なし</td></tr>
+          <tr class="is-changed">
+            <td class="center num">4</td>
+            <td><strong>実装</strong></td>
+            <td><span class="chip claude">implementer Sonnet</span> fork</td>
+            <td><span class="chip codex">Codex</span> <code>delegate-codex.sh impl</code><br><span class="mono">exit 3 なら Sonnet fork にフォールバック</span></td>
+          </tr>
+          <tr><td class="center num">5</td><td>検収(レビュー + 品質チェック)</td><td><span class="chip claude">Sonnet + Haiku</span></td><td><span class="chip claude">Sonnet + Haiku</span> ベンダー分離のため Claude に残す</td></tr>
+          <tr><td class="center num">6–7</td><td>指摘の修正・振り返り</td><td><span class="chip claude">Opus</span></td><td><span class="chip claude">Opus</span> 変更なし</td></tr>
+          <tr><td class="center num">8–9</td><td>コミット → PR</td><td><span class="chip claude">Opus</span></td><td><span class="chip claude">Opus</span> ※モード C のみ commit を Codex に許す</td></tr>
+          <tr><td class="center num">10–11</td><td>PR 自動レビュー → マージ</td><td><span class="chip ci">Actions</span></td><td><span class="chip ci">Actions</span> 変更なし</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <span class="callout-label">往復ルールも据え置き</span>
+      <p>委譲先が Codex に変わっても、司令塔の分岐ロジックは変えない。<strong>完了 → 検収 / 判断待ち → <code>design.md</code> に追記して再委託 / 失敗 → 原因分析</strong>。2 回連続で失敗したら委託を打ち切り司令塔が引き取り、<strong>同一タスクを再委託しない</strong>(Claude ↔ Codex の往復ループを閉じる)。</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">05</span><h2>3 モード運用</h2></div>
+
+    <p>モードは推測させず <code>.harness/mode</code> を単一ソースとし、<strong>切替は人間が宣言する</strong>(Claude が自動で降格しない)。SessionStart hook が現在のモードを注入する。</p>
+
+    <p class="rb-pointer">実行者・コマンドの一覧は <strong><a href="#runbook">§02 のランブック</a></strong> にある。ここでは各モードの<strong>設計判断の根拠</strong>だけを扱う。</p>
+
+    <h3>モード C の出口設計</h3>
+    <p>Codex はブランチ上にコミットを積むだけで PR を作らない。引き継ぎの単一ソースは <code>.steering/[dir]/codex-log.md</code>(変更・コミット範囲・自己チェック結果・<strong>設計判断</strong>・申し送り)。Claude の枠が回復したら、<strong>差分全文ではなくこのログを起点に</strong>検収 → PR へ合流する。</p>
+
+    <h3>モード C を始める前の 3 条件</h3>
+    <p>司令塔がいないので <strong>Codex 自身が守る</strong>(AGENTS.md に書く)。</p>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th class="center">#</th><th>条件</th><th>理由</th></tr></thead>
+        <tbody>
+          <tr class="is-changed"><td class="center num">1</td><td><strong>保護ブランチにいたら feature ブランチを切る</strong></td><td>§06 で追加した <code>.husky/pre-commit</code> が保護ブランチへのコミットを弾く。司令塔がいないため、Codex 自身が切らないと<strong>詰む</strong></td></tr>
+          <tr><td class="center num">2</td><td><strong>コミットに <code>Codex-authored: true</code> トレーラーを付ける</strong></td><td>上限で殺されると <code>codex-log.md</code> を書けない。<strong>各コミットが自分で名乗る</strong>ので識別手段が中断に耐える。件名の接頭辞にすると Conventional Commits を壊すため<strong>トレーラーにする</strong></td></tr>
+          <tr><td class="center num">3</td><td>Issue 操作(ラベル・コメント)はしない</td><td>sandbox はネットワーク無効で <code>gh</code> も無い。Claude 復帰時にまとめて行う</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout done">
+      <span class="callout-label">設計判断は延期されるが放棄されない</span>
+      <p>モード C は「設計判断は移管しない」原則への<strong>一時的な例外</strong>。Codex は下した判断を <code>codex-log.md</code> の「設計判断」欄に列挙し、<strong>Claude 復帰時に司令塔が <code>design.md</code> へ反映する</strong>。反映箇所は code-reviewer に重点レビュー範囲として渡す。<code>codex-log.md</code> を正のままにしない — 永続ドキュメントと steering の役割分担が崩れるため。</p>
+    </div>
+
+    <div class="callout warn">
+      <span class="callout-label">モード C には自動ゲートが無い</span>
+      <p><code>ci.yml</code> のトリガは <code>push: [main, develop]</code> と <code>pull_request</code> のみ。モード C は「feature ブランチにコミットを積むが PR は作らない」ので、<strong>CI が起動する契機が無い</strong>。頼れるのは Codex のセルフチェックだけになる。</p>
+      <p><strong>緩和案(提案・必須にしない)</strong>: モード C を始める前に<strong>人間が draft PR を先に開く</strong>と、以後の push ごとに CI が回る。既存の <code>pull_request</code> トリガに乗るので設定変更が要らない。採らない場合は「<strong>モード C の成果物は Claude 復帰時の検収を通るまで一切検証されていない</strong>」前提で扱う。</p>
+      <p><strong>push する主体は人間しかいない。</strong> Codex は sandbox のネットワークが無効で、権限表でも push を禁止している。つまり Codex が積んだコミットは<strong>放っておけばローカルに留まり、CI に永久に到達しない</strong>。draft PR を開くだけでは足りず、<strong>区切りごとに人間が push する</strong>ところまでが緩和策の中身になる。</p>
+    </div>
+
+    <h3>モード B は PR を積むがマージしない</h3>
+    <p>モード B は code-reviewer を飛ばす。CI は lint・型・テストしか見ず、<strong>スペック整合とアーキテクチャ整合は未検査</strong>のまま残る。これを何チケットも続けると、レビューを経ていないコードが <code>main</code> に入る。</p>
+    <p><strong>モード B 中の PR は draft で積み、枠が戻ってからまとめてレビューしてマージする。</strong>「進みは止めないが、未検証のものを本流に入れない」という切り分け。急ぐ場合の例外はユーザーが明示的に判断する。</p>
+
+    <div class="callout done">
+      <span class="callout-label">draft は作法ではなく節約の実体</span>
+      <p><code>claude-code-review.yml</code> は <code>if: github.event.pull_request.draft == false</code> を持つため、<strong>draft のままなら GitHub Actions の Claude レビューが走らない</strong>。非 draft で開くと、モード B が温存しようとしているまさにその枠を PR ごとに消費する。一方 <code>ci.yml</code> の <code>pull_request</code> トリガは draft でも発火するので、<strong>機械的検証は受けたままレビューだけを止められる</strong>。</p>
+      <p>枠が戻ったとき <code>ready_for_review</code> に切り替えると <code>types: [opened, ready_for_review]</code> により<strong>レビューが自動起動する</strong>。「溜まった PR をまとめてレビュー」はこの機構にそのまま乗る運用で、手動で呼び直す必要はない。</p>
+    </div>
+
+    <div class="callout warn">
+      <span class="callout-label">モード B の手順で順序を逆にしない</span>
+      <p><code>ci.yml</code> のトリガは <code>push: [main, develop]</code> と <code>pull_request</code> だけで、<strong>作業ブランチへの push だけでは CI は走らない</strong>。「CI が緑なら PR を作る」は因果が逆で、<strong>PR を作るまで CI は一度も動かない</strong>。正しい順序は commit → push → draft PR → <strong>ここで初めて CI</strong>。モード B は検収を CI に丸投げする設計なので、取り違えると検収が丸ごと空振りする。</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">06</span><h2>委託経路をシェルに置く</h2></div>
+
+    <p>初版は OpenAI 公式プラグイン(<code>codex-plugin-cc</code>)経由の委託を前提にしていたが、<strong>上限対策としては構造的にゼロ点</strong>だった — スラッシュコマンドは Claude が生きているときしか呼べない。そこで委託の正の経路を、シェルから叩ける 1 本のスクリプトに移す。</p>
+
+    <div class="route">
+      <div class="route-callers">
+        <div class="node claude"><b>Claude 司令塔</b><span>Bash ツールから叩く(モード A・B)</span></div>
+        <div class="node human"><b>人間</b><span>端末から直接叩く(モード B・C)</span></div>
+        <div class="node codex"><b>Codex 自身</b><span>.codex/prompts の手順に従う(モード C)</span></div>
+      </div>
+      <div class="spine"></div>
+      <div class="node hub"><b>.claude/scripts/delegate-codex.sh</b><span>入力 = .steering/ のパス &nbsp;/&nbsp; 出力 = サマリーのみ</span></div>
+      <div class="spine"></div>
+      <div class="node sink"><b>codex exec</b><span>sandbox: workspace-write ・ ネットワーク無効</span></div>
+    </div>
+
+    <p>入力も出力も呼び出し元によらず同一なので、<strong>ハーネスの二重管理が起きない</strong>。プラグインは導入してもよいが「モード A で人間が対話的に使う糖衣」に格下げし、テンプレートのフローからは呼ばない。</p>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th>mode</th><th>target</th><th>sandbox</th><th>用途</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">impl</td><td class="mono">.steering/[dir]</td><td class="mono">workspace-write</td><td>tasklist の消化(実装フェーズ本体)</td></tr>
+          <tr><td class="mono">explore</td><td class="mono">調査指示</td><td class="mono">read-only</td><td>広域コード探索。サマリーのみ返す</td></tr>
+          <tr><td class="mono">review</td><td class="mono">&lt;base-ref&gt;</td><td class="mono">read-only</td><td>敵対的レビュー。指摘リストを返す</td></tr>
+          <tr><td class="mono">fix-ci</td><td class="mono">CI ログのパス</td><td class="mono">workspace-write</td><td>CI 失敗の機械的修正</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>入口検査: <code>design.md</code> の完成マーカー</h3>
+
+    <p><strong>Claude が計画途中で上限に当たる</strong>ケースへの備え。書きかけの <code>design.md</code> を実装者が「完成品」として読むと、不完全な設計のまま実装が進み、<strong>Codex 側の枠まで無駄に消費する</strong>。</p>
+
+    <pre><code>&lt;!-- status: draft --&gt;   … 執筆中。実装に渡してはいけない
+&lt;!-- status: ready --&gt;   … 実装可能。設計判断は書き切られている</code></pre>
+
+    <p><code>delegate-codex.sh</code> と <code>implement-ticket</code> は <strong><code>ready</code> 以外なら <code>exit 5</code> で拒否</strong>する(<code>2</code> = タスク起因の失敗 とは<strong>別コードにするのが要点</strong> — 回復手段が「司令塔が設計を書き切る」と「原因分析」で全く違う)。マーカーが無ければ <code>draft</code> とみなす(既存の steering を安全側に倒す)。<code>tasklist.md</code> の <code>&lt;!-- main-edit-ok --&gt;</code> を hook が読む既存の作法と同じ — <strong>散文の規約ではなく機械が読める印にする</strong>ことで、Claude が突然止まっても状態がファイルに残る。</p>
+
+    <p><strong>ただしモード C ではこのゲートは無効化される。</strong> 司令塔がいないので Codex が <code>design.md</code> を書いて自分で <code>ready</code> を立てる(自己認証)。塞ぐ手段が無いため、<strong>Claude 復帰時の検収で <code>design.md</code> 自体をレビュー対象に含める</strong>ことで回収する — 入口で検査できない分を出口で見る。</p>
+
+    <div class="callout done">
+      <span class="callout-label">規約の置き場所を間違えない</span>
+      <p>この計画書がある <code>docs/template-dev/</code> は、CLAUDE.md が<strong>明示的に「読み込み対象外」</strong>と宣言しているディレクトリ。ここにしか書かないと<strong>司令塔はマーカーの存在を知らないまま毎回拒否される</strong>。<code>&lt;!-- main-edit-ok --&gt;</code> は hook のエラーメッセージが自己教育してくれるが、こちらにはその経路が無い。</p>
+      <p>そこで steering テンプレートの <code>design.md</code> に <code>draft</code> を<strong>既定で埋め</strong>(作れば必ず印が付く)、steering スキルのモード1 に <code>ready</code> への変更手順を書いた — <strong>ロードされる場所に規約を置く</strong>。</p>
+    </div>
+
+    <div class="callout warn">
+      <span class="callout-label">「無ければ draft とみなす」は既存を全部壊す</span>
+      <p>当初は「マーカーが無ければ <code>draft</code> とみなす(安全側)」としていた。しかし<strong>このリポジトリの <code>.steering/</code> 3 件を含め、導入以前の <code>design.md</code> には印が無い</strong>。安全側に倒したつもりで「委譲経路が全プロジェクトで沈黙して止まる」ことになる。</p>
+      <p>正しくは <strong>印があるものだけを検査する</strong>。テンプレートが <code>draft</code> を既定で埋めるようになった以降の作業は必ず印を持つので、これで十分。<strong>この規則は Codex と Sonnet fork で共通</strong>にする — 片方だけがゲートを持つと「同じ計画を渡しても実装者によって結果が違う」状態になり、交換可能性が崩れる。</p>
+    </div>
+
+    <h3>入口検査: 委託前の実行可能性</h3>
+    <p>ネットワーク無効の sandbox では、<strong>依存が未インストールだと Codex は何一つ完遂できない</strong>。品質チェックが動かないだけでなく、<code>.husky/pre-commit</code> の <code>npx lint-staged</code> が取得を試みて失敗するため、<strong>コミット自体が原因の分かりにくいエラーで死ぬ</strong>。「新規依存を追加しない」だけでは足りず、「<strong>そもそも依存が入っている</strong>」が前提条件になる。</p>
+    <p>ただし <code>delegate-codex.sh</code> はマニフェスト上テンプレート所有(<code>owned</code>)で、<strong>全プロジェクトに配られる</strong>。<code>node_modules</code> の有無を決め打ちで見ると Python / Go のプロジェクトで無意味に落ちるため、検査は<strong>スタック非依存の形</strong>にする — AGENTS.md に書かれた検証コマンドを 1 つ空実行できるかだけ見て、駄目なら委託せず <code>exit 3</code> で戻す。<strong>枠を溶かす前に止めるのが目的</strong>。コミットを許すモード C では <code>git config core.hooksPath</code> の設定済みも併せて見る(未設定なら husky が丸ごと無効 = 防衛線が存在しない状態でコミットさせることになる)。</p>
+
+    <h3>終了コード契約</h3>
+    <p>司令塔は<strong>この値だけを見て分岐する</strong>(推測しない)。<code>3</code> と <code>4</code> を混ぜないのが要点 — 前者は環境の欠落(恒久)、後者は枠切れ(一時)で回復手段が違う。</p>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th class="center">code</th><th>意味</th><th>司令塔の動き</th></tr></thead>
+        <tbody>
+          <tr><td class="center mono">0</td><td>完了</td><td>検収へ</td></tr>
+          <tr><td class="center mono">1</td><td>判断待ち</td><td><code>design.md</code> に追記して再委託</td></tr>
+          <tr><td class="center mono">2</td><td>失敗(タスク起因)</td><td>原因分析。2 回連続なら引き取り</td></tr>
+          <tr><td class="center mono">3</td><td><strong>Codex 利用不可</strong>(CLI 不在・未認証)</td><td><strong>恒久フォールバック</strong> — 以降このセッションは Sonnet fork</td></tr>
+          <tr class="is-changed"><td class="center mono">4</td><td><strong>Codex 側のレート上限</strong></td><td><strong>一時フォールバック</strong> — 待つか Sonnet fork</td></tr>
+          <tr class="is-changed"><td class="center mono">5</td><td><strong>計画が未完成</strong>(<code>design.md</code> が <code>ready</code> でない)</td><td>司令塔が書き切って <code>ready</code> にしてから再委託</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Claude Code on the web のリモート実行にはローカル Codex CLI が無いため <code>3</code> を返す。この経路を残さないと環境依存で作業が止まる。</p>
+
+    <div class="callout warn">
+      <span class="callout-label">上限の検出そのものが脆い</span>
+      <p>Codex CLI が上限に固有の終了コードを返すかは<strong>未確認</strong>。返さない場合は stderr のパターン(<code>rate</code> / <code>quota</code> / <code>429</code> / <code>limit</code>)で判定することになり、文言変更で壊れる。<strong>生のエラー 3 行を必ず run record に保存</strong>し、検出をすり抜けても人間が判断できる状態にしておく。</p>
+    </div>
+
+    <div class="callout warn">
+      <span class="callout-label">送信は事後に回収できない唯一のリスク</span>
+      <p><strong><code>.gitignore</code> は守りにならない。</strong> ignore されたファイルもディスク上にあれば <code>workspace-write</code> sandbox は読める(<code>.env</code> が典型)。委託はそれを OpenAI 側へ送りうる。</p>
+      <p>対策は 2 段。<strong>(1)</strong> <code>delegate-codex.sh</code> が委託前に <code>.env</code> / <code>*.pem</code> / <code>id_rsa*</code> / <code>credentials*</code> の存在を検査して確認を求める(存在しないのが正常なので普段は無言)。<strong>(2)</strong> kickoff のガバナンス判断を「使うか / 使わないか」ではなく「<strong>どのパスを送ってよいか</strong>」まで決めるものに格上げし、その一覧をスクリプトへ渡す。</p>
+      <p>他のリスクは検収で回収できるが、<strong>これだけは送信した時点で終わり</strong>。<code>.codex/config.toml</code> にパス単位の除外があるかは未確認なので、当てにせず (1) を必ず実装する。</p>
+    </div>
+
+    <h3>run record — 委託を挟んで <code>/clear</code> するための仕掛け</h3>
+
+    <p>起動時と終了時に <code>.harness/codex-runs/[id].json</code> を書く。<strong>これが状態の正</strong>で、会話に依存しない。通常なら司令塔のコンテキストに載る Codex のサマリー 20 行が<strong>ここに着地し、次のセッションには 5 行だけが注入される</strong>。これが「委託」と「<code>/clear</code>」を噛み合わせている実体。</p>
+
+    <pre><code>{
+  "id": "20260818-143200",
+  "mode": "impl",
+  "steering": ".steering/20260818-issue12-user-crud/",
+  "codexSessionId": "01JQ...",
+  "pid": 48213,
+  "status": "running | completed | failed | rate-limited",
+  "resetAt": null,
+  "summary": "tasklist 3/3 完了・変更 3 ファイル・lint/型/関連テスト pass",
+  "error": null,
+  "log": ".harness/codex-runs/20260818-143200.log",
+  "accepted": false
+}</code></pre>
+
+    <p>これを SessionStart hook が読み、新セッションの現在地に 1 ブロック足す。既に「ブランチ・in-progress Issue・未完了タスク」を注入する仕組みがあるので、<strong>そこに足すだけ</strong>で済む:</p>
+
+    <pre><code>## 現在地(SessionStart 自動オリエンテーション)
+- ブランチ: feature/issue12-user-crud
+- PR のベースブランチ(ポリシー): main(根拠: .claude/branch-policy.json)
+- in-progress チケット:
+  12  ユーザー CRUD の実装   ticket, P0, in-progress
+<span class="hl">- Codex 委託(未検収): 1 件
+  - 20260818-143200 / mode=impl / 対象 .steering/20260818-issue12-user-crud/
+    状態: 完了(14:32:00 → 14:51:12)
+    サマリー: tasklist 3/3 完了・変更 3 ファイル・lint/型/関連テスト pass
+    ログ: .harness/codex-runs/20260818-143200.log
+    → 検収(/check + code-reviewer)を実行し、通ったら accepted=true にする</span>
+- 最新ステアリング(.steering/20260818-issue12-user-crud/)の未完了タスク: なし</code></pre>
+
+    <div class="callout">
+      <span class="callout-label">clear の損益</span>
+      <p>新セッションでプロジェクト由来で載るのは<strong>約 12,100 文字</strong>(<code>CLAUDE.md</code> 2,724 + <code>spec-driven.md</code> 1,528 + <code>lead/*.md</code> 7,375 + 現在地 504)。ルール類は毎回同一バイト列なのでキャッシュに乗り、変動する現在地が末尾に来る並びになっている。<strong>実費は「検収のため <code>design.md</code> / <code>tasklist.md</code> を読み直す分」</strong>で、継続時に払う「計画の全会話 × 残りターン数」より小さい。</p>
+      <p>ただし条件がある — <strong><code>design.md</code> に書けていない知見を抱えたまま clear しない。</strong> 「design.md は実装者が設計判断なしで進められる粒度まで」という既存要件は、<code>/clear</code> を安全にする条件でもある。</p>
+    </div>
+
+    <div class="callout warn">
+      <span class="callout-label">Codex へのモード伝達は 2 経路要る</span>
+      <p>モード別の許可(コミットの可否など)は、<strong>Codex が自分のモードを知っている前提</strong>で書かれている。AGENTS.md は静的ファイルなので、それだけでは判別できない。</p>
+      <p><strong>当初は「<code>delegate-codex.sh</code> のプロンプト注入が唯一の伝達路」としていたが、これはモード C を成立させない。</strong> モード C は Codex を直接起動する = <code>delegate-codex.sh</code> を通らないため注入が届かず、既定の<strong>モード A に落ちてコミットを拒否する</strong>。守りたい当の縮退モードが、伝達手段の依存によって機能しなくなる構造だった。</p>
+      <p>修正: <code>.harness/mode</code> を Codex も読む単一ソースにし、読む順序を <strong>プロンプトの値 &gt; <code>.harness/mode</code> &gt; モード A</strong> に固定した。AGENTS.md の起動時手順にファイル読み取りを必ず含める。</p>
+    </div>
+
+    <h3>委託中に並行してよい作業</h3>
+
+    <p>Codex とは<strong>同一ワーキングツリー・同一ブランチを共有する</strong>。委託中の司令塔は委託ブランチのプロダクトコードに触れない作業のみ並行する(docs 執筆・調査・レビューは可)。</p>
+
+    <div class="callout warn">
+      <span class="callout-label">委託中に新しい steering ディレクトリを作らない</span>
+      <p><code>latest-steering.sh</code> の選定は「日付プレフィックス降順 → 同日は <strong><code>tasklist.md</code> の mtime</strong> 降順」。委託中に同日の新ディレクトリを作ると、Codex が委託先の tasklist を更新するたびに「最新」が入れ替わる:</p>
+      <pre><code>新ディレクトリ B の tasklist を書く    → B が latest
+Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
+司令塔が B の tasklist を追記          → B が latest</code></pre>
+      <p><code>check-implementation-phase.sh</code> のブロック判定と SessionStart の表示が<strong>委託中ずっと入れ替わる</strong>。Sonnet fork は同期実行で窓が一瞬だが、<strong>バックグラウンド委託は窓が委託全体に広がる</strong> — Codex 併用が潜在的な競合を顕在化させる。</p>
+    </div>
+
+    <h3>委託が途中で止まったとき</h3>
+
+    <p>レート上限で殺された Codex は<strong>サマリーも <code>codex-log.md</code> も書けない</strong>。run record は <code>running</code> のまま、pid だけ死んだ状態で残る。したがって回復時に読むのは<strong>サマリーではなく <code>tasklist.md</code> と <code>git diff</code></strong>。</p>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th>選択肢</th><th>コスト</th><th>使いどき</th></tr></thead>
+        <tbody>
+          <tr><td><strong>待つ</strong></td><td>ゼロ</td><td>5 時間枠の上限。残りタスクが多い</td></tr>
+          <tr><td><strong>Sonnet fork に引き継ぐ</strong></td><td>Claude 枠(小)</td><td>残り 1〜2 タスク。急ぐ</td></tr>
+          <tr><td>部分成果を破棄(<code>git checkout</code>)</td><td>ゼロ</td><td>ビルドが壊れていて、かつ進捗が 1 タスク以下</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>司令塔(Opus)が引き取るのを既定にしない。</strong> 温存したい枠を最も高い単価で使うことになる。Sonnet fork を先に試す。</p>
+
+    <p><strong>手直しするときは hook の脱出弁が要る。</strong> 中断すると未完了タスクが残るため <code>check-implementation-phase.sh</code> が司令塔の Edit/Write をブロックする(3 択のうち「Sonnet fork に引き継ぐ」と「破棄」は通るが、手直しだけ詰まる)。<code>tasklist.md</code> に <code>&lt;!-- main-edit-ok --&gt;</code> を追記して解除し、<strong>直後に消す</strong>(消し忘れると以降ずっと実装フェーズの強制が効かなくなる)。</p>
+
+    <div class="callout done">
+      <span class="callout-label">なぜ乗り換えられるのか</span>
+      <p>Codex と Sonnet fork は<strong>同じ契約</strong>(<code>design.md</code> + <code>tasklist.md</code> を唯一の根拠とし、1 タスク完了ごとに <code>- [x]</code> へ更新し、同じ報告フォーマットを返す)で動く。どちらも会話履歴を持たないため、<strong>チケットの途中でも乗り換えコストがゼロ</strong>。これは副産物ではなく<strong>満たすべき設計要件</strong>として扱う — <code>tasklist.md</code> の逐次更新が「行儀」ではなく要件なのはこのため。</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">07</span><h2>ガードレールを 4 層にする</h2></div>
+
+    <p>ここが今回実装した部分。<strong>Codex は Claude の hook を一切通らない。</strong> モード C で Codex にコミットを許す以上、ベンダー非依存の防衛線がローカルに要る。</p>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th>層</th><th>実体</th><th class="center">Claude</th><th class="center">Codex</th><th class="center">手動 git</th><th>状態</th></tr></thead>
+        <tbody>
+          <tr><td>1. 現在地の注入</td><td class="mono">.claude/hooks/session-start.sh</td><td class="center yes">✓</td><td class="center na">—</td><td class="center na">—</td><td><span class="chip todo">既存</span></td></tr>
+          <tr><td>2. コマンド前検査</td><td class="mono">.claude/scripts/check-branch-policy.sh</td><td class="center yes">✓</td><td class="center no">✗</td><td class="center no">✗</td><td><span class="chip ok">重複排除済</span></td></tr>
+          <tr class="is-changed"><td>3. コミット前検査</td><td class="mono">.husky/pre-commit</td><td class="center yes">✓</td><td class="center yes">✓</td><td class="center yes">✓</td><td><span class="chip ok">新規 · 今回</span></td></tr>
+          <tr><td>4. 最終ゲート</td><td class="mono">.github/workflows/ci.yml</td><td class="center yes">✓</td><td class="center yes">✓</td><td class="center yes">✓</td><td><span class="chip todo">既存</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout done">
+      <span class="callout-label">今回の設計判断</span>
+      <p>保護ブランチ判定の<strong>実体を 1 ファイルに集約</strong>した(<code>.claude/scripts/check-protected-branch.sh</code>)。層 2 と層 3 が同じスクリプトを呼ぶため、<strong>経路によって判定がずれない</strong>。終了コードの読み替え(<code>1</code> → <code>2</code>)は呼び出し側が持ち、共有側は用途を知らずに済む。<code>latest-steering.sh</code> を hook・fork・スキルで共有しているのと同じ構造。</p>
+    </div>
+
+    <div class="callout warn">
+      <span class="callout-label">この層がモード C で詰みを作る</span>
+      <p>モード C には司令塔がいない。Codex が保護ブランチ上で作業を始めると<strong>この層に弾かれ、原因を自己診断できずに止まる</strong>。共有スクリプトのメッセージに <code>git switch -c feature/[作業名]</code> の案内を入れてあるので自力回復の余地はあるが、AGENTS.md のモード C 手順にブランチ作成を明記して確実にする(§04)。</p>
+    </div>
+
+    <div class="callout done">
+      <span class="callout-label">監視役もベンダー中立にする</span>
+      <p>層 3 が消えていないかの検査を、当初は SessionStart hook にだけ置いていた。しかし SessionStart は <strong>Claude 専用</strong>であり、この層が守りたいのは<strong>モード C = Claude が起動しない期間そのもの</strong>。<strong>検知が必要な期間に検知役が動かない</strong>という構造で、「層が無いことより気づけないことの方が悪い」という論理がそのまま跳ね返っていた。</p>
+      <p>同じ検査を <code>ci.yml</code> にも置いた。既存ループは <code>.claude/scripts/*.sh</code> と <code>.claude/hooks/*.sh</code> しか見ておらず <strong><code>.husky/</code> は検査対象外だった</strong>。<code>.husky/</code> はマニフェストの <code>merge</code>(手動統合)対象で、同期の誤りで呼び出しごと落ちやすい。</p>
+      <p>あわせて <strong><code>quality</code> から独立したジョブに切り出した</strong>。従来は <code>quality</code> の最終ステップにあり、lint やテストが落ちると fail-fast で<strong>実行されずに終わっていた</strong> — ガードレールが消えている PR ほど他のチェックも落ちやすく、<strong>最も検知したい場面で検知できない</strong>構造だった。依存のインストールが要らないので独立させた方が速くもある。</p>
+      <div class="scroller">
+        <table>
+          <thead><tr><th>層</th><th>いつ気づくか</th><th>性質</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">session-start.sh</td><td>Claude セッション開始時</td><td><strong>早期警告</strong>。壊れたまま作業を始めさせない</td></tr>
+            <tr class="is-changed"><td class="mono">ci.yml(独立ジョブ)</td><td>PR の時点</td><td><strong>最終検証</strong>。Claude が一度も起動しなくても効く</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <h3>README の規約のうち、Codex に効かないもの</h3>
+    <p>§02 で挙げたハーネス機能は<strong>ほとんどが Claude 専用</strong>。Codex 併用ではそれぞれ写像先が要る。</p>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th>ハーネス機能</th><th class="center">Claude</th><th class="center">Codex</th><th>Codex 側の代替</th></tr></thead>
+        <tbody>
+          <tr><td>共通ルールの読み込み(CLAUDE.md + rules/)</td><td class="center yes">✓</td><td class="center no">✗</td><td><strong>AGENTS.md に写像</strong>(段階2)</td></tr>
+          <tr><td>PostToolUse の prettier / lint 自動実行</td><td class="center yes">✓</td><td class="center no">✗</td><td>AGENTS.md で自己実行を義務化(<strong>変更ファイルのみ</strong>。全体フォーマットは司令塔の並行編集を書き潰す)</td></tr>
+          <tr><td>危険コマンドのブロック</td><td class="center yes">✓</td><td class="center no">✗</td><td><code>.codex/config.toml</code> の sandbox で張り直す</td></tr>
+          <tr class="is-changed"><td>保護ブランチへの直接コミット</td><td class="center yes">✓</td><td class="center yes">✓</td><td><strong><code>.husky/pre-commit</code> に移植(今回)</strong></td></tr>
+          <tr><td>現在地の自動注入(SessionStart)</td><td class="center yes">✓</td><td class="center no">✗</td><td><code>.codex/prompts/</code> or playbook(段階5)</td></tr>
+          <tr><td>実装フェーズの委譲強制</td><td class="center yes">✓</td><td class="center na">—</td><td>Codex は実装者側のため不要</td></tr>
+          <tr><td>最新 steering の判定</td><td class="center yes">✓</td><td class="center yes">✓</td><td><code>latest-steering.sh</code> はシェルなので共有できる</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout done">
+      <span class="callout-label">この層が静かに消えないようにする(実装済み)</span>
+      <p><code>.husky/pre-commit</code> は template-manifest の <strong><code>merge</code></strong>(手動統合)対象。<code>/sync-template</code> の統合ミスで<strong>共有スクリプトの呼び出しごと落ちても誰も気づかない</strong>。層が無いことより、無くなったのに気づけないことの方が悪い。</p>
+      <p>SessionStart のハーネス自壊検知に 2 つ追加した: <strong>(1)</strong> <code>.husky/pre-commit</code> が共有スクリプトを呼んでいるか、<strong>(2)</strong> <code>core.hooksPath</code> が設定されているか(未設定 = husky 自体が無効)。正常時は無言、失われたときだけ警告する。</p>
+      <p><strong>検査は「呼び出しの有無」と「呼ばれる実体の有無」を両方見る。</strong> 当初は <code>[ -f script ] &amp;&amp; ! grep …</code> の形で書いており、<strong>スクリプトごと消えると検査自体がスキップされ <code>exit 0</code></strong> になっていた。層が完全に消滅した最悪のケースが最も静かに通るという、この節の主張がそのまま裏返った状態だった。一般化すると <strong>「X が壊れていないか」を X の存在を前提に検査してはいけない</strong>。<code>.husky/pre-commit</code> 側も、スクリプト不在時に stderr へ警告を出す(フェイルオープンは維持)。</p>
+    </div>
+
+    <h3>Codex 関連ファイルのマニフェスト登録(段階2 で行う)</h3>
+    <p>AGENTS.md も <code>.codex/</code> も現在マニフェストに<strong>未登録</strong>で、<code>/sync-template</code> の扱いが未定義。生成と同時に登録する。</p>
+    <div class="scroller">
+      <table>
+        <thead><tr><th>パス</th><th>区分</th><th>理由</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">AGENTS.md</td><td><span class="chip todo">merge</span></td><td>雛形はテンプレート、検証コマンドはスタック依存でプロジェクトが書き換える</td></tr>
+          <tr><td class="mono">.codex/config.toml</td><td><span class="chip todo">merge</span></td><td>sandbox 既定はテンプレートの方針、model / effort はプロジェクト裁量</td></tr>
+          <tr><td class="mono">.codex/prompts/</td><td><span class="chip todo">owned</span></td><td>ワークフローの写像。<code>.claude/commands/</code> と同じ扱い</td></tr>
+          <tr><td class="mono">.harness/</td><td><span class="chip todo">never</span></td><td>ローカルの一時状態。gitignore 対象</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>残る穴(割り切り)</h3>
+    <div class="scroller">
+      <table>
+        <thead><tr><th>穴</th><th>内容</th><th>補う層</th></tr></thead>
+        <tbody>
+          <tr><td>husky は <code>npm install</code> 後にしか効かない</td><td><code>prepare: "husky"</code> が <code>core.hooksPath</code> を設定する仕組み。依存未インストールのクローン直後は git hook 自体が動かない</td><td>環境構築手順 + CI</td></tr>
+          <tr><td><s><code>--no-verify</code> で素通しできる</s> → <strong>コミットについては塞がった</strong></td><td><code>--no-verify</code> が無効化するのは <code>pre-commit</code> と <code>commit-msg</code> だけで、<code>prepare-commit-msg</code> は迂回できない(実測)。ただし <code>git push</code> の直接実行など、コミット以外の経路は塞げない</td><td>リモートのブランチ保護 + CI</td></tr>
+          <tr><td>CI は「直接コミットされたか」を見ない</td><td><code>branch-policy</code> ジョブが検査するのは PR の base とブランチ名のみ</td><td>リモートのブランチ保護</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn">
+      <span class="callout-label">この受け皿は現状のリポジトリでは存在しない(2026-08-19 判明)</span>
+      <p>上の表は<strong>残る穴 3 件のうち 2 件を「リモートのブランチ保護」に集約</strong>している。しかしこのリポジトリは <strong>Free プランの private</strong> であり、ブランチ保護もルールセットも使えない:</p>
+      <p class="mono" style="font-size: 0.75rem; background: var(--surface-2); padding: 0.5rem;">$ gh api repos/{owner}/{repo}/branches/main/protection<br>403 Upgrade to GitHub Pro or make this repository public</p>
+      <p>帰結は 3 つ。<strong>Codex にコミット権を渡す(モード C)前に決着させること。</strong></p>
+      <ul>
+        <li><code>--no-verify</code> と <code>main</code> への直接 push に <strong>backstop が無い</strong></li>
+        <li>CI を required check にできない → <code>branch-policy</code> / <code>harness-integrity</code> ジョブは<strong>赤くなるだけでマージを止められない</strong></li>
+        <li>「権限境界は GitHub 側で張る」という前提が、このリポジトリでは<strong>空手形</strong>になっている</li>
+      </ul>
+      <p>選択肢は <strong>①リポジトリを public にする</strong>(public なら Free でもルールセットが使える)/ <strong>②Pro・Team に上げる</strong> / <strong>③ローカル hook が唯一の層だと認めて上の表を書き換える</strong>。③はモード C の前提としては最も弱い。</p>
+    </div>
+
+    <div class="callout warn">
+      <span class="callout-label">フェイルオープンのつもりが fail-closed だった(2026-08-19 修正)</span>
+      <p>husky は <code>.husky/pre-commit</code> を <strong><code>sh -e</code></strong> で実行する(<code>.husky/_/h</code>)。<code>set -e</code> 下では非ゼロを返したコマンドの直後にシェルごと終了するため、当初の</p>
+      <p class="mono" style="font-size: 0.75rem; background: var(--surface-2); padding: 0.5rem;">bash "$GUARD"<br>case $? in 1) exit 1 ;; esac&nbsp;&nbsp;<span style="color: var(--gap);">← 到達しない</span></p>
+      <p>は <code>case</code> に制御が渡らず、<strong>内部エラー(<code>bash</code> 不在 = 127・構文エラー = 2・権限落ち = 126)まで全コミットをブロックしていた</strong>。設計上の「内部エラーはフェイルオープン」の真逆であり、メッセージは <code>husky - pre-commit script failed (code 127)</code> だけ、回復手段は <code>--no-verify</code> のみ。<strong>この節が防ごうとしている「静かな自壊」の最も派手な裏返し</strong>になっていた。</p>
+      <p>修正は終了コードを <code>&amp;&amp; / ||</code> のリスト内で受ける形(リスト内は <code>set -e</code> が発火しない)。<code>npx lint-staged</code> も <code>lint-staged</code> の直呼びに変えた — husky が <code>node_modules/.bin</code> を PATH に足しているのでローカル解決でき、<strong>ネットワーク無効の sandbox(Codex 委託時)で <code>npx</code> がレジストリ取得を試みて死ぬ経路</strong>が消える。</p>
+    </div>
+
+    <div class="callout done">
+      <span class="callout-label">ポリシーの空洞化検知(2026-08-19 追加)</span>
+      <p>保護ブランチ検査の 3 層(PreToolUse hook / <code>.husky/pre-commit</code> / CI の <code>branch-policy</code>)は、いずれも <code>protectedBranches</code> という<strong>同じ配列</strong>を読む。ここが空になると <strong>3 層が同時に、かつ「正常に動作したうえで素通し」という形で</strong>無効化される。呼び出しの有無だけを見る自壊検知では<strong>最も静かに層が消えるのがこの経路</strong>なので、SessionStart と CI の両方に「<code>protectedBranches</code> が空でないこと」を追加した。</p>
+    </div>
+    <p>いずれも<strong>ローカルのガードレールをセキュリティ境界として扱わない</strong>という前提で許容している。権限境界は GitHub 側のブランチ保護で張る。</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">08</span><h2>今回の変更ファイル</h2></div>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th>ファイル</th><th>種別</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">.claude/scripts/check-protected-branch.sh</td><td><span class="chip ok">新規</span></td><td>保護ブランチ判定の実体。終了コード契約 <code>0</code>/<code>1</code>、4 条件でフェイルオープン(リポジトリ外・ポリシー不在・jq 不在・detached HEAD)</td></tr>
+          <tr class="is-changed"><td class="mono">.husky/prepare-commit-msg</td><td><span class="chip ok">新規</span></td><td><strong>2026-08-19 追加。</strong><code>pre-commit</code> は <code>git commit</code> と <code>git commit --amend</code> でしか発火せず、<strong><code>git revert</code> / <code>git cherry-pick</code> では発火しない</strong>(実測)。全操作で発火するこのフックで塞ぐ。<code>$2 = merge</code> のときは通す(<code>git pull</code> を殺さないため)。<strong>副次効果として <code>git commit --no-verify</code> も塞がる</strong></td></tr>
+          <tr class="is-changed"><td class="mono">.claude/scripts/check-guard-integrity.sh</td><td><span class="chip ok">新規</span></td><td><strong>2026-08-19 追加。</strong>自壊検知の実体を集約(SessionStart と CI が別判定を持つとずれるため)。層の存在・呼び出し・<code>protectedBranches</code> の空洞化を検査する</td></tr>
+          <tr class="is-changed"><td class="mono">.husky/pre-commit</td><td><span class="chip ok">変更</span></td><td><code>lint-staged</code> の前に検査を通す。<strong>ベンダー非依存</strong>の防衛線。スクリプト不在時は stderr へ警告(フェイルオープンは維持)。<strong>2026-08-19: <code>sh -e</code> 対応に修正</strong> — 終了コードを <code>&amp;&amp; / ||</code> のリスト内で受け、<code>npx lint-staged</code> を直呼びに変更</td></tr>
+          <tr><td class="mono">.claude/scripts/check-branch-policy.sh</td><td><span class="chip ok">変更</span></td><td>インラインの判定を共有スクリプト呼び出しに置換。PR base 検査は不変</td></tr>
+          <tr><td class="mono">.claude/rules/lead/branch-and-tickets.md</td><td><span class="chip ok">変更</span></td><td>強制層の記述を 3 段 → 4 段に</td></tr>
+          <tr><td class="mono">.claude/hooks/session-start.sh</td><td><span class="chip ok">変更</span></td><td>自壊検知(呼び出しの消失 / 実体の消失 / <code>core.hooksPath</code> 未設定 / git 上の実行権限落ち / <strong>2026-08-19 追加: <code>protectedBranches</code> の空洞化</strong>)。<strong>早期警告</strong>の層</td></tr>
+          <tr class="is-changed"><td class="mono">.github/workflows/ci.yml</td><td><span class="chip ok">変更</span></td><td><code>.husky/pre-commit</code> の構文検査と呼び出し検査を追加し、<strong>独立ジョブ <code>harness-integrity</code> に分離</strong>(他チェックの失敗で握り潰されないため)。<strong>2026-08-19: <code>protectedBranches</code> の空洞化検知を追加。</strong><strong>クライアント非依存</strong>の層</td></tr>
+          <tr class="is-changed"><td class="mono">.claude/skills/implement-ticket/SKILL.md</td><td><span class="chip ok">変更</span></td><td>完成マーカーの入口検査を追加。<code>draft</code> なら「判断待ち」で差し戻す。<strong>Codex と同じゲート</strong>にして交換可能性を保つ</td></tr>
+          <tr class="is-changed"><td class="mono">.claude/skills/steering/templates/design.md</td><td><span class="chip ok">変更</span></td><td>完成マーカー <code>&lt;!-- status: draft --&gt;</code> を既定で埋める(作れば必ず印が付く)</td></tr>
+          <tr class="is-changed"><td class="mono">.claude/skills/steering/SKILL.md</td><td><span class="chip ok">変更</span></td><td>モード1 に <code>ready</code> への変更手順と判断基準。<strong>ロードされる場所</strong>に規約を置く</td></tr>
+          <tr class="is-changed"><td class="mono">.claude/scripts/check-implementation-phase.sh</td><td><span class="chip ok">変更</span></td><td>通過パスに <code>.husky/*</code> を追加。ハーネスの一部になったため、司令塔が脱出弁なしで編集できる必要がある</td></tr>
+          <tr class="is-changed"><td class="mono">README.md</td><td><span class="chip ok">変更</span></td><td>ブランチ戦略の「3 段構え」を 4 段に(husky 層を追加)</td></tr>
+          <tr class="is-changed"><td class="mono">.claude/skills/development-guidelines/guides/process.md</td><td><span class="chip ok">変更</span></td><td>強制層リストに husky 層を追加。<strong>各プロジェクトの <code>docs/development-guidelines.md</code> の生成元</strong>なので、放置すると全プロジェクトに古い説明が配られる</td></tr>
+          <tr class="is-changed"><td class="mono">docs/template-dev/CHANGELOG.md</td><td><span class="chip ok">変更</span></td><td>2026-08-19 のエントリを追加。<code>.husky/pre-commit</code> は <code>merge</code> 対象なので <code>[manual]</code> が無いと取り込む側に伝わらない</td></tr>
+          <tr><td class="mono">docs/template-dev/codex-delegation-plan.md</td><td><span class="chip ok">変更</span></td><td>全面改訂(292 → 700 行超)。3 モード・委託経路・§8 ガードレール・§11 段階導入</td></tr>
+          <tr><td class="mono">.steering/20260818-vendor-neutral-branch-guard/</td><td><span class="chip ok">新規</span></td><td>requirements / design / tasklist(全タスク完了・振り返り記録済み)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>検証</h3>
+    <div class="scroller">
+      <table>
+        <thead><tr><th>対象</th><th class="center">件数</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td>スクリプト単体</td><td class="center num">6 / 6</td><td>保護ブランチ・作業ブランチ・ポリシー不在・detached HEAD・リポジトリ外・空配列</td></tr>
+          <tr><td>husky 統合</td><td class="center num">3 / 3</td><td>main で中断・feature で通過・スクリプト不在でも <code>lint-staged</code> 到達</td></tr>
+          <tr><td>hook 回帰</td><td class="center num">6 / 6</td><td>コミット判定 2 件 + PR base 検査 3 件 + 誤検知なし 1 件</td></tr>
+          <tr class="is-changed"><td><strong>フェイルオープン</strong></td><td class="center num">5 / 5</td><td>共有スクリプト不在 / 不在かつ保護ブランチ / 内部エラー × hook・husky</td></tr>
+          <tr class="is-changed"><td><strong>CI の自壊検知</strong></td><td class="center num">5 / 5</td><td>正常 <code>0</code> / 呼び出し削除 <code>1</code> / <strong>スクリプト削除 <code>1</code></strong> / <strong>スクリプト削除+呼び出し残存 <code>1</code></strong> / husky 不在 <code>0</code></td></tr>
+          <tr class="is-changed"><td><strong><code>sh -e</code> 下の pre-commit</strong></td><td class="center num">4 / 4</td><td>main で中断 / feature で通過 / <strong>guard 構文エラーで素通し + 警告</strong> / <strong>guard 消失で素通し + 警告</strong></td></tr>
+          <tr class="is-changed"><td><strong>空洞化検知</strong></td><td class="center num">2 / 2</td><td><code>protectedBranches: []</code> を検出 / 正常なポリシーは通す</td></tr>
+          <tr class="is-changed"><td><strong>git 操作の網羅</strong></td><td class="center num">10 / 10</td><td>保護ブランチ上で commit / amend / <strong>--no-verify</strong> / <strong>revert</strong> / <strong>cherry-pick</strong> をブロック、<strong>merge は通過</strong>。作業ブランチでは 4 操作すべて通過</td></tr>
+          <tr class="is-changed"><td><strong>自壊検知</strong></td><td class="center num">9 / 9</td><td>正常 / 各フック消失 / <strong>フックごと全消失</strong> / 呼び出しのコメントアウト / <strong>コメントだけの偽フック</strong> / 実体消失 / <code>protectedBranches</code> 空 / husky 非採用構成は対象外</td></tr>
+          <tr class="is-changed"><td><strong>新フックのフェイルオープン</strong></td><td class="center num">4 / 4</td><td>正常ブロック / guard 構文エラーで素通し / guard 消失で素通し / <code>source=merge</code> で検査せず</td></tr>
+          <tr><td>品質チェック</td><td class="center num">4 / 4</td><td>lint・typecheck・test・format すべて緑。自動修正なし・未解決なし</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>保護ブランチ上の挙動は<strong>使い捨て git リポジトリ</strong>で検証した(このリポジトリの HEAD を汚さないため)。</p>
+
+    <div class="callout done">
+      <span class="callout-label">レビューで発見・修正した自作の欠陥</span>
+      <p><strong>呼び出し側がフェイルオープンになっていなかった。</strong> 当初 <code>if ! bash ...</code> と書いており、違反(<code>exit 1</code>)以外もブロックしていた。共有スクリプトが同期漏れ・権限落ちで<strong>無いだけで全コミットが止まる</strong>状態で、共有スクリプト側は 4 条件でフェイルオープンする設計なのに呼び出し側が fail-closed という不整合だった。<code>case $? in 1) ... esac</code> に修正し、検証を 15 → 20 ケースに拡張。</p>
+      <p><strong>教訓</strong>: 判定を 1 箇所に集約したことで、逆に「呼び出し側が終了コード契約を誤読する」新しい失敗モードが生まれていた。<strong>フェイルオープン設計は共有スクリプト側だけでは完結しない。</strong></p>
+    </div>
+
+    <div class="callout warn">
+      <span class="callout-label">守っていたのは「コミットを作る操作」の一部だけだった(2026-08-19)</span>
+      <p>保護ブランチ上での各 git 操作を実測したところ、<code>pre-commit</code> フックが発火するのは <code>git commit</code> と <code>git commit --amend</code> <strong>だけ</strong>で、<strong><code>git revert</code> と <code>git cherry-pick</code> では発火しない</strong>ことが分かった。Claude 側の <code>check-branch-policy.sh</code> も <code>git commit</code> にしかマッチせず、CI は PR の base とブランチ名しか見ない。つまり<strong>この 2 操作は 4 層すべてを素通りしていた</strong>。</p>
+      <p>「main の悪いコミットを revert して」は<strong>エージェントに最も自然に発生する指示</strong>であり、モード C では Codex がコミット権を持つ。層の名前(「保護ブランチへの直接コミットを止める」)と実際の守備範囲がずれていた。</p>
+      <p><code>.husky/prepare-commit-msg</code> を追加して塞いだ。第 2 引数で出所が分かるため、<code>merge</code>(= <code>git pull</code> の統合コミット)だけは通せる — ここを塞ぐと保護ブランチで pull すらできなくなる。<strong>副次効果として <code>git commit --no-verify</code> も塞がった</strong>: <code>--no-verify</code> が無効化するのは <code>pre-commit</code> と <code>commit-msg</code> だけで、このフックは迂回できない。</p>
+      <p><strong>教訓</strong>: 「どの操作を守るか」を<strong>フック名ではなく実測で確かめる</strong>。<code>pre-commit</code> という名前は「コミット前」と読めるが、実際に守るのは <code>git commit</code> という<strong>コマンド</strong>であって、コミットという<strong>結果</strong>ではない。</p>
+    </div>
+
+    <div class="callout warn">
+      <span class="callout-label">その修正自体が、実行環境によって無効化されていた(2026-08-19)</span>
+      <p>上の修正で入れた <code>case $? in 1) exit 1 ;; esac</code> は、<strong><code>.husky/pre-commit</code> では機能しなかった</strong>。husky がこのファイルを <code>sh -e</code> で実行するため、<code>bash "$GUARD"</code> が非ゼロを返した時点でシェルごと終了し、<code>case</code> に制御が渡らないため。<strong>PreToolUse hook 側(<code>set -e</code> 無し)では同じコードが正しく動いていた</strong>ぶん、発見が遅れた。</p>
+      <p><strong>教訓</strong>: 「判定の実体を 1 箇所に集約する」は正しいが、<strong>呼び出し側のシェルオプションまでは共有されない</strong>。同じ 3 行を 2 箇所に写しても、<code>set -e</code> の有無で意味が反転する。共有スクリプトの終了コード契約を書くときは、<strong>呼び出し側がどのシェルでどう起動されるかまでを契約に含める</strong>必要がある。</p>
+    </div>
+
+    <div class="callout warn">
+      <span class="callout-label">作業中に判明 · 要別対応</span>
+      <p><strong><code>check-branch-policy.sh</code> の <code>CMD_START</code> が markdown のコードスパンを誤検知する。</strong> コマンド置換を拾うためバッククォートを起点文字に含めており、文書中のコードスパンを「コマンド位置の呼び出し」と誤判定する。今回この作業中に実際に 2 回ブロックされた。このテンプレートは自身のワークフローを文書化するため遭遇頻度が高い。<strong>スコープ外として手を付けていない</strong> — 独立したチケットとして起票することを推奨する。</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">09</span><h2>実装以外の移管候補</h2></div>
+
+    <p>効果 = Claude 枠の節約量 × リスクの低さ。上から順に着手する。</p>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th>タスク</th><th class="center">効果</th><th>経路</th><th>備考</th></tr></thead>
+        <tbody>
+          <tr><td>広域コード探索(Explore 相当)</td><td class="center">★★★</td><td class="mono">explore</td><td>読み取りのみ。司令塔のコンテキストを最も汚す作業</td></tr>
+          <tr><td>CI 失敗の修正・dependabot 追従</td><td class="center">★★★</td><td class="mono">fix-ci</td><td>失敗ログという明確な受け入れ条件がある</td></tr>
+          <tr><td>テスト・フィクスチャ生成</td><td class="center">★★</td><td class="mono">impl</td><td>仕様が確定しているものに限る</td></tr>
+          <tr><td>リネーム / 移行系リファクタ</td><td class="center">★★</td><td class="mono">impl</td><td>既存パターンの横展開</td></tr>
+          <tr><td>docs と実装の乖離検出</td><td class="center">★★</td><td class="mono">explore</td><td>検出は Codex、更新の判断と執筆は Claude</td></tr>
+          <tr><td>重要変更の敵対的レビュー</td><td class="center">★★</td><td class="mono">review</td><td>ベンダー分離の価値。<code>/code-review ultra</code> を置換</td></tr>
+          <tr><td>行き詰まり調査</td><td class="center">★★</td><td class="mono">explore</td><td>2 回連続で修正に失敗したときの分岐先</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>移管しないもの:</strong> 設計判断そのもの / ユーザー承認を伴う対話 / 参照実装の 1 例目(品質のレバレッジが最大)/ コミット・PR(モード A・B)/ セキュリティ敏感領域の実装。</p>
+
+    <h3>委託の損益分岐</h3>
+
+    <p>粒度の条件を満たしていても<strong>委託が常に得とは限らない</strong>。<code>design.md</code> を「設計判断ゼロで実装できる粒度」まで書くコスト自体が Opus の消費だから。</p>
+
+    <div class="callout">
+      <span class="callout-label">判定軸</span>
+      <p><strong>「<code>design.md</code> を書き切るコスト」&lt;「実装ループのコスト」を満たすときだけ委託する。</strong></p>
+      <p><strong>既存パターンの横展開</strong>は設計記述が薄くて済む(「A と同じ形で B を作る」)ので成立しやすい。<strong>新規パターンの 1 例目</strong>は設計記述が厚くなるので成立しにくく、これは「参照実装は司令塔が書く」という既存ルールと<strong>同じ結論に到達する</strong> — 別の理由から同じ線が引けるのは、線の位置が正しい傍証になる。</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">10</span><h2>段階導入</h2></div>
+
+    <p>要件が上限対策になったため、初版の「読み取り試用 → 実装委託」から<strong>ガードレールを先頭に</strong>組み替えた。各段階で価値が確認できなければそこで止めてよい。</p>
+
+    <div class="stages">
+      <div class="stage">
+        <span class="stage-n">00</span>
+        <div class="stage-body"><b>前提</b><span>ChatGPT Plus 契約 ・ <code>codex login</code> ・ データガバナンス判断</span></div>
+        <span class="chip todo">契約待ち</span>
+      </div>
+      <div class="stage is-done">
+        <span class="stage-n">01</span>
+        <div class="stage-body"><b>ベンダー中立ガードレール</b><span><code>.husky/pre-commit</code> に保護ブランチ検査を移植 — Codex にコミットを許す前提条件</span></div>
+        <span class="chip ok">完了</span>
+      </div>
+      <div class="stage">
+        <span class="stage-n">02</span>
+        <div class="stage-body"><b>最小ハーネス</b><span>AGENTS.md ・ <code>.codex/config.toml</code> ・ <code>delegate-codex.sh</code>(<code>explore</code> / <code>review</code> のみ)。書き込みが無いので安全</span></div>
+        <span class="chip todo">次</span>
+      </div>
+      <div class="stage">
+        <span class="stage-n">03</span>
+        <div class="stage-body"><b>実装委託</b><span><code>delegate-codex.sh impl</code> + <code>/next-ticket</code> の分岐(§03)+ CLAUDE.md 条件ペア</span></div>
+        <span class="chip todo">未着手</span>
+      </div>
+      <div class="stage">
+        <span class="stage-n">04</span>
+        <div class="stage-body"><b>モード B</b><span><code>.harness/mode</code> + SessionStart 注入。週枠の実効寿命がどれだけ延びたかを測る</span></div>
+        <span class="chip todo">未着手</span>
+      </div>
+      <div class="stage">
+        <span class="stage-n">05</span>
+        <div class="stage-body"><b>モード C</b><span><code>.codex/prompts/</code> + <code>codex-log.md</code> 運用。Claude 不在で 1 チケット完走できるか</span></div>
+        <span class="chip todo">未着手</span>
+      </div>
+      <div class="stage">
+        <span class="stage-n">06</span>
+        <div class="stage-body"><b>チケット統合</b><span><code>delegate:codex</code> ラベル + README 追記</span></div>
+        <span class="chip todo">未着手</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">11</span><h2>未確認の前提</h2></div>
+
+    <p>着手前に実機で確かめる必要があるもの。ここが崩れると設計の一部を差し替える。</p>
+
+    <ul>
+      <li><strong>Codex CLI は現在この devcontainer に未インストール。</strong> <code>codex</code> コマンド・<code>~/.codex</code> ともに無い。契約後に <code>codex exec</code> のオプション体系と sandbox 仕様を再確認する</li>
+      <li><strong><code>.codex/prompts/</code> の project スコープ対応が未確認。</strong> ユーザースコープ(<code>~/.codex/prompts/</code>)は確認できている。非対応なら <code>docs/playbook/codex-standalone.md</code> に手順書を置き、人間が起動時に参照させる形へ降格する</li>
+      <li><strong>レート上限に固有の終了コードを返すか。</strong> 返さなければ stderr のパターンマッチに降格する(誤検知するので生エラーを run record に必ず残す)</li>
+      <li><strong>サンドボックスのネットワーク無効が CLI 自身の通信を妨げないか。</strong> 妨げるなら「上限」ではない別のエラーになり、検出が破綻する。ネットワーク無効を諦めて防衛線をガードレール層に寄せる判断になる</li>
+      <li><strong>レート上限のリセット単位(5 時間枠 / 週次)と <code>resetAt</code> の取得可否。</strong> 取得できなければ「待つ」判断を人間に委ねる</li>
+      <li><strong>GitHub のブランチ保護が使えるプランか。</strong> 現状このリポジトリは Free の private で <code>403 Upgrade to GitHub Pro</code> が返る。残る穴 3 件のうち 2 件をブランチ保護に集約している設計なので、<strong>モード C(Codex にコミット権)へ進む前に決着が要る</strong>(§07)</li>
+      <li><strong>環境構築手順で <code>npm ci</code> を担保する必要がある。</strong> 今回の作業開始時点で husky は無効(<code>core.hooksPath</code> 未設定)であり、移植前の <code>lint-staged</code> すら動いていなかった</li>
+    </ul>
+  </section>
+
+  <footer>
+    <p>正は <code>docs/template-dev/codex-delegation-plan.md</code> / 実運用フローの正は <code>README.md</code> — 本ページは構成確認用の要約です。</p>
+  </footer>
+
+</div>
+
+<!-- ============ メモ(注釈)機能 ============ -->
+
+<div id="anno-bar">
+  <span id="anno-count">メモ 0</span>
+  <button type="button" class="anno-btn" id="anno-open">一覧</button>
+  <button type="button" class="anno-btn" id="anno-toggle">ハイライト非表示</button>
+  <button type="button" class="anno-btn" id="anno-export">書き出し</button>
+  <button type="button" class="anno-btn" id="anno-import">読み込み</button>
+</div>
+
+<button type="button" class="anno-btn primary" id="anno-add">＋ メモ</button>
+
+<div id="anno-editor">
+  <blockquote id="anno-quote"></blockquote>
+  <textarea id="anno-text" placeholder="メモを入力(Ctrl/Cmd + Enter で保存)"></textarea>
+  <div class="anno-row">
+    <button type="button" class="anno-btn primary" id="anno-save">保存</button>
+    <button type="button" class="anno-btn" id="anno-cancel">キャンセル</button>
+    <span class="spacer"></span>
+    <button type="button" class="anno-btn danger" id="anno-delete">削除</button>
+  </div>
+</div>
+
+<aside id="anno-drawer" aria-label="メモ一覧">
+  <div class="anno-head">
+    <h2>メモ</h2>
+    <button type="button" class="anno-btn" id="anno-close">閉じる</button>
+  </div>
+  <ul id="anno-list"></ul>
+</aside>
+
+<div id="anno-io">
+  <div class="anno-io-box">
+    <h2 id="anno-io-title">書き出し</h2>
+    <p id="anno-io-help"></p>
+    <textarea id="anno-io-text" spellcheck="false"></textarea>
+    <div class="anno-row">
+      <button type="button" class="anno-btn primary" id="anno-io-ok">コピー</button>
+      <button type="button" class="anno-btn" id="anno-io-download">ファイルに保存</button>
+      <span class="spacer"></span>
+      <button type="button" class="anno-btn" id="anno-io-close">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<section id="anno-print">
+  <h2>メモ一覧</h2>
+  <ol id="anno-print-list"></ol>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  var KEY = "codex-harness-notes-v1";
+  // 注釈のアンカー先にする「本文ブロック」。選択位置からこの中で最も内側のものを拾う。
+  var BLOCK_SEL = "p, li, dd, dt, td, th, h2, h3, h4, blockquote, figcaption, .rb-cell, .rb-phase, .node, .flow-what, .stage-body, .rb-note, .rb-warn";
+
+  var root = document.querySelector(".wrap");
+  if (!root) return;
+
+  var notes = [];
+  var pending = null;   // 新規作成中の選択情報
+  var editing = null;   // 編集中のノート id
+
+  var el = {
+    bar: document.getElementById("anno-bar"),
+    count: document.getElementById("anno-count"),
+    add: document.getElementById("anno-add"),
+    editor: document.getElementById("anno-editor"),
+    quote: document.getElementById("anno-quote"),
+    text: document.getElementById("anno-text"),
+    save: document.getElementById("anno-save"),
+    cancel: document.getElementById("anno-cancel"),
+    del: document.getElementById("anno-delete"),
+    drawer: document.getElementById("anno-drawer"),
+    list: document.getElementById("anno-list"),
+    io: document.getElementById("anno-io"),
+    ioTitle: document.getElementById("anno-io-title"),
+    ioHelp: document.getElementById("anno-io-help"),
+    ioText: document.getElementById("anno-io-text"),
+    ioOk: document.getElementById("anno-io-ok"),
+    ioDl: document.getElementById("anno-io-download"),
+    printList: document.getElementById("anno-print-list")
+  };
+
+  /* ---------- 保存領域 ---------- */
+
+  var storageOK = (function () {
+    try {
+      window.localStorage.setItem(KEY + "-probe", "1");
+      window.localStorage.removeItem(KEY + "-probe");
+      return true;
+    } catch (e) {
+      return false;
+    }
+  })();
+
+  function load() {
+    if (!storageOK) return [];
+    try {
+      var raw = window.localStorage.getItem(KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function persist() {
+    if (!storageOK) return;
+    try {
+      window.localStorage.setItem(KEY, JSON.stringify(notes, function (k, v) {
+        return k.charAt(0) === "_" ? undefined : v;   // _orphan 等の内部フラグは保存しない
+      }));
+    } catch (e) {
+      /* 容量超過等。表示は続行する */
+    }
+  }
+
+  /* ---------- ブロックの同定 ---------- */
+
+  function norm(s) {
+    return (s || "").replace(/\s+/g, " ").trim();
+  }
+
+  function hash(s) {
+    var h = 5381, i;
+    for (i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+    return (h >>> 0).toString(36);
+  }
+
+  var blocks = Array.prototype.slice.call(root.querySelectorAll(BLOCK_SEL));
+  blocks.forEach(function (b, i) {
+    b.setAttribute("data-anno-i", String(i));
+    b.setAttribute("data-anno-h", hash(norm(b.textContent)));
+  });
+
+  // 見出し(所属セクション)を控えておくと、位置が失われたメモでも文脈が残る
+  function sectionOf(node) {
+    var sec = node.closest ? node.closest("section") : null;
+    if (!sec) return "";
+    var h = sec.querySelector("h2");
+    return h ? norm(h.textContent) : "";
+  }
+
+  function findBlock(note) {
+    // ① 位置と内容がどちらも一致(無編集ならここで決まる)
+    var exact = root.querySelector('[data-anno-i="' + note.i + '"][data-anno-h="' + note.h + '"]');
+    if (exact) return exact;
+    // ② 位置だけ一致(そのブロックの本文が編集された場合)
+    var byIndex = root.querySelector('[data-anno-i="' + note.i + '"]');
+    if (byIndex && byIndex.textContent.indexOf(note.quote) !== -1) return byIndex;
+    // ③ 内容だけ一致(ブロックが移動した場合)。「同左」のように同文のセルが複数あるので
+    //    ハッシュ一致だけでは足りず、引用文を含むかまで見る
+    var byHash = root.querySelectorAll('[data-anno-h="' + note.h + '"]');
+    for (var k = 0; k < byHash.length; k++) {
+      if (byHash[k].textContent.indexOf(note.quote) !== -1) return byHash[k];
+    }
+    return null;
+  }
+
+  /* ---------- 範囲のハイライト ---------- */
+
+  function wrapRange(block, start, len, id) {
+    if (len <= 0) return false;
+    var walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, null);
+    var pos = 0, segments = [], node;
+    while ((node = walker.nextNode())) {
+      var nLen = node.nodeValue.length;
+      var segStart = Math.max(start, pos);
+      var segEnd = Math.min(start + len, pos + nLen);
+      if (segEnd > segStart) {
+        segments.push({ node: node, from: segStart - pos, to: segEnd - pos });
+      }
+      pos += nLen;
+      if (pos >= start + len) break;
+    }
+    if (!segments.length) return false;
+    segments.forEach(function (seg) {
+      var t = seg.node;
+      if (seg.to < t.nodeValue.length) t.splitText(seg.to);
+      var target = seg.from > 0 ? t.splitText(seg.from) : t;
+      var m = document.createElement("mark");
+      m.className = "anno";
+      m.setAttribute("data-note", id);
+      target.parentNode.insertBefore(m, target);
+      m.appendChild(target);
+    });
+    return true;
+  }
+
+  function clearMarks() {
+    Array.prototype.slice.call(root.querySelectorAll("mark.anno")).forEach(function (m) {
+      var parent = m.parentNode;
+      while (m.firstChild) parent.insertBefore(m.firstChild, m);
+      parent.removeChild(m);
+      parent.normalize();
+    });
+  }
+
+  function renderMarks() {
+    clearMarks();
+    notes.forEach(function (n) {
+      var block = findBlock(n);
+      n._orphan = true;
+      if (!block) return;
+      // 本文が動いていてもテキストが残っていれば拾い直す
+      var start = n.start;
+      var full = block.textContent;
+      if (full.substr(start, n.quote.length) !== n.quote) {
+        var found = full.indexOf(n.quote);
+        if (found === -1) return;
+        start = found;
+      }
+      if (wrapRange(block, start, n.quote.length, n.id)) n._orphan = false;
+    });
+  }
+
+  /* ---------- 一覧 ---------- */
+
+  function render() {
+    renderMarks();
+    el.count.textContent = "メモ " + notes.length;
+    el.list.innerHTML = "";
+    if (!notes.length) {
+      var empty = document.createElement("li");
+      empty.className = "anno-empty";
+      empty.textContent = storageOK
+        ? "本文を選択すると「＋ メモ」ボタンが出ます。"
+        : "この環境では localStorage が使えないため保存されません(書き出しで JSON を控えてください)。";
+      empty.style.border = "none";
+      empty.style.background = "none";
+      el.list.appendChild(empty);
+    }
+    notes.forEach(function (n) {
+      var li = document.createElement("li");
+      if (n._orphan) li.className = "is-orphan";
+      var sec = document.createElement("span");
+      sec.className = "anno-sec";
+      sec.textContent = n.sec || "本文";
+      var q = document.createElement("blockquote");
+      q.textContent = n.quote;
+      var body = document.createElement("div");
+      body.className = "anno-body";
+      body.textContent = n.body;
+      var row = document.createElement("div");
+      row.className = "anno-row";
+      if (!n._orphan) {
+        var jump = document.createElement("button");
+        jump.type = "button";
+        jump.className = "anno-btn";
+        jump.textContent = "本文へ";
+        jump.addEventListener("click", function () { jumpTo(n.id); });
+        row.appendChild(jump);
+      }
+      var edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "anno-btn";
+      edit.textContent = "編集";
+      edit.addEventListener("click", function () { openEditor(n, null); });
+      var rm = document.createElement("button");
+      rm.type = "button";
+      rm.className = "anno-btn danger";
+      rm.textContent = "削除";
+      rm.addEventListener("click", function () { removeNote(n.id); });
+      row.appendChild(edit);
+      row.appendChild(rm);
+      li.appendChild(sec);
+      li.appendChild(q);
+      li.appendChild(body);
+      li.appendChild(row);
+      el.list.appendChild(li);
+    });
+  }
+
+  function jumpTo(id) {
+    var m = root.querySelector('mark.anno[data-note="' + id + '"]');
+    if (!m) return;
+    document.body.classList.remove("anno-hidden");
+    m.scrollIntoView({ behavior: "smooth", block: "center" });
+    m.classList.add("is-flash");
+    setTimeout(function () { m.classList.remove("is-flash"); }, 1300);
+  }
+
+  /* ---------- 選択 → 追加 ---------- */
+
+  function closestBlock(node) {
+    var n = node.nodeType === 1 ? node : node.parentNode;
+    return n && n.closest ? n.closest(BLOCK_SEL) : null;
+  }
+
+  function hideAdd() { el.add.classList.remove("is-on"); }
+
+  document.addEventListener("selectionchange", function () {
+    var sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) {
+      if (!el.editor.classList.contains("is-on")) hideAdd();
+    }
+  });
+
+  document.addEventListener("mouseup", function (ev) {
+    if (el.editor.contains(ev.target) || el.bar.contains(ev.target) ||
+        el.drawer.contains(ev.target) || ev.target === el.add) return;
+    setTimeout(function () { offerAdd(); }, 0);
+  });
+
+  function offerAdd() {
+    var sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return hideAdd();
+    var range = sel.getRangeAt(0);
+    if (!root.contains(range.startContainer)) return hideAdd();
+    var block = closestBlock(range.startContainer);
+    if (!block) return hideAdd();
+
+    var pre = document.createRange();
+    pre.selectNodeContents(block);
+    pre.setEnd(range.startContainer, range.startOffset);
+    var start = pre.toString().length;
+
+    var selText = sel.toString();
+    var full = block.textContent;
+    var len = Math.min(selText.length, full.length - start);
+    var quote = full.substr(start, len);
+    if (!norm(quote)) return hideAdd();
+
+    pending = {
+      block: block,
+      start: start,
+      quote: quote,
+      sec: sectionOf(block)
+    };
+
+    var rect = range.getBoundingClientRect();
+    el.add.style.top = (window.scrollY + rect.bottom + 6) + "px";
+    el.add.style.left = (window.scrollX + rect.left) + "px";
+    el.add.classList.add("is-on");
+  }
+
+  el.add.addEventListener("click", function () {
+    hideAdd();
+    if (pending) openEditor(null, pending);
+  });
+
+  /* ---------- エディタ ---------- */
+
+  function openEditor(note, sel) {
+    editing = note ? note.id : null;
+    el.quote.textContent = note ? note.quote : sel.quote;
+    el.text.value = note ? note.body : "";
+    el.del.style.display = note ? "" : "none";
+
+    var anchor;
+    if (note) {
+      anchor = root.querySelector('mark.anno[data-note="' + note.id + '"]');
+      if (anchor) {
+        anchor.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+    var rect = anchor ? anchor.getBoundingClientRect() : null;
+    if (!rect && el.add.classList.contains("is-on")) rect = el.add.getBoundingClientRect();
+    var top, left;
+    if (rect) {
+      // 本文に対応箇所がある場合はその直下。ドキュメント座標なので smooth scroll と競合しない
+      top = window.scrollY + rect.bottom + 6;
+      left = Math.min(window.scrollX + rect.left, window.scrollX + window.innerWidth - 400);
+    } else {
+      // 位置が失われたメモ(本文が変更された)は画面中央に出す
+      top = window.scrollY + window.innerHeight * 0.25;
+      left = window.scrollX + Math.max(8, (window.innerWidth - 384) / 2);
+    }
+    el.editor.style.top = top + "px";
+    el.editor.style.left = Math.max(8, left) + "px";
+    el.editor.classList.add("is-on");
+    el.text.focus();
+  }
+
+  function closeEditor() {
+    el.editor.classList.remove("is-on");
+    editing = null;
+    pending = null;
+  }
+
+  el.save.addEventListener("click", function () {
+    var body = el.text.value.trim();
+    if (!body) return closeEditor();
+    if (editing) {
+      notes.forEach(function (n) { if (n.id === editing) n.body = body; });
+    } else if (pending) {
+      notes.push({
+        id: "n" + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
+        i: Number(pending.block.getAttribute("data-anno-i")),
+        h: pending.block.getAttribute("data-anno-h"),
+        start: pending.start,
+        quote: pending.quote,
+        sec: pending.sec,
+        body: body,
+        at: new Date().toISOString().slice(0, 10)
+      });
+    }
+    persist();
+    closeEditor();
+    render();
+    window.getSelection().removeAllRanges();
+  });
+
+  el.cancel.addEventListener("click", closeEditor);
+  el.del.addEventListener("click", function () {
+    if (editing) removeNote(editing);
+    closeEditor();
+  });
+
+  el.text.addEventListener("keydown", function (ev) {
+    if ((ev.metaKey || ev.ctrlKey) && ev.key === "Enter") el.save.click();
+    if (ev.key === "Escape") closeEditor();
+  });
+
+  function removeNote(id) {
+    notes = notes.filter(function (n) { return n.id !== id; });
+    persist();
+    render();
+  }
+
+  root.addEventListener("click", function (ev) {
+    var m = ev.target.closest ? ev.target.closest("mark.anno") : null;
+    if (!m || document.body.classList.contains("anno-hidden")) return;
+    var id = m.getAttribute("data-note");
+    var note = notes.filter(function (n) { return n.id === id; })[0];
+    if (note) openEditor(note, null);
+  });
+
+  /* ---------- ツールバー ---------- */
+
+  document.getElementById("anno-open").addEventListener("click", function () {
+    el.drawer.classList.toggle("is-on");
+  });
+  document.getElementById("anno-close").addEventListener("click", function () {
+    el.drawer.classList.remove("is-on");
+  });
+  document.getElementById("anno-toggle").addEventListener("click", function () {
+    var hidden = document.body.classList.toggle("anno-hidden");
+    this.textContent = hidden ? "ハイライト表示" : "ハイライト非表示";
+  });
+
+  function openIO(mode) {
+    el.io.classList.add("is-on");
+    if (mode === "export") {
+      el.ioTitle.textContent = "書き出し";
+      el.ioHelp.textContent = "このJSONを控えておけば、別のブラウザやファイルを移動した後でも「読み込み」で復元できます。";
+      el.ioText.value = JSON.stringify(notes, null, 2);
+      el.ioOk.textContent = "コピー";
+      el.ioDl.style.display = "";
+    } else {
+      el.ioTitle.textContent = "読み込み";
+      el.ioHelp.textContent = "書き出したJSONを貼り付けてください。既存のメモは置き換えられます。";
+      el.ioText.value = "";
+      el.ioOk.textContent = "取り込む";
+      el.ioDl.style.display = "none";
+    }
+    el.ioOk.setAttribute("data-mode", mode);
+    el.ioText.focus();
+  }
+
+  document.getElementById("anno-export").addEventListener("click", function () { openIO("export"); });
+  document.getElementById("anno-import").addEventListener("click", function () { openIO("import"); });
+  document.getElementById("anno-io-close").addEventListener("click", function () {
+    el.io.classList.remove("is-on");
+  });
+  el.io.addEventListener("click", function (ev) {
+    if (ev.target === el.io) el.io.classList.remove("is-on");
+  });
+
+  el.ioOk.addEventListener("click", function () {
+    if (this.getAttribute("data-mode") === "export") {
+      el.ioText.select();
+      var done = false;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(el.ioText.value).then(function () {}, function () {});
+        done = true;
+      }
+      if (!done) { try { document.execCommand("copy"); } catch (e) {} }
+      this.textContent = "コピーしました";
+      var btn = this;
+      setTimeout(function () { btn.textContent = "コピー"; }, 1500);
+      return;
+    }
+    var parsed;
+    try {
+      parsed = JSON.parse(el.ioText.value);
+    } catch (e) {
+      el.ioHelp.textContent = "JSON として読めませんでした。貼り付け内容を確認してください。";
+      return;
+    }
+    if (!Array.isArray(parsed)) {
+      el.ioHelp.textContent = "配列形式の JSON を貼り付けてください。";
+      return;
+    }
+    notes = parsed;
+    persist();
+    render();
+    el.io.classList.remove("is-on");
+  });
+
+  el.ioDl.addEventListener("click", function () {
+    try {
+      var blob = new Blob([JSON.stringify(notes, null, 2)], { type: "application/json" });
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "codex-harness-notes.json";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    } catch (e) {
+      el.ioHelp.textContent = "この環境ではファイル保存が使えません。テキストをコピーして控えてください。";
+    }
+  });
+
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key !== "Escape") return;
+    closeEditor();
+    el.io.classList.remove("is-on");
+    el.drawer.classList.remove("is-on");
+  });
+
+  /* ---------- 印刷時は巻末注にする ---------- */
+
+  window.addEventListener("beforeprint", function () {
+    el.printList.innerHTML = "";
+    notes.forEach(function (n) {
+      var li = document.createElement("li");
+      var q = document.createElement("blockquote");
+      q.textContent = (n.sec ? "[" + n.sec + "] " : "") + n.quote;
+      var b = document.createElement("div");
+      b.textContent = n.body;
+      li.appendChild(q);
+      li.appendChild(b);
+      el.printList.appendChild(li);
+    });
+    document.getElementById("anno-print").style.display = notes.length ? "block" : "none";
+  });
+
+  /* ---------- 起動 ---------- */
+
+  notes = load();
+  render();
+})();
+</script>
