@@ -179,10 +179,11 @@ flowchart TD
 - **Claude Code on the web** から開いた場合は SessionStart hook が `npm install` を自動実行する(devcontainer 不要で `/check` が通る)。web のリモート環境には `gh` CLI がないため、GitHub 操作は MCP ツールで代替される(CLAUDE.md に明記済み)
 - **MCP は最小構成**: 既定は Context7(最新ライブラリドキュメント参照。`.mcp.json` に登録済み、初回セッションで承認が必要)のみ。プロジェクト特性に応じた追加は `/kickoff` フェーズ1.5 が提案する(判断基準: `.claude/docs/mcp-introduction-guide.md`)
 - **`/clear`・resume 後は SessionStart hook が現在地を自動注入**する(ブランチ・**ポリシー上のベースブランチと乖離警告**・未コミット変更・in-progress Issue・最新 `.steering/` の未完了タスク)。web リモートは毎回新セッションで始まるため、セッション開始時にも注入される
-- **ブランチ戦略は `.claude/branch-policy.json` が単一ソース**。アプリ/web のリモートセッションはプラットフォームが `claude/*` ブランチを既定ブランチ起点で先に作るため、規約から乖離しやすい。対策は 3 段構え:
+- **ブランチ戦略は `.claude/branch-policy.json` が単一ソース**。アプリ/web のリモートセッションはプラットフォームが `claude/*` ブランチを既定ブランチ起点で先に作るため、規約から乖離しやすい。対策は 4 段構え:
   1. `claude/*` を `feature/*` と同格の正規ブランチとして**追認**する(リネームするとセッションとの紐付けが壊れるため禁止)
-  2. SessionStart hook がベースブランチを事実として注入し、PreToolUse hook が保護ブランチへの直接コミットと `gh pr create --base` の誤りをブロックする
-  3. CI の `branch-policy` ジョブがクライアント(CLI / アプリ / GitHub UI)によらずマージ前に最終検証する
+  2. SessionStart hook がベースブランチを事実として注入し、PreToolUse hook が保護ブランチへの直接コミットと `gh pr create --base` の誤りをブロックする(**Claude 経由のみ**)
+  3. `.husky/` の git hook が保護ブランチへの直接コミットをブロックする(**ベンダー非依存**なので、手動 `git` や Claude 以外の AI ツールにも効く)。`pre-commit` が `git commit` / `--amend` を、`prepare-commit-msg` が `git revert` / `git cherry-pick` を止め(後者は `pre-commit` が発火しない)、`git merge` / `git pull` は通す。判定の実体は 2 と共有(`.claude/scripts/check-protected-branch.sh`)なので経路によらず同じ結果になる
+  4. CI の `branch-policy` ジョブがクライアント(CLI / アプリ / GitHub UI)によらずマージ前に最終検証する
   - **アプリからセッションを作るときは、セッションのベースブランチにポリシーの `baseBranch` を選ぶ**と 1 段目から乖離しない(テンプレート既定は `main` の GitHub Flow。`develop` 統合ブランチを採るプロジェクトは `/kickoff` でポリシーファイルを更新する)
 - **チケット完了(PR 作成)ごとに `/clear`** してから次の `/next-ticket` を始める。作業状態は Issue・`.steering/`・git に永続化済みなので、コンテキストを持ち越す必要がない(トークン消費の最大の削減ポイント)
 
