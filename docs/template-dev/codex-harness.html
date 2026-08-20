@@ -220,6 +220,45 @@
     margin-bottom: 0.5rem;
   }
 
+  /* 検討内容(callout)は既定で畳む。ラベルは常に見えるので概要は追える */
+  details.callout > summary {
+    display: flex;
+    align-items: baseline;
+    gap: 0.55rem;
+    cursor: pointer;
+    list-style: none;
+    margin-bottom: 0;
+  }
+  details.callout > summary::-webkit-details-marker { display: none; }
+  details.callout > summary::before {
+    content: "\25B8";
+    display: inline-block;
+    flex: none;
+    transition: transform 0.15s ease;
+  }
+  details.callout[open] > summary::before { transform: rotate(90deg); }
+  details.callout[open] > summary { margin-bottom: 0.75rem; }
+  details.callout > summary:hover { color: var(--ink); }
+  details.callout > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  /* 一括開閉 */
+  .disclose-bar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin: 1.5rem 0 0;
+  }
+  .disclose-btn {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: var(--step--1);
+    color: var(--ink-3);
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    padding: 0.35rem 0.75rem;
+    cursor: pointer;
+  }
+  .disclose-btn:hover { color: var(--ink); border-color: var(--rule-strong); }
+
   /* ---------- tables ---------- */
 
   .scroller { overflow-x: auto; margin: 1.25rem 0; border: 1px solid var(--rule); background: var(--surface); }
@@ -467,7 +506,7 @@
     <h1>Codex 併用ハーネス</h1>
     <p class="standfirst">実装フェーズを Codex に移し、Claude が週間上限に当たっても作業が止まらない構成。設計・検収は Claude に残す。</p>
     <div class="meta">
-      <span>改訂 <b>2026-08-19</b></span>
+      <span>改訂 <b>2026-08-20</b></span>
       <span>段階 <b>1 / 6 完了</b></span>
       <span>ブランチ <b>feature/vendor-neutral-branch-guard</b></span>
       <span>正 <b>docs/template-dev/codex-delegation-plan.md</b></span>
@@ -481,8 +520,13 @@
       <span class="chip todo">未着手</span>
       <span>— 青緑の行が Codex 併用で変わる箇所</span>
     </div>
-    <p class="standfirst" style="font-size: var(--step--1); margin-top: 1rem;">本文を選択すると <strong>「＋ メモ」</strong> が出ます。書き込んだメモはブラウザに保存され、右下のツールバーから一覧・書き出し・読み込みができます。<span style="color: var(--ink-3);">(別ブラウザや別マシンへ移すときは「書き出し」した JSON を「読み込み」してください)</span></p>
+    <p class="standfirst" style="font-size: var(--step--1); margin-top: 1rem;">検討の経緯・判断の根拠は<strong>折り畳んであります</strong>(ラベルをクリックで展開)。まず見出しとラベルだけ追えば全体像がつかめます。<br>本文を選択すると <strong>「＋ メモ」</strong> が出ます。書き込んだメモはブラウザに保存され、右下のツールバーから一覧・書き出し・読み込みができます。<span style="color: var(--ink-3);">(別ブラウザや別マシンへ移すときは「書き出し」した JSON を「読み込み」してください)</span></p>
   </header>
+
+  <div class="disclose-bar">
+    <button type="button" class="disclose-btn" id="disclose-all">検討メモをすべて開く</button>
+    <button type="button" class="disclose-btn" id="disclose-none">すべて閉じる</button>
+  </div>
 
   <section>
     <div class="sec-head"><span class="sec-num">01</span><h2>何を解こうとしているか</h2></div>
@@ -491,10 +535,10 @@
 
     <p>同じ問題に Cursor 併用案が取り組んで保留になった。理由は「Composer をプログラム起動できず、受け渡しに人間の中継が必要」。<strong>Codex CLI は <code>codex exec</code> でヘッドレス起動できるため、この欠点が無い</strong> — これが Codex を採る決定的な理由。</p>
 
-    <div class="callout warn">
-      <span class="callout-label">前提の限界</span>
+    <details class="callout warn">
+      <summary class="callout-label">前提の限界</summary>
       <p>認証は <strong>ChatGPT Plus サブスク</strong>。Codex 側にもレート制限があるため、<strong>両方枯れれば止まる</strong>。Codex 単独稼働(モード C)は恒久解ではなく数日しのぎであり、枠の実効寿命を伸ばす主力は<strong>モード B</strong> に置く。</p>
-    </div>
+    </details>
   </section>
   <section id="runbook">
     <div class="sec-head"><span class="sec-num">02</span><h2>最終形: 3 モードの実行ランブック</h2></div>
@@ -717,16 +761,16 @@ npm ci</code>
       </div>
     </div>
 
-    <div class="callout warn">
-      <span class="callout-label">この表のうち、いま動くのは Mode A の Sonnet fork 経路だけ</span>
+    <details class="callout warn">
+      <summary class="callout-label">この表のうち、いま動くのは Mode A の Sonnet fork 経路だけ</summary>
       <p>段階 1(ベンダー中立ガードレール)のみ実装済み。<code>delegate-codex.sh</code>・<code>AGENTS.md</code>・<code>.codex/</code>・<code>.harness/mode</code> は<strong>すべて未実装</strong>で、Codex CLI もこの devcontainer に未インストール。したがって現時点で Claude の枠が尽きたら<strong>作業は止まる</strong> — 表は到達目標であって現状ではない。段階の内訳は §10 を参照。</p>
-    </div>
+    </details>
 
-    <div class="callout done">
-      <span class="callout-label">3 モードを貫く不変条件</span>
+    <details class="callout done">
+      <summary class="callout-label">3 モードを貫く不変条件</summary>
       <p>実装者(Codex / Sonnet fork)は<strong>会話履歴を持たない</strong>。根拠は <code>design.md</code> と <code>tasklist.md</code> だけで、報告フォーマット(完了 / 判断待ち / 失敗)も共通。だから<strong>チケットの途中でも実装者を差し替えられる</strong> — Codex が 2/3 タスク目で上限に殺されても、Sonnet fork が 3 番目から続けられる。これは「あれば便利」ではなく満たすべき要件として扱う。</p>
       <p>成立条件は <strong>1 タスク完了ごとに <code>tasklist.md</code> を <code>- [x]</code> へ更新する</strong>(まとめ更新の禁止)。ただし<strong>この 1 点だけは強制層を持てない</strong> — AGENTS.md も SKILL.md も散文であり hook ではない。だから回復時は tasklist を信じず <code>git diff --stat</code> と突き合わせる。</p>
-    </div>
+    </details>
   </section>
 
   <section>
@@ -849,10 +893,10 @@ npm ci</code>
       </table>
     </div>
 
-    <div class="callout">
-      <span class="callout-label">往復ルールも据え置き</span>
+    <details class="callout">
+      <summary class="callout-label">往復ルールも据え置き</summary>
       <p>委譲先が Codex に変わっても、司令塔の分岐ロジックは変えない。<strong>完了 → 検収 / 判断待ち → <code>design.md</code> に追記して再委託 / 失敗 → 原因分析</strong>。2 回連続で失敗したら委託を打ち切り司令塔が引き取り、<strong>同一タスクを再委託しない</strong>(Claude ↔ Codex の往復ループを閉じる)。</p>
-    </div>
+    </details>
   </section>
 
   <section>
@@ -879,32 +923,32 @@ npm ci</code>
       </table>
     </div>
 
-    <div class="callout done">
-      <span class="callout-label">設計判断は延期されるが放棄されない</span>
+    <details class="callout done">
+      <summary class="callout-label">設計判断は延期されるが放棄されない</summary>
       <p>モード C は「設計判断は移管しない」原則への<strong>一時的な例外</strong>。Codex は下した判断を <code>codex-log.md</code> の「設計判断」欄に列挙し、<strong>Claude 復帰時に司令塔が <code>design.md</code> へ反映する</strong>。反映箇所は code-reviewer に重点レビュー範囲として渡す。<code>codex-log.md</code> を正のままにしない — 永続ドキュメントと steering の役割分担が崩れるため。</p>
-    </div>
+    </details>
 
-    <div class="callout warn">
-      <span class="callout-label">モード C には自動ゲートが無い</span>
+    <details class="callout warn">
+      <summary class="callout-label">モード C には自動ゲートが無い</summary>
       <p><code>ci.yml</code> のトリガは <code>push: [main, develop]</code> と <code>pull_request</code> のみ。モード C は「feature ブランチにコミットを積むが PR は作らない」ので、<strong>CI が起動する契機が無い</strong>。頼れるのは Codex のセルフチェックだけになる。</p>
       <p><strong>緩和案(提案・必須にしない)</strong>: モード C を始める前に<strong>人間が draft PR を先に開く</strong>と、以後の push ごとに CI が回る。既存の <code>pull_request</code> トリガに乗るので設定変更が要らない。採らない場合は「<strong>モード C の成果物は Claude 復帰時の検収を通るまで一切検証されていない</strong>」前提で扱う。</p>
       <p><strong>push する主体は人間しかいない。</strong> Codex は sandbox のネットワークが無効で、権限表でも push を禁止している。つまり Codex が積んだコミットは<strong>放っておけばローカルに留まり、CI に永久に到達しない</strong>。draft PR を開くだけでは足りず、<strong>区切りごとに人間が push する</strong>ところまでが緩和策の中身になる。</p>
-    </div>
+    </details>
 
     <h3>モード B は PR を積むがマージしない</h3>
     <p>モード B は code-reviewer を飛ばす。CI は lint・型・テストしか見ず、<strong>スペック整合とアーキテクチャ整合は未検査</strong>のまま残る。これを何チケットも続けると、レビューを経ていないコードが <code>main</code> に入る。</p>
     <p><strong>モード B 中の PR は draft で積み、枠が戻ってからまとめてレビューしてマージする。</strong>「進みは止めないが、未検証のものを本流に入れない」という切り分け。急ぐ場合の例外はユーザーが明示的に判断する。</p>
 
-    <div class="callout done">
-      <span class="callout-label">draft は作法ではなく節約の実体</span>
+    <details class="callout done">
+      <summary class="callout-label">draft は作法ではなく節約の実体</summary>
       <p><code>claude-code-review.yml</code> は <code>if: github.event.pull_request.draft == false</code> を持つため、<strong>draft のままなら GitHub Actions の Claude レビューが走らない</strong>。非 draft で開くと、モード B が温存しようとしているまさにその枠を PR ごとに消費する。一方 <code>ci.yml</code> の <code>pull_request</code> トリガは draft でも発火するので、<strong>機械的検証は受けたままレビューだけを止められる</strong>。</p>
       <p>枠が戻ったとき <code>ready_for_review</code> に切り替えると <code>types: [opened, ready_for_review]</code> により<strong>レビューが自動起動する</strong>。「溜まった PR をまとめてレビュー」はこの機構にそのまま乗る運用で、手動で呼び直す必要はない。</p>
-    </div>
+    </details>
 
-    <div class="callout warn">
-      <span class="callout-label">モード B の手順で順序を逆にしない</span>
+    <details class="callout warn">
+      <summary class="callout-label">モード B の手順で順序を逆にしない</summary>
       <p><code>ci.yml</code> のトリガは <code>push: [main, develop]</code> と <code>pull_request</code> だけで、<strong>作業ブランチへの push だけでは CI は走らない</strong>。「CI が緑なら PR を作る」は因果が逆で、<strong>PR を作るまで CI は一度も動かない</strong>。正しい順序は commit → push → draft PR → <strong>ここで初めて CI</strong>。モード B は検収を CI に丸投げする設計なので、取り違えると検収が丸ごと空振りする。</p>
-    </div>
+    </details>
   </section>
 
   <section>
@@ -949,17 +993,17 @@ npm ci</code>
 
     <p><strong>ただしモード C ではこのゲートは無効化される。</strong> 司令塔がいないので Codex が <code>design.md</code> を書いて自分で <code>ready</code> を立てる(自己認証)。塞ぐ手段が無いため、<strong>Claude 復帰時の検収で <code>design.md</code> 自体をレビュー対象に含める</strong>ことで回収する — 入口で検査できない分を出口で見る。</p>
 
-    <div class="callout done">
-      <span class="callout-label">規約の置き場所を間違えない</span>
+    <details class="callout done">
+      <summary class="callout-label">規約の置き場所を間違えない</summary>
       <p>この計画書がある <code>docs/template-dev/</code> は、CLAUDE.md が<strong>明示的に「読み込み対象外」</strong>と宣言しているディレクトリ。ここにしか書かないと<strong>司令塔はマーカーの存在を知らないまま毎回拒否される</strong>。<code>&lt;!-- main-edit-ok --&gt;</code> は hook のエラーメッセージが自己教育してくれるが、こちらにはその経路が無い。</p>
       <p>そこで steering テンプレートの <code>design.md</code> に <code>draft</code> を<strong>既定で埋め</strong>(作れば必ず印が付く)、steering スキルのモード1 に <code>ready</code> への変更手順を書いた — <strong>ロードされる場所に規約を置く</strong>。</p>
-    </div>
+    </details>
 
-    <div class="callout warn">
-      <span class="callout-label">「無ければ draft とみなす」は既存を全部壊す</span>
+    <details class="callout warn">
+      <summary class="callout-label">「無ければ draft とみなす」は既存を全部壊す</summary>
       <p>当初は「マーカーが無ければ <code>draft</code> とみなす(安全側)」としていた。しかし<strong>このリポジトリの <code>.steering/</code> 3 件を含め、導入以前の <code>design.md</code> には印が無い</strong>。安全側に倒したつもりで「委譲経路が全プロジェクトで沈黙して止まる」ことになる。</p>
       <p>正しくは <strong>印があるものだけを検査する</strong>。テンプレートが <code>draft</code> を既定で埋めるようになった以降の作業は必ず印を持つので、これで十分。<strong>この規則は Codex と Sonnet fork で共通</strong>にする — 片方だけがゲートを持つと「同じ計画を渡しても実装者によって結果が違う」状態になり、交換可能性が崩れる。</p>
-    </div>
+    </details>
 
     <h3>入口検査: 委託前の実行可能性</h3>
     <p>ネットワーク無効の sandbox では、<strong>依存が未インストールだと Codex は何一つ完遂できない</strong>。品質チェックが動かないだけでなく、<code>.husky/pre-commit</code> の <code>npx lint-staged</code> が取得を試みて失敗するため、<strong>コミット自体が原因の分かりにくいエラーで死ぬ</strong>。「新規依存を追加しない」だけでは足りず、「<strong>そもそも依存が入っている</strong>」が前提条件になる。</p>
@@ -984,17 +1028,17 @@ npm ci</code>
 
     <p>Claude Code on the web のリモート実行にはローカル Codex CLI が無いため <code>3</code> を返す。この経路を残さないと環境依存で作業が止まる。</p>
 
-    <div class="callout warn">
-      <span class="callout-label">上限の検出そのものが脆い</span>
+    <details class="callout warn">
+      <summary class="callout-label">上限の検出そのものが脆い</summary>
       <p>Codex CLI が上限に固有の終了コードを返すかは<strong>未確認</strong>。返さない場合は stderr のパターン(<code>rate</code> / <code>quota</code> / <code>429</code> / <code>limit</code>)で判定することになり、文言変更で壊れる。<strong>生のエラー 3 行を必ず run record に保存</strong>し、検出をすり抜けても人間が判断できる状態にしておく。</p>
-    </div>
+    </details>
 
-    <div class="callout warn">
-      <span class="callout-label">送信は事後に回収できない唯一のリスク</span>
+    <details class="callout warn">
+      <summary class="callout-label">送信は事後に回収できない唯一のリスク</summary>
       <p><strong><code>.gitignore</code> は守りにならない。</strong> ignore されたファイルもディスク上にあれば <code>workspace-write</code> sandbox は読める(<code>.env</code> が典型)。委託はそれを OpenAI 側へ送りうる。</p>
       <p>対策は 2 段。<strong>(1)</strong> <code>delegate-codex.sh</code> が委託前に <code>.env</code> / <code>*.pem</code> / <code>id_rsa*</code> / <code>credentials*</code> の存在を検査して確認を求める(存在しないのが正常なので普段は無言)。<strong>(2)</strong> kickoff のガバナンス判断を「使うか / 使わないか」ではなく「<strong>どのパスを送ってよいか</strong>」まで決めるものに格上げし、その一覧をスクリプトへ渡す。</p>
       <p>他のリスクは検収で回収できるが、<strong>これだけは送信した時点で終わり</strong>。<code>.codex/config.toml</code> にパス単位の除外があるかは未確認なので、当てにせず (1) を必ず実装する。</p>
-    </div>
+    </details>
 
     <h3>run record — 委託を挟んで <code>/clear</code> するための仕掛け</h3>
 
@@ -1029,31 +1073,31 @@ npm ci</code>
     → 検収(/check + code-reviewer)を実行し、通ったら accepted=true にする</span>
 - 最新ステアリング(.steering/20260818-issue12-user-crud/)の未完了タスク: なし</code></pre>
 
-    <div class="callout">
-      <span class="callout-label">clear の損益</span>
+    <details class="callout">
+      <summary class="callout-label">clear の損益</summary>
       <p>新セッションでプロジェクト由来で載るのは<strong>約 12,100 文字</strong>(<code>CLAUDE.md</code> 2,724 + <code>spec-driven.md</code> 1,528 + <code>lead/*.md</code> 7,375 + 現在地 504)。ルール類は毎回同一バイト列なのでキャッシュに乗り、変動する現在地が末尾に来る並びになっている。<strong>実費は「検収のため <code>design.md</code> / <code>tasklist.md</code> を読み直す分」</strong>で、継続時に払う「計画の全会話 × 残りターン数」より小さい。</p>
       <p>ただし条件がある — <strong><code>design.md</code> に書けていない知見を抱えたまま clear しない。</strong> 「design.md は実装者が設計判断なしで進められる粒度まで」という既存要件は、<code>/clear</code> を安全にする条件でもある。</p>
-    </div>
+    </details>
 
-    <div class="callout warn">
-      <span class="callout-label">Codex へのモード伝達は 2 経路要る</span>
+    <details class="callout warn">
+      <summary class="callout-label">Codex へのモード伝達は 2 経路要る</summary>
       <p>モード別の許可(コミットの可否など)は、<strong>Codex が自分のモードを知っている前提</strong>で書かれている。AGENTS.md は静的ファイルなので、それだけでは判別できない。</p>
       <p><strong>当初は「<code>delegate-codex.sh</code> のプロンプト注入が唯一の伝達路」としていたが、これはモード C を成立させない。</strong> モード C は Codex を直接起動する = <code>delegate-codex.sh</code> を通らないため注入が届かず、既定の<strong>モード A に落ちてコミットを拒否する</strong>。守りたい当の縮退モードが、伝達手段の依存によって機能しなくなる構造だった。</p>
       <p>修正: <code>.harness/mode</code> を Codex も読む単一ソースにし、読む順序を <strong>プロンプトの値 &gt; <code>.harness/mode</code> &gt; モード A</strong> に固定した。AGENTS.md の起動時手順にファイル読み取りを必ず含める。</p>
-    </div>
+    </details>
 
     <h3>委託中に並行してよい作業</h3>
 
     <p>Codex とは<strong>同一ワーキングツリー・同一ブランチを共有する</strong>。委託中の司令塔は委託ブランチのプロダクトコードに触れない作業のみ並行する(docs 執筆・調査・レビューは可)。</p>
 
-    <div class="callout warn">
-      <span class="callout-label">委託中に新しい steering ディレクトリを作らない</span>
+    <details class="callout warn">
+      <summary class="callout-label">委託中に新しい steering ディレクトリを作らない</summary>
       <p><code>latest-steering.sh</code> の選定は「日付プレフィックス降順 → 同日は <strong><code>tasklist.md</code> の mtime</strong> 降順」。委託中に同日の新ディレクトリを作ると、Codex が委託先の tasklist を更新するたびに「最新」が入れ替わる:</p>
       <pre><code>新ディレクトリ B の tasklist を書く    → B が latest
 Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
 司令塔が B の tasklist を追記          → B が latest</code></pre>
       <p><code>check-implementation-phase.sh</code> のブロック判定と SessionStart の表示が<strong>委託中ずっと入れ替わる</strong>。Sonnet fork は同期実行で窓が一瞬だが、<strong>バックグラウンド委託は窓が委託全体に広がる</strong> — Codex 併用が潜在的な競合を顕在化させる。</p>
-    </div>
+    </details>
 
     <h3>委託が途中で止まったとき</h3>
 
@@ -1074,10 +1118,10 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
 
     <p><strong>手直しするときは hook の脱出弁が要る。</strong> 中断すると未完了タスクが残るため <code>check-implementation-phase.sh</code> が司令塔の Edit/Write をブロックする(3 択のうち「Sonnet fork に引き継ぐ」と「破棄」は通るが、手直しだけ詰まる)。<code>tasklist.md</code> に <code>&lt;!-- main-edit-ok --&gt;</code> を追記して解除し、<strong>直後に消す</strong>(消し忘れると以降ずっと実装フェーズの強制が効かなくなる)。</p>
 
-    <div class="callout done">
-      <span class="callout-label">なぜ乗り換えられるのか</span>
+    <details class="callout done">
+      <summary class="callout-label">なぜ乗り換えられるのか</summary>
       <p>Codex と Sonnet fork は<strong>同じ契約</strong>(<code>design.md</code> + <code>tasklist.md</code> を唯一の根拠とし、1 タスク完了ごとに <code>- [x]</code> へ更新し、同じ報告フォーマットを返す)で動く。どちらも会話履歴を持たないため、<strong>チケットの途中でも乗り換えコストがゼロ</strong>。これは副産物ではなく<strong>満たすべき設計要件</strong>として扱う — <code>tasklist.md</code> の逐次更新が「行儀」ではなく要件なのはこのため。</p>
-    </div>
+    </details>
   </section>
 
   <section>
@@ -1097,18 +1141,18 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
       </table>
     </div>
 
-    <div class="callout done">
-      <span class="callout-label">今回の設計判断</span>
+    <details class="callout done">
+      <summary class="callout-label">今回の設計判断</summary>
       <p>保護ブランチ判定の<strong>実体を 1 ファイルに集約</strong>した(<code>.claude/scripts/check-protected-branch.sh</code>)。層 2 と層 3 が同じスクリプトを呼ぶため、<strong>経路によって判定がずれない</strong>。終了コードの読み替え(<code>1</code> → <code>2</code>)は呼び出し側が持ち、共有側は用途を知らずに済む。<code>latest-steering.sh</code> を hook・fork・スキルで共有しているのと同じ構造。</p>
-    </div>
+    </details>
 
-    <div class="callout warn">
-      <span class="callout-label">この層がモード C で詰みを作る</span>
+    <details class="callout warn">
+      <summary class="callout-label">この層がモード C で詰みを作る</summary>
       <p>モード C には司令塔がいない。Codex が保護ブランチ上で作業を始めると<strong>この層に弾かれ、原因を自己診断できずに止まる</strong>。共有スクリプトのメッセージに <code>git switch -c feature/[作業名]</code> の案内を入れてあるので自力回復の余地はあるが、AGENTS.md のモード C 手順にブランチ作成を明記して確実にする(§04)。</p>
-    </div>
+    </details>
 
-    <div class="callout done">
-      <span class="callout-label">監視役もベンダー中立にする</span>
+    <details class="callout done">
+      <summary class="callout-label">監視役もベンダー中立にする</summary>
       <p>層 3 が消えていないかの検査を、当初は SessionStart hook にだけ置いていた。しかし SessionStart は <strong>Claude 専用</strong>であり、この層が守りたいのは<strong>モード C = Claude が起動しない期間そのもの</strong>。<strong>検知が必要な期間に検知役が動かない</strong>という構造で、「層が無いことより気づけないことの方が悪い」という論理がそのまま跳ね返っていた。</p>
       <p>同じ検査を <code>ci.yml</code> にも置いた。既存ループは <code>.claude/scripts/*.sh</code> と <code>.claude/hooks/*.sh</code> しか見ておらず <strong><code>.husky/</code> は検査対象外だった</strong>。<code>.husky/</code> はマニフェストの <code>merge</code>(手動統合)対象で、同期の誤りで呼び出しごと落ちやすい。</p>
       <p>あわせて <strong><code>quality</code> から独立したジョブに切り出した</strong>。従来は <code>quality</code> の最終ステップにあり、lint やテストが落ちると fail-fast で<strong>実行されずに終わっていた</strong> — ガードレールが消えている PR ほど他のチェックも落ちやすく、<strong>最も検知したい場面で検知できない</strong>構造だった。依存のインストールが要らないので独立させた方が速くもある。</p>
@@ -1121,7 +1165,7 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
           </tbody>
         </table>
       </div>
-    </div>
+    </details>
 
     <h3>README の規約のうち、Codex に効かないもの</h3>
     <p>§02 で挙げたハーネス機能は<strong>ほとんどが Claude 専用</strong>。Codex 併用ではそれぞれ写像先が要る。</p>
@@ -1141,12 +1185,12 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
       </table>
     </div>
 
-    <div class="callout done">
-      <span class="callout-label">この層が静かに消えないようにする(実装済み)</span>
+    <details class="callout done">
+      <summary class="callout-label">この層が静かに消えないようにする(実装済み)</summary>
       <p><code>.husky/pre-commit</code> は template-manifest の <strong><code>merge</code></strong>(手動統合)対象。<code>/sync-template</code> の統合ミスで<strong>共有スクリプトの呼び出しごと落ちても誰も気づかない</strong>。層が無いことより、無くなったのに気づけないことの方が悪い。</p>
       <p>SessionStart のハーネス自壊検知に 2 つ追加した: <strong>(1)</strong> <code>.husky/pre-commit</code> が共有スクリプトを呼んでいるか、<strong>(2)</strong> <code>core.hooksPath</code> が設定されているか(未設定 = husky 自体が無効)。正常時は無言、失われたときだけ警告する。</p>
       <p><strong>検査は「呼び出しの有無」と「呼ばれる実体の有無」を両方見る。</strong> 当初は <code>[ -f script ] &amp;&amp; ! grep …</code> の形で書いており、<strong>スクリプトごと消えると検査自体がスキップされ <code>exit 0</code></strong> になっていた。層が完全に消滅した最悪のケースが最も静かに通るという、この節の主張がそのまま裏返った状態だった。一般化すると <strong>「X が壊れていないか」を X の存在を前提に検査してはいけない</strong>。<code>.husky/pre-commit</code> 側も、スクリプト不在時に stderr へ警告を出す(フェイルオープンは維持)。</p>
-    </div>
+    </details>
 
     <h3>Codex 関連ファイルのマニフェスト登録(段階2 で行う)</h3>
     <p>AGENTS.md も <code>.codex/</code> も現在マニフェストに<strong>未登録</strong>で、<code>/sync-template</code> の扱いが未定義。生成と同時に登録する。</p>
@@ -1174,8 +1218,8 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
       </table>
     </div>
 
-    <div class="callout warn">
-      <span class="callout-label">この受け皿は現状のリポジトリでは存在しない(2026-08-19 判明)</span>
+    <details class="callout warn">
+      <summary class="callout-label">この受け皿は現状のリポジトリでは存在しない(2026-08-19 判明)</summary>
       <p>上の表は<strong>残る穴 3 件のうち 2 件を「リモートのブランチ保護」に集約</strong>している。しかしこのリポジトリは <strong>Free プランの private</strong> であり、ブランチ保護もルールセットも使えない:</p>
       <p class="mono" style="font-size: 0.75rem; background: var(--surface-2); padding: 0.5rem;">$ gh api repos/{owner}/{repo}/branches/main/protection<br>403 Upgrade to GitHub Pro or make this repository public</p>
       <p>帰結は 3 つ。<strong>Codex にコミット権を渡す(モード C)前に決着させること。</strong></p>
@@ -1185,20 +1229,20 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
         <li>「権限境界は GitHub 側で張る」という前提が、このリポジトリでは<strong>空手形</strong>になっている</li>
       </ul>
       <p>選択肢は <strong>①リポジトリを public にする</strong>(public なら Free でもルールセットが使える)/ <strong>②Pro・Team に上げる</strong> / <strong>③ローカル hook が唯一の層だと認めて上の表を書き換える</strong>。③はモード C の前提としては最も弱い。</p>
-    </div>
+    </details>
 
-    <div class="callout warn">
-      <span class="callout-label">フェイルオープンのつもりが fail-closed だった(2026-08-19 修正)</span>
+    <details class="callout warn">
+      <summary class="callout-label">フェイルオープンのつもりが fail-closed だった(2026-08-19 修正)</summary>
       <p>husky は <code>.husky/pre-commit</code> を <strong><code>sh -e</code></strong> で実行する(<code>.husky/_/h</code>)。<code>set -e</code> 下では非ゼロを返したコマンドの直後にシェルごと終了するため、当初の</p>
       <p class="mono" style="font-size: 0.75rem; background: var(--surface-2); padding: 0.5rem;">bash "$GUARD"<br>case $? in 1) exit 1 ;; esac&nbsp;&nbsp;<span style="color: var(--gap);">← 到達しない</span></p>
       <p>は <code>case</code> に制御が渡らず、<strong>内部エラー(<code>bash</code> 不在 = 127・構文エラー = 2・権限落ち = 126)まで全コミットをブロックしていた</strong>。設計上の「内部エラーはフェイルオープン」の真逆であり、メッセージは <code>husky - pre-commit script failed (code 127)</code> だけ、回復手段は <code>--no-verify</code> のみ。<strong>この節が防ごうとしている「静かな自壊」の最も派手な裏返し</strong>になっていた。</p>
       <p>修正は終了コードを <code>&amp;&amp; / ||</code> のリスト内で受ける形(リスト内は <code>set -e</code> が発火しない)。<code>npx lint-staged</code> も <code>lint-staged</code> の直呼びに変えた — husky が <code>node_modules/.bin</code> を PATH に足しているのでローカル解決でき、<strong>ネットワーク無効の sandbox(Codex 委託時)で <code>npx</code> がレジストリ取得を試みて死ぬ経路</strong>が消える。</p>
-    </div>
+    </details>
 
-    <div class="callout done">
-      <span class="callout-label">ポリシーの空洞化検知(2026-08-19 追加)</span>
+    <details class="callout done">
+      <summary class="callout-label">ポリシーの空洞化検知(2026-08-19 追加)</summary>
       <p>保護ブランチ検査の 3 層(PreToolUse hook / <code>.husky/pre-commit</code> / CI の <code>branch-policy</code>)は、いずれも <code>protectedBranches</code> という<strong>同じ配列</strong>を読む。ここが空になると <strong>3 層が同時に、かつ「正常に動作したうえで素通し」という形で</strong>無効化される。呼び出しの有無だけを見る自壊検知では<strong>最も静かに層が消えるのがこの経路</strong>なので、SessionStart と CI の両方に「<code>protectedBranches</code> が空でないこと」を追加した。</p>
-    </div>
+    </details>
     <p>いずれも<strong>ローカルのガードレールをセキュリティ境界として扱わない</strong>という前提で許容している。権限境界は GitHub 側のブランチ保護で張る。</p>
   </section>
 
@@ -1251,30 +1295,30 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
     </div>
     <p>保護ブランチ上の挙動は<strong>使い捨て git リポジトリ</strong>で検証した(このリポジトリの HEAD を汚さないため)。</p>
 
-    <div class="callout done">
-      <span class="callout-label">レビューで発見・修正した自作の欠陥</span>
+    <details class="callout done">
+      <summary class="callout-label">レビューで発見・修正した自作の欠陥</summary>
       <p><strong>呼び出し側がフェイルオープンになっていなかった。</strong> 当初 <code>if ! bash ...</code> と書いており、違反(<code>exit 1</code>)以外もブロックしていた。共有スクリプトが同期漏れ・権限落ちで<strong>無いだけで全コミットが止まる</strong>状態で、共有スクリプト側は 4 条件でフェイルオープンする設計なのに呼び出し側が fail-closed という不整合だった。<code>case $? in 1) ... esac</code> に修正し、検証を 15 → 20 ケースに拡張。</p>
       <p><strong>教訓</strong>: 判定を 1 箇所に集約したことで、逆に「呼び出し側が終了コード契約を誤読する」新しい失敗モードが生まれていた。<strong>フェイルオープン設計は共有スクリプト側だけでは完結しない。</strong></p>
-    </div>
+    </details>
 
-    <div class="callout warn">
-      <span class="callout-label">守っていたのは「コミットを作る操作」の一部だけだった(2026-08-19)</span>
+    <details class="callout warn">
+      <summary class="callout-label">守っていたのは「コミットを作る操作」の一部だけだった(2026-08-19)</summary>
       <p>保護ブランチ上での各 git 操作を実測したところ、<code>pre-commit</code> フックが発火するのは <code>git commit</code> と <code>git commit --amend</code> <strong>だけ</strong>で、<strong><code>git revert</code> と <code>git cherry-pick</code> では発火しない</strong>ことが分かった。Claude 側の <code>check-branch-policy.sh</code> も <code>git commit</code> にしかマッチせず、CI は PR の base とブランチ名しか見ない。つまり<strong>この 2 操作は 4 層すべてを素通りしていた</strong>。</p>
       <p>「main の悪いコミットを revert して」は<strong>エージェントに最も自然に発生する指示</strong>であり、モード C では Codex がコミット権を持つ。層の名前(「保護ブランチへの直接コミットを止める」)と実際の守備範囲がずれていた。</p>
       <p><code>.husky/prepare-commit-msg</code> を追加して塞いだ。<code>.git/MERGE_HEAD</code> の有無で出所が分かるため、取り込み(= <code>git merge</code> / <code>git pull</code>)だけは通せる — ここを塞ぐと保護ブランチで pull すらできなくなる。<strong>第 2 引数では判別できない</strong>点に注意(<code>git revert -e</code> / <code>git cherry-pick -e</code> も <code>merge</code> を渡してくる)。<strong>副次効果として <code>git commit --no-verify</code> も塞がった</strong>: <code>--no-verify</code> が無効化するのは <code>pre-commit</code> と <code>commit-msg</code> だけで、このフックは迂回できない。</p>
       <p><strong>教訓</strong>: 「どの操作を守るか」を<strong>フック名ではなく実測で確かめる</strong>。<code>pre-commit</code> という名前は「コミット前」と読めるが、実際に守るのは <code>git commit</code> という<strong>コマンド</strong>であって、コミットという<strong>結果</strong>ではない。</p>
-    </div>
+    </details>
 
-    <div class="callout warn">
-      <span class="callout-label">その修正自体が、実行環境によって無効化されていた(2026-08-19)</span>
+    <details class="callout warn">
+      <summary class="callout-label">その修正自体が、実行環境によって無効化されていた(2026-08-19)</summary>
       <p>上の修正で入れた <code>case $? in 1) exit 1 ;; esac</code> は、<strong><code>.husky/pre-commit</code> では機能しなかった</strong>。husky がこのファイルを <code>sh -e</code> で実行するため、<code>bash "$GUARD"</code> が非ゼロを返した時点でシェルごと終了し、<code>case</code> に制御が渡らないため。<strong>PreToolUse hook 側(<code>set -e</code> 無し)では同じコードが正しく動いていた</strong>ぶん、発見が遅れた。</p>
       <p><strong>教訓</strong>: 「判定の実体を 1 箇所に集約する」は正しいが、<strong>呼び出し側のシェルオプションまでは共有されない</strong>。同じ 3 行を 2 箇所に写しても、<code>set -e</code> の有無で意味が反転する。共有スクリプトの終了コード契約を書くときは、<strong>呼び出し側がどのシェルでどう起動されるかまでを契約に含める</strong>必要がある。</p>
-    </div>
+    </details>
 
-    <div class="callout warn">
-      <span class="callout-label">作業中に判明 · 要別対応</span>
+    <details class="callout warn">
+      <summary class="callout-label">作業中に判明 · 要別対応</summary>
       <p><strong><code>check-branch-policy.sh</code> の <code>CMD_START</code> が markdown のコードスパンを誤検知する。</strong> コマンド置換を拾うためバッククォートを起点文字に含めており、文書中のコードスパンを「コマンド位置の呼び出し」と誤判定する。今回この作業中に実際に 2 回ブロックされた。このテンプレートは自身のワークフローを文書化するため遭遇頻度が高い。<strong>スコープ外として手を付けていない</strong> — 独立したチケットとして起票することを推奨する。</p>
-    </div>
+    </details>
   </section>
 
   <section>
@@ -1303,11 +1347,11 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
 
     <p>粒度の条件を満たしていても<strong>委託が常に得とは限らない</strong>。<code>design.md</code> を「設計判断ゼロで実装できる粒度」まで書くコスト自体が Opus の消費だから。</p>
 
-    <div class="callout">
-      <span class="callout-label">判定軸</span>
+    <details class="callout">
+      <summary class="callout-label">判定軸</summary>
       <p><strong>「<code>design.md</code> を書き切るコスト」&lt;「実装ループのコスト」を満たすときだけ委託する。</strong></p>
       <p><strong>既存パターンの横展開</strong>は設計記述が薄くて済む(「A と同じ形で B を作る」)ので成立しやすい。<strong>新規パターンの 1 例目</strong>は設計記述が厚くなるので成立しにくく、これは「参照実装は司令塔が書く」という既存ルールと<strong>同じ結論に到達する</strong> — 別の理由から同じ線が引けるのは、線の位置が正しい傍証になる。</p>
-    </div>
+    </details>
   </section>
 
   <section>
@@ -1368,6 +1412,86 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
       <li><strong>GitHub のブランチ保護が使えるプランか。</strong> 現状このリポジトリは Free の private で <code>403 Upgrade to GitHub Pro</code> が返る。残る穴 3 件のうち 2 件をブランチ保護に集約している設計なので、<strong>モード C(Codex にコミット権)へ進む前に決着が要る</strong>(§07)</li>
       <li><strong>環境構築手順で <code>npm ci</code> を担保する必要がある。</strong> 今回の作業開始時点で husky は無効(<code>core.hooksPath</code> 未設定)であり、移植前の <code>lint-staged</code> すら動いていなかった</li>
     </ul>
+  </section>
+
+  <section id="manual-ops">
+    <div class="sec-head"><span class="sec-num">12</span><h2>ユーザー操作が必要なこと</h2></div>
+
+    <p>他の節は「仕組みがどうなっているか」の説明。この節は<strong>人間が手を動かさないと進まないもの</strong>だけを集めた。権限・課金・アカウント設定に属するため、Claude / Codex / CI のいずれも代行できない。</p>
+
+    <h3>12.1 完了済み(2026-08-20)</h3>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th>項目</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td>コミットの author / committer を統一</td><td>未 push の 8 コミットを GitHub の noreply(<code>109528067+fuji18@users.noreply.github.com</code>)に書き換え。到達可能な履歴から個人アドレスが消えた。内容差分ゼロを確認済み</td></tr>
+          <tr><td><code>user.email</code> の設定</td><td>リポジトリ(<code>.git/config</code>)とコンテナのグローバル(<code>~/.gitconfig</code>)の両方</td></tr>
+          <tr><td><code>prepare-commit-msg</code> の判別修正</td><td>第 2 引数ではなく <code>.git/MERGE_HEAD</code> の有無で判別する(§07)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>12.2 public 化(順序に意味がある)</h3>
+
+    <p>§07「残る穴」の 2 件を「リモートのブランチ保護」に集約している設計を、実体のあるものにする手順。<strong>3〜5 をやって初めて意味を持つ</strong> — public にしただけではブランチ保護は何も掛からない。</p>
+
+    <ol class="rail">
+      <li><b>現ブランチを push → PR → main にマージ</b><span>ベースは <code>main</code>(<code>.claude/branch-policy.json</code>)</span></li>
+      <li><b>リポジトリを public に変更</b><span>Settings → General → Danger Zone → Change repository visibility</span></li>
+      <li><b><code>main</code> にルールセットを作成</b><span>Settings → Rules → Rulesets。直接 push 禁止 / PR 必須 / force push・削除の禁止</span></li>
+      <li><b>required status checks を指定</b><span><code>branch-policy</code> / <code>harness-integrity</code> / <code>quality</code> の 3 ジョブ。いずれも PR で必ず走ることを確認済み</span></li>
+      <li><b>bypass list を空にする</b><span>自分自身も例外にしない。ここを緩めると設計が空手形に戻る</span></li>
+      <li><b>secret scanning と push protection を有効化</b><span>public リポジトリでは無料で使える</span></li>
+    </ol>
+
+    <details class="callout warn" open>
+      <summary class="callout-label">public にする前に確認すること</summary>
+      <ul>
+        <li><strong><code>git push --all</code> を使わない。</strong> ローカル専用ブランチごと公開される</li>
+        <li><strong><code>docs/template-dev/</code> は開発日誌がそのまま公開される。</strong> §07「残る穴」はガードの回避手順の一覧でもある。内容は一般的な git の知識なので危険度は低いが、公開範囲としては判断が要る</li>
+        <li><strong>fork からの PR にシークレットは渡らない。</strong> <code>claude-code-review.yml</code> は fork PR では自動スキップされる(壊れているわけではない)。<code>pull_request_target</code> は使っていないので、fork のコードが特権実行される経路も無い</li>
+        <li><strong><code>claude.yml</code> は <code>author_association</code> で OWNER / MEMBER / COLLABORATOR に限定済み。</strong> 第三者のコメントで <code>@claude</code> が起動してトークンを消費する経路は塞がっている</li>
+      </ul>
+    </details>
+
+    <h3>12.3 恒久設定(環境)</h3>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th>対象</th><th>やること</th><th>理由</th></tr></thead>
+        <tbody>
+          <tr><td>ホスト側の <code>~/.gitconfig</code></td><td>コンテナ外のターミナルでも <code>user.email</code> / <code>user.name</code> を設定する</td><td>devcontainer をリビルドするとコンテナ内の設定は失われうる</td></tr>
+          <tr><td>GitHub Settings → Emails</td><td>「Keep my email address private」と「Block command line pushes that expose my email」を ON</td><td>後者は個人アドレス入りの push を<strong>サーバ側で弾く</strong>最後の砦</td></tr>
+          <tr><td>クローン直後の <code>npm ci</code></td><td>必ず実行する</td><td>husky は <code>npm install</code> 後にしか <code>core.hooksPath</code> を設定しない。未実行だと git hook 層が丸ごと無効(§07)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>12.4 Codex 契約後、最初にやること</h3>
+
+    <p>§11 の未確認の前提のうち、<strong>設計の差し替えに直結する 2 件</strong>を最初に実測する。ここが崩れたまま段階 2 に進むと、モード間フォールバックが<strong>「壊れたことに気づけない形」で壊れる</strong>。</p>
+
+    <ul>
+      <li><strong>レート上限で固有の終了コードを返すか。</strong> 返さなければ stderr のパターンマッチに降格する(文言変更で静かに壊れるため、生エラーを run record に必ず残す)</li>
+      <li><strong>sandbox のネットワーク無効が CLI 自身の API 通信を妨げないか。</strong> 妨げるなら「ネットワーク無効を既定にする」防衛線ごと差し替えになる</li>
+    </ul>
+
+    <h3>12.5 モード運用中、恒常的に人間が担うもの</h3>
+
+    <p>モード C は「Codex + 人間」であって Codex 単独ではない。自動化されていないのは次の 4 点。</p>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th>操作</th><th>なぜ人間が要るか</th></tr></thead>
+        <tbody>
+          <tr><td><code>.harness/mode</code> の切替宣言</td><td>Claude は自動降格しない。上限に当たったことを人間が宣言する</td></tr>
+          <tr><td>feature ブランチにいることの確認</td><td>保護ブランチ上では委託そのものを始めない</td></tr>
+          <tr><td>draft PR を先に開く</td><td>開かないとモード C 中は CI が一度も走らない(§05)</td></tr>
+          <tr><td>区切りごとの <code>git push</code></td><td>Codex はネットワーク無効かつ push 禁止のため、自分では送れない</td></tr>
+        </tbody>
+      </table>
+    </div>
   </section>
 
   <footer>
@@ -1655,10 +1779,41 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
     var m = root.querySelector('mark.anno[data-note="' + id + '"]');
     if (!m) return;
     document.body.classList.remove("anno-hidden");
+    // 折り畳まれた details の中だとスクロールしても見えないので、祖先を開いてから飛ぶ
+    var d = m.parentNode;
+    while (d && d !== root) {
+      if (d.tagName === "DETAILS") d.open = true;
+      d = d.parentNode;
+    }
     m.scrollIntoView({ behavior: "smooth", block: "center" });
     m.classList.add("is-flash");
     setTimeout(function () { m.classList.remove("is-flash"); }, 1300);
   }
+
+  /* ---------- 検討メモの一括開閉 / 印刷 ---------- */
+
+  function setAllDetails(open) {
+    var list = root.querySelectorAll("details.callout");
+    for (var i = 0; i < list.length; i++) list[i].open = open;
+  }
+  var dAll = document.getElementById("disclose-all");
+  var dNone = document.getElementById("disclose-none");
+  if (dAll) dAll.addEventListener("click", function () { setAllDetails(true); });
+  if (dNone) dNone.addEventListener("click", function () { setAllDetails(false); });
+
+  // 印刷・PDF 化で折り畳んだ内容が落ちないよう、一時的に全部開く
+  var printReopen = [];
+  window.addEventListener("beforeprint", function () {
+    printReopen = [];
+    var list = root.querySelectorAll("details.callout");
+    for (var i = 0; i < list.length; i++) {
+      if (!list[i].open) { printReopen.push(list[i]); list[i].open = true; }
+    }
+  });
+  window.addEventListener("afterprint", function () {
+    for (var i = 0; i < printReopen.length; i++) printReopen[i].open = false;
+    printReopen = [];
+  });
 
   /* ---------- 選択 → 追加 ---------- */
 
