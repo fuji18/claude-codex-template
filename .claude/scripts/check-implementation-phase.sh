@@ -13,8 +13,10 @@
 #
 # ブロックしないもの(意図的):
 #   - サブエージェント(implementer 等)からの編集
-#   - .steering/ / docs/ / .claude/ / .github/ への編集
-#     → fork が「判断待ち」で戻ったとき、司令塔が design.md を直す動線を残すため
+#   - .steering/ / docs/ / .claude/ / .github/ / .husky/ への編集
+#     → fork が「判断待ち」で戻ったとき、司令塔が design.md を直す動線を残すため。
+#       .husky/ はベンダー非依存のガードレール(pre-commit → check-protected-branch.sh)を
+#       置く場所であり、ハーネスの一部なので同じ扱いにする
 #   - tasklist が全て [x] の状態(= 検収フェーズ)。code-reviewer の指摘対応は司令塔が直接行う
 #   - tasklist.md に <!-- main-edit-ok --> がある場合(テンプレート自体の改修など、
 #     司令塔が実装するのが正しい作業のための脱出弁)
@@ -38,7 +40,7 @@ REL="${FILE#"$(pwd)/"}"
 
 # 計画・ドキュメント・ハーネスの編集は司令塔の仕事なので通す
 case "$REL" in
-  .steering/* | docs/* | .claude/* | .github/* | /*) exit 0 ;;
+  .steering/* | docs/* | .claude/* | .github/* | .husky/* | /*) exit 0 ;;
 esac
 
 # 最新のステアリングディレクトリだけを見る(放置された過去の tasklist で止めないため)。

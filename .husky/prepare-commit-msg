@@ -1,0 +1,27 @@
+# 保護ブランチ上で「コミットを作る」操作のうち、pre-commit が捕まえられないものを止める。
+#
+# 実測(git 2.x): pre-commit が発火するのは git commit と git commit --amend だけで、
+# git revert / git cherry-pick では発火しない。両者は保護ブランチへの直接コミットそのものな
+# ので、全操作で発火する prepare-commit-msg 側にも同じ検査を置く。
+#
+# $2 = コミットの出所。merge のときだけ通す:
+#   message … commit / --amend / revert / cherry-pick → 検査する
+#   merge   … git merge / git pull の統合コミット      → 通す
+#             (ここを塞ぐと保護ブランチで git pull すらできなくなる。取り込みは違反ではない)
+#
+# 【重要】husky はこのファイルを `sh -e` で実行する(.husky/_/h)。終了コードは必ず
+# `&& / ||` のリスト内で受けること — 理由と実例は .husky/pre-commit の冒頭コメント参照。
+case "${2:-}" in
+  merge) exit 0 ;;
+esac
+
+GUARD=".claude/scripts/check-protected-branch.sh"
+if [ -f "$GUARD" ]; then
+  bash "$GUARD" && rc=0 || rc=$?
+  if [ "$rc" = 1 ]; then exit 1; fi
+  if [ "$rc" != 0 ]; then
+    echo "⚠️ 保護ブランチ検査が内部エラーで終了しました (code $rc)。検査をスキップします — $GUARD を確認してください" >&2
+  fi
+else
+  echo "⚠️ $GUARD が無いため保護ブランチ検査をスキップしました(ベンダー非依存の防衛線が失われています)" >&2
+fi

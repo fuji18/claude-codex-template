@@ -26,6 +26,7 @@
     ".claude/template-manifest.json",
     ".github/dependabot.yml",
     ".husky/pre-commit",
+    ".husky/prepare-commit-msg",
     ".secretlintrc.json",
     ".gitattributes",
     ".gitignore"

@@ -65,6 +65,51 @@ jobs:
 
           echo "ブランチポリシー OK: $HEAD_REF -> $BASE_REF"
 
+  # ハーネスの自壊検知。quality から独立させているのは、lint やテストの失敗で
+  # この検査が実行されずに終わる(fail-fast で後続ステップが飛ぶ)のを避けるため。
+  # ガードレールが消えている PR ほど他のチェックも落ちやすく、最も検知したい場面で
+  # 検知できなくなる。依存のインストールも要らないので独立ジョブの方が速い。
+  harness-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      # hook スクリプトの実行権限と settings.json の構文を検証する
+      # (PreToolUse hook は実行失敗時にフェイルオープンになるため、CI で機械的に担保する)
+      - name: Validate harness integrity
+        run: |
+          jq . .claude/settings.json > /dev/null
+          for s in .claude/scripts/*.sh .claude/hooks/*.sh; do
+            [ -f "$s" ] || continue
+            if [ ! -x "$s" ]; then
+              echo "::error::hook スクリプトに実行権限がありません: $s — ローカルで chmod +x しても core.fileMode=false の環境では index に反映されません。git update-index --chmod=+x $s を実行してコミットし直してください"
+              exit 1
+            fi
+            bash -n "$s"
+          done
+
+          # ベンダー非依存の防衛線(.husky/* → check-protected-branch.sh)の検証。
+          # 同じ検査は SessionStart hook にもあるが、あちらは Claude セッション開始時に
+          # しか動かない = 検知自体がベンダー依存になる。Claude を一度も起動しない期間
+          # (他ツール単独での作業など)にこの層が消えても気づけないため、クライアント
+          # 非依存のこの層にも置く。.husky/ は template-manifest の merge 対象=手動統合
+          # であり、同期の誤りで呼び出しごと落ちやすい。
+          # 判定の実体は共有スクリプトに集約してある(SessionStart と同じ結果になることが要件)。
+          for f in .husky/pre-commit .husky/prepare-commit-msg; do
+            [ -f "$f" ] && bash -n "$f"
+          done
+
+          if ! ISSUES="$(bash .claude/scripts/check-guard-integrity.sh)"; then
+            printf '%s\n' "$ISSUES" | while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error::$line"
+            done
+            exit 1
+          fi
+
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -103,17 +148,3 @@ jobs:
       - name: Dependency audit
         continue-on-error: true
         run: npm audit --audit-level=high
-
-      # ハーネスの自壊検知: hook スクリプトの実行権限と settings.json の構文を検証する
-      # (PreToolUse hook は実行失敗時にフェイルオープンになるため、CI で機械的に担保する)
-      - name: Harness integrity
-        run: |
-          jq . .claude/settings.json > /dev/null
-          for s in .claude/scripts/*.sh .claude/hooks/*.sh; do
-            [ -f "$s" ] || continue
-            if [ ! -x "$s" ]; then
-              echo "::error::hook スクリプトに実行権限がありません: $s"
-              exit 1
-            fi
-            bash -n "$s"
-          done
