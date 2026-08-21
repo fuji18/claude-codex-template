@@ -763,7 +763,7 @@ npm ci</code>
 
     <details class="callout warn">
       <summary class="callout-label">この表のうち、いま動くのは Mode A の Sonnet fork 経路だけ</summary>
-      <p>段階 1(ベンダー中立ガードレール)のみ実装済み。<code>delegate-codex.sh</code>・<code>AGENTS.md</code>・<code>.codex/</code>・<code>.harness/mode</code> は<strong>すべて未実装</strong>で、Codex CLI もこの devcontainer に未インストール。したがって現時点で Claude の枠が尽きたら<strong>作業は止まる</strong> — 表は到達目標であって現状ではない。段階の内訳は §10 を参照。</p>
+      <p>段階 2 まで実装済み(<code>AGENTS.md</code>・<code>.codex/config.toml</code>・<code>delegate-codex.sh</code> の <code>explore</code> / <code>review</code>)。ただし <code>impl</code> モードと <code>.harness/mode</code> は<strong>未実装</strong>で、Codex CLI もこの devcontainer に<strong>未インストール</strong>(段階0 未達)。したがって現時点で Claude の枠が尽きたら<strong>作業は止まる</strong> — 表は到達目標であって現状ではない。段階の内訳は §10 を参照。</p>
     </details>
 
     <details class="callout done">
@@ -1363,7 +1363,7 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
     <div class="stages">
       <div class="stage">
         <span class="stage-n">00</span>
-        <div class="stage-body"><b>前提</b><span>ChatGPT Plus 契約 ・ <code>codex login</code> ・ データガバナンス判断</span></div>
+        <div class="stage-body"><b>前提</b><span>ChatGPT Plus 契約 ・ <code>codex login</code> ・ データガバナンス判断 ・ <a href="https://github.com/fuji18/claude-codex-template/issues/4">Issue #4</a></span></div>
         <span class="chip todo">契約待ち</span>
       </div>
       <div class="stage is-done">
@@ -1378,22 +1378,22 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
       </div>
       <div class="stage">
         <span class="stage-n">03</span>
-        <div class="stage-body"><b>実装委託</b><span><code>delegate-codex.sh impl</code> + <code>/next-ticket</code> の分岐(§03)+ CLAUDE.md 条件ペア</span></div>
+        <div class="stage-body"><b>実装委託</b><span><code>delegate-codex.sh impl</code> + <code>/next-ticket</code> の分岐(§03)+ CLAUDE.md 条件ペア ・ <a href="https://github.com/fuji18/claude-codex-template/issues/5">Issue #5</a></span></div>
         <span class="chip todo">未着手</span>
       </div>
       <div class="stage">
         <span class="stage-n">04</span>
-        <div class="stage-body"><b>モード B</b><span><code>.harness/mode</code> + SessionStart 注入。週枠の実効寿命がどれだけ延びたかを測る</span></div>
+        <div class="stage-body"><b>モード B</b><span><code>.harness/mode</code> + SessionStart 注入。週枠の実効寿命がどれだけ延びたかを測る ・ <a href="https://github.com/fuji18/claude-codex-template/issues/6">Issue #6</a></span></div>
         <span class="chip todo">未着手</span>
       </div>
       <div class="stage">
         <span class="stage-n">05</span>
-        <div class="stage-body"><b>モード C</b><span><code>.codex/prompts/</code> + <code>codex-log.md</code> 運用。Claude 不在で 1 チケット完走できるか</span></div>
+        <div class="stage-body"><b>モード C</b><span><code>.codex/prompts/</code> + <code>codex-log.md</code> 運用。Claude 不在で 1 チケット完走できるか ・ <a href="https://github.com/fuji18/claude-codex-template/issues/7">Issue #7</a></span></div>
         <span class="chip todo">未着手</span>
       </div>
       <div class="stage">
         <span class="stage-n">06</span>
-        <div class="stage-body"><b>チケット統合</b><span><code>delegate:codex</code> ラベル + README 追記</span></div>
+        <div class="stage-body"><b>チケット統合</b><span><code>delegate:codex</code> ラベル + README 追記 ・ <a href="https://github.com/fuji18/claude-codex-template/issues/8">Issue #8</a></span></div>
         <span class="chip todo">未着手</span>
       </div>
     </div>

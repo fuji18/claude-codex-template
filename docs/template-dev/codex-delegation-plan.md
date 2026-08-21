@@ -748,6 +748,7 @@ Codex が「並行実装」と「第二意見レビュー」を担うなら、�
 
 - 各段階で価値が確認できなければ**そこで止めてよい**(段階 2 の読み取り用途だけでも第二意見としての価値は成立する)
 - 段階 2 以降はテンプレート自身の開発フローに乗せる: **各項目を GitHub Issues として発行し(根拠: 本ドキュメント)、`/next-ticket` で消化する**
+- **Issue 発行済み(2026-08-21)**: 段階0 = [#4](https://github.com/fuji18/claude-codex-template/issues/4)(`blocked`: ChatGPT Plus 未契約)/ 段階3 = [#5](https://github.com/fuji18/claude-codex-template/issues/5)/ 段階4 = [#6](https://github.com/fuji18/claude-codex-template/issues/6)/ 段階5 = [#7](https://github.com/fuji18/claude-codex-template/issues/7)/ 段階6 = [#8](https://github.com/fuji18/claude-codex-template/issues/8)。**段階0 が全後続の前提**であり、契約が済むまで段階3 以降は着手しない
 - 本ドキュメントは調査時点の Codex CLI 仕様に基づく。着手前に **§13 の未確認項目を一括で検証する**
 
 **段階2 で検証できたこと / できなかったこと(2026-08-20)**
