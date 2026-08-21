@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ベンダー中立ブランチガード レビュー指摘</title>
+<style>
+  :root {
+    --bg: #f8f9fb;
+    --surface: #ffffff;
+    --text: #1f2530;
+    --muted: #5b6472;
+    --border: #dde2ea;
+    --accent: #2563eb;
+    --danger-bg: #fdf0f0;
+    --danger-border: #e5484d;
+    --warn-bg: #fdf7ec;
+    --warn-border: #d97706;
+    --info-bg: #eef4fd;
+    --info-border: #2563eb;
+    --ok-bg: #eefaf2;
+    --ok-border: #16a34a;
+    --code-bg: #eef1f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171c;
+      --surface: #1c2027;
+      --text: #e6e9ee;
+      --muted: #9aa4b2;
+      --border: #323945;
+      --accent: #6ea8fe;
+      --danger-bg: #2a1c1d;
+      --danger-border: #e5484d;
+      --warn-bg: #2a2418;
+      --warn-border: #d97706;
+      --info-bg: #1a2333;
+      --info-border: #6ea8fe;
+      --ok-bg: #17261d;
+      --ok-border: #22c55e;
+      --code-bg: #262c36;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+    line-height: 1.75;
+    font-size: 15px;
+  }
+  main {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  h1 {
+    font-size: 1.6rem;
+    margin: 0 0 4px;
+    letter-spacing: .01em;
+  }
+  .meta {
+    color: var(--muted);
+    font-size: .85rem;
+    margin-bottom: 28px;
+  }
+  h2 {
+    font-size: 1.2rem;
+    margin: 44px 0 14px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid var(--border);
+  }
+  code {
+    background: var(--code-bg);
+    border-radius: 4px;
+    padding: .1em .4em;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: .86em;
+    word-break: break-all;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 5px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin: 18px 0;
+  }
+  .card h3 {
+    margin: 0 0 8px;
+    font-size: 1.02rem;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .card p { margin: 8px 0; }
+  .card p:last-child { margin-bottom: 0; }
+  .sev {
+    flex-shrink: 0;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .05em;
+    border-radius: 999px;
+    padding: 2px 10px;
+    white-space: nowrap;
+  }
+  .card.danger { border-left-color: var(--danger-border); }
+  .card.danger .sev { background: var(--danger-bg); color: var(--danger-border); border: 1px solid var(--danger-border); }
+  .card.warn { border-left-color: var(--warn-border); }
+  .card.warn .sev { background: var(--warn-bg); color: var(--warn-border); border: 1px solid var(--warn-border); }
+  .card.info { border-left-color: var(--info-border); }
+  .card.info .sev { background: var(--info-bg); color: var(--info-border); border: 1px solid var(--info-border); }
+  .card.ok { border-left-color: var(--ok-border); }
+  .card.ok .sev { background: var(--ok-bg); color: var(--ok-border); border: 1px solid var(--ok-border); }
+  .summary {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 22px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0;
+    font-size: .92rem;
+    background: var(--surface);
+  }
+  .table-wrap { overflow-x: auto; }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; white-space: nowrap; }
+  ul { padding-left: 1.4em; margin: 8px 0; }
+  li { margin: 4px 0; }
+  .ref { color: var(--muted); font-size: .84rem; margin-top: 10px; }
+  ol.actions { padding-left: 1.6em; }
+  ol.actions li { margin: 8px 0; }
+  strong { font-weight: 700; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>ベンダー中立ブランチガード — レビュー指摘まとめ</h1>
+<p class="meta">
+  対象: <code>feature/vendor-neutral-branch-guard</code> の未コミット変更一式(段階1 実装 + <code>codex-delegation-plan.md</code> 2026-08-19 改訂)/
+  レビュー日: 2026-08-20
+</p>
+
+<h2>総合評価</h2>
+<div class="summary">
+  <p><strong>設計は筋が通っており、8 巡の自己監査で主要な破綻は既に潰されている。</strong>
+  「判定の実体を 1 ファイル(<code>check-protected-branch.sh</code> / <code>check-guard-integrity.sh</code>)に集約し、Claude 専用層とベンダー非依存層の両方から呼ぶ」構造は一貫しており、Codex・手動 git・他ツールに同じルールが効く。</p>
+  <p>以下は実機確認済み:</p>
+  <ul>
+    <li><code>check-guard-integrity.sh</code> が現状態で exit 0(自壊なし)</li>
+    <li>新規スクリプト 2 本が git index 上で 100755(<code>core.fileMode=false</code> 対策済み)</li>
+    <li>husky v9 有効(<code>core.hooksPath=.husky/_</code>)・<code>.husky/_/prepare-commit-msg</code> シム存在</li>
+    <li><code>claude-code-review.yml</code> の <code>draft == false</code> 条件(モード B の節約の実体)存在</li>
+    <li>ドキュメントの写像(README / lead ルール / development-guidelines / CHANGELOG の <code>[manual]</code> 印)が揃っている</li>
+  </ul>
+  <p>ただし「Codex にコミット権を渡す」前提を空手形にしている<strong>未決事項が 1 つ</strong>と、<strong>コミット漏れになりそうな実務上の懸念が 1 つ</strong>ある(下記 #1・#2)。</p>
+</div>
+
+<h2>懸念点(重要順)</h2>
+
+<div class="card danger">
+  <h3><span class="sev">要決断</span>#1 リモート側に受け皿が無いまま、割り切りの根拠が「リモートのブランチ保護」になっている</h3>
+  <p>このリポジトリは <strong>Free プランの private</strong> で、ブランチ保護もルールセットも使えず(<code>403 Upgrade to GitHub Pro</code>)、CI を required check にもできない。つまり以下は<strong>最後まで何にも止められない</strong>:</p>
+  <ul>
+    <li><code>--no-verify</code> 付きの push / main への直接 push</li>
+    <li>保護ブランチ上での <code>git rebase</code> / <code>git reset</code>(コミットフックが発火しない経路)</li>
+    <li>CI(<code>harness-integrity</code> / <code>branch-policy</code>)が赤くてもマージできる</li>
+  </ul>
+  <p>計画 §8 はこれを自認し 3 択(public 化 / Pro 課金 / ローカル hook を唯一の層と認める)を提示して止まっている。コードの欠陥ではなく<strong>ユーザーの判断待ち</strong>であり、<strong>モード C(Codex にコミット権)開始前に決着が必要</strong>。テンプレートという性質上 public 化が最も自然に見える。</p>
+  <p class="ref">参照: codex-delegation-plan.md §8「この受け皿は現状のリポジトリでは存在しない」</p>
+</div>
+
+<div class="card danger">
+  <h3><span class="sev">CI が落ちる</span>#2 <code>.husky/prepare-commit-msg</code> が未追跡のまま</h3>
+  <p><code>git status</code> で <code>??</code>(未追跡)。これを含めずにコミット・push すると、<strong>CI の <code>harness-integrity</code> ジョブが「.husky/prepare-commit-msg が存在しない」で必ず落ちる</strong>(検知が正しく機能した結果ではあるが)。</p>
+  <p>未追跡ファイルは 3 点。コミット時にすべて含めること:</p>
+  <ul>
+    <li><code>.husky/prepare-commit-msg</code></li>
+    <li><code>.steering/20260818-vendor-neutral-branch-guard/</code></li>
+    <li><code>docs/template-dev/codex-harness.html</code></li>
+  </ul>
+</div>
+
+<div class="card warn">
+  <h3><span class="sev">未検証の前提</span>#3 上限時のフォールバック連鎖が未検証の前提の上に載っている</h3>
+  <p>「Claude 上限 → Codex」「Codex 上限 → Sonnet fork」の自動分岐は、次の 2 点に依存するが<strong>Codex CLI は未インストールで両方未確認</strong>:</p>
+  <ul>
+    <li>Codex CLI がレート上限で<strong>固有の終了コード</strong>を返すこと(exit 4 の検出。返さなければ stderr の文言マッチに降格し、文言変更で静かに壊れる)</li>
+    <li>sandbox のネットワーク無効が <strong>CLI 自身の API 通信を妨げない</strong>こと(妨げるなら「ネットワーク無効を既定にする」防衛線ごと差し替え)</li>
+  </ul>
+  <p>ここが崩れるとモード間フォールバックが<strong>「壊れたことに気づけない形」で壊れる</strong>。計画 §13 が #2・#3 を最優先検証と位置づけているのは妥当。<strong>段階0(契約)直後に一括検証してから段階2 に進む</strong>ことが骨格の成否を分ける。</p>
+  <p class="ref">参照: codex-delegation-plan.md §13(未確認の前提)</p>
+</div>
+
+<div class="card warn">
+  <h3><span class="sev">認識合わせ</span>#4 「Codex だけで代替」は現時点ではまだ成立しない</h3>
+  <p>完了しているのは<strong>段階1(ガードレール)だけ</strong>。<code>delegate-codex.sh</code>・AGENTS.md・<code>.codex/config.toml</code>・<code>.harness/mode</code> は未実装のため、<strong>今週 Claude が上限に当たっても Codex 側の受け皿はまだ何も無い</strong>。</p>
+  <p>また設計上もモード C は「Codex + 人間」であって Codex 単独ではない。人間の手作業として残るもの:</p>
+  <ul>
+    <li><code>.harness/mode</code> の切替宣言(Claude は自動降格しない)</li>
+    <li>feature ブランチにいることの確認</li>
+    <li>draft PR を先に開く(開かないとモード C 中は CI が一度も走らない)</li>
+    <li>区切りごとの <code>git push</code>(Codex はネットワーク無効かつ push 禁止)</li>
+  </ul>
+</div>
+
+<h2>細かい指摘(破綻ではない)</h2>
+
+<div class="card info">
+  <h3><span class="sev">記述の言い過ぎ</span>「<code>git merge</code> / <code>git pull</code> は通す」はクリーンなマージ限定</h3>
+  <p>コンフリクトしたマージを <code>git commit</code> で完結させる経路では <code>pre-commit</code> が発火し、保護ブランチ上ではブロックされる(<code>prepare-commit-msg</code> の <code>merge</code> 素通しに到達する前に止まる)。保護ブランチ上でコンフリクトする状況自体がガードで防がれているため実害はほぼ皆無だが、README・ルール類の「統合コミットは通す」はやや言い過ぎ。</p>
+  <p>同様に <code>check-protected-branch.sh</code> のコメント「merge 中は detached HEAD」は誤り(merge 中はブランチに留まる)。挙動には影響しない。</p>
+</div>
+
+<div class="card info">
+  <h3><span class="sev">既知の割り切り</span><code>--abort|--quit|--skip|--continue</code> 除外がコマンド文字列全体に当たる</h3>
+  <p><code>check-branch-policy.sh</code> の除外正規表現はコマンド全体を見るため、コミットメッセージに <code>--skip</code> 等を含むと Claude 層だけすり抜ける。husky 層が拾うので多層防御としては保たれる。同ファイル冒頭が宣言する「ベストエフォート」の範囲内。</p>
+</div>
+
+<div class="card info">
+  <h3><span class="sev">運用上の注意</span>モード B・C の検収は当面「運用規律のみ」で支えられる</h3>
+  <p>モード B・C の検収は CI 頼みだが、#1 が未決の間は「CI が赤くてもマージできる」。モード B の「draft PR を積んで後でまとめてレビュー」という規律は、機械的な強制ではなく運用規律だけで支えられる点を意識しておくこと。</p>
+</div>
+
+<h2>推奨アクション(順序どおり)</h2>
+<div class="summary">
+  <ol class="actions">
+    <li><strong>未追跡 3 点を含めてコミットする</strong>(<code>.husky/prepare-commit-msg</code> を忘れると CI が落ちる)</li>
+    <li><strong>ブランチ保護 3 択を決断する</strong>(public 化 / Pro 課金 / ローカル hook 唯一と認める)。モード C 開始の前提条件</li>
+    <li><strong>Codex 契約後、計画 §13 の #2・#3 を最初に検証する</strong>(レート上限の終了コード / sandbox ネットワークと CLI 通信の関係)。崩れたら §3.2 の終了コード契約と §7.2 の sandbox 既定を差し替えてから段階2 へ</li>
+  </ol>
+</div>
+
+<h2>変更前後の防衛範囲(参考)</h2>
+<div class="table-wrap">
+<table>
+  <tr><th>コミット経路</th><th>変更前</th><th>変更後</th></tr>
+  <tr><td>Claude Code(<code>git commit</code>)</td><td><code>check-branch-policy.sh</code></td><td>同左 + <code>.husky/pre-commit</code></td></tr>
+  <tr><td>Claude Code(<code>revert</code> / <code>cherry-pick</code>)</td><td><strong>無防備</strong></td><td><code>check-branch-policy.sh</code> + <code>.husky/prepare-commit-msg</code></td></tr>
+  <tr><td>Codex / 手動 git / 他ツール</td><td><strong>無防備</strong></td><td><code>.husky/pre-commit</code> + <code>prepare-commit-msg</code></td></tr>
+  <tr><td><code>git commit --no-verify</code></td><td>無防備</td><td><code>prepare-commit-msg</code> が捕捉(<code>--no-verify</code> で迂回不可)</td></tr>
+  <tr><td><code>git push</code> / <code>rebase</code> / <code>reset</code></td><td>無防備</td><td><strong>依然として無防備</strong>(#1 の決着待ち)</td></tr>
+</table>
+</div>
+
+</main>
+</body>
+</html>

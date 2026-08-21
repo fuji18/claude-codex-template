@@ -1,1 +1,37 @@
-npx lint-staged
+# 保護ブランチへの直接コミットを止める(ベンダー非依存の防衛線)。
+# Claude の PreToolUse hook は Claude 以外の経路(Codex・手動 git・他ツール)に
+# 効かないため、git hook 側にも同じ検査を置く。判定の実体は共有スクリプトに一本化。
+#
+# 【重要】husky はこのファイルを `sh -e` で実行する(.husky/_/h)。
+# `set -e` 下では非ゼロを返したコマンドの直後にシェルごと終了するため、
+#   bash "$GUARD"
+#   case $? in 1) exit 1 ;; esac
+# と書くと case に制御が渡らず、内部エラー(bash 不在=127・構文エラー=2 など)まで
+# コミットを止めてしまう。ハーネスはフェイルオープン設計なので、終了コードは
+# 必ず `&& / ||` のリスト内で受けること(リスト内は set -e が発火しない)。
+GUARD=".claude/scripts/check-protected-branch.sh"
+if [ -f "$GUARD" ]; then
+  bash "$GUARD" && rc=0 || rc=$?
+  # 違反(exit 1)だけを中断に読み替える
+  if [ "$rc" = 1 ]; then exit 1; fi
+  # それ以外の非ゼロは内部エラー。素通しするが黙らない
+  if [ "$rc" != 0 ]; then
+    echo "⚠️ 保護ブランチ検査が内部エラーで終了しました (code $rc)。検査をスキップします — $GUARD を確認してください" >&2
+  fi
+else
+  # フェイルオープンは維持するが、黙って素通ししない。
+  # 層が消えたことに気づけない状態が、層が無い状態より悪い。
+  echo "⚠️ $GUARD が無いため保護ブランチ検査をスキップしました(ベンダー非依存の防衛線が失われています)" >&2
+fi
+
+# lint-staged の起動は 2 段構え。
+# husky が node_modules/.bin を PATH に足す(.husky/_/h)ので通常は直呼びで解決するが、
+# husky v8 形式(core.hooksPath=.husky)などフックが素の sh で起動される構成では
+# PATH 補正が無く 127 で落ちる = 検査ではなくコミット自体が死ぬ。
+# フォールバックは `--no-install` 付き(素の `npx` はローカルに無いとレジストリ取得を試み、
+# ネットワーク無効の sandbox で原因の分かりにくいエラーになる)。
+if command -v lint-staged >/dev/null 2>&1; then
+  lint-staged
+else
+  npx --no-install lint-staged
+fi

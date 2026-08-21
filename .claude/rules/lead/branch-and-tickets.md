@@ -9,7 +9,9 @@
 
 - **アプリ/web のリモートセッションは `claude/*` ブランチが先に作られた状態で始まる**。これは `feature/*` と同格の正規ブランチとして扱い、**リネームしない**(セッションとブランチの紐付けが壊れる)。新しいブランチも切らずそのまま作業する
 - リモートセッションはプラットフォーム既定ブランチ(通常 `main`)起点で作られるため、`baseBranch` が `develop` のプロジェクトでは**乖離が起きる**。PR 作成前に `git merge origin/[baseBranch]` で追従し、`gh pr create --base [baseBranch]` を必ず明示する
-- 保護ブランチ上での作業は禁止。強制層は 3 段: SessionStart hook(現在地とベースを注入)→ PreToolUse hook(直接コミット・base 誤りをブロック)→ CI の `branch-policy` ジョブ(クライアント非依存の最終検証)
+- 保護ブランチ上での作業は禁止。強制層は 4 段: SessionStart hook(現在地とベースを注入)→ PreToolUse hook(直接コミット・base 誤りをブロック。**Claude 経由のみ**)→ `.husky/` の git hook(**ベンダー非依存**なので Codex・手動 git・他ツールにも効く)→ CI の `branch-policy` ジョブ(クライアント非依存の最終検証)。下 2 層の保護ブランチ判定は `.claude/scripts/check-protected-branch.sh` に一本化してあり、経路によらず同じ結果になる
+  - git hook 層は 2 ファイル構成: `pre-commit` が `git commit` / `--amend` を、`prepare-commit-msg` が **`git revert` / `git cherry-pick`** を止める。後者は `pre-commit` が発火しないため別フックが要る。`git merge` / `git pull` の取り込みだけを通す(取り込みは違反ではない)。通す判定には第 2 引数ではなく **`.git/MERGE_HEAD` の有無**を使う — `git revert -e` / `git cherry-pick -e` も第 2 引数に `merge` を渡してくるため、引数だけで素通しにすると保護ブランチ上ですり抜ける(実測)。なおコンフリクトしたマージを `git commit` で確定する経路は `pre-commit` が発火するためブロックされる(保護ブランチ上でそこまで進むこと自体が想定外)
+  - **`prepare-commit-msg` は `--no-verify` で迂回できない**(git の `--no-verify` は `pre-commit` と `commit-msg` しか無効化しない)。ローカルで唯一 `--no-verify` に耐える層
 
 ### チケット運用(GitHub Issues)
 

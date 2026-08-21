@@ -26,11 +26,43 @@ fi
 
 # --- ハーネスの自壊検知: hook スクリプトの実行権限が落ちていないか ---
 # PreToolUse hook は実行失敗時にフェイルオープン(素通り)になるため、ここで警告する
-for s in .claude/scripts/*.sh; do
+for s in .claude/scripts/*.sh .claude/hooks/*.sh; do
   if [ -f "$s" ] && [ ! -x "$s" ]; then
     echo "⚠️ hook スクリプトに実行権限がない: $s(chmod +x で復旧すること。PreToolUse はフェイルオープンになる)"
   fi
 done
+
+# ディスクの権限と git 上の権限は食い違いうる。core.fileMode=false の環境(WSL や
+# Windows マウント経由の devcontainer では珍しくない)では、ディスクが +x でも
+# 新規スクリプトは 100644 で index に入る。ディスクだけを見る上の検査は素通しし、
+# クリーンなクローンで動く CI の harness-integrity だけが PR で落ちる。
+# = 「気づくのが最も遅い層」でしか検知できないので、ここでも見る。
+if command -v git >/dev/null 2>&1; then
+  # git ls-files -s の出力は "<mode> <sha> <stage>\tパス"。パスに空白が入っても
+  # 切れないよう、フィールド分割ではなくタブ以降を丸ごと取る。
+  BADMODE="$(git ls-files -s .claude/scripts/ .claude/hooks/ 2>/dev/null |
+    awk -F'\t' '$2 ~ /\.sh$/ && $1 !~ /^100755 / {print $2}')"
+  if [ -n "$BADMODE" ]; then
+    echo "⚠️ git 上で実行権限が落ちているスクリプトがある(CI の harness-integrity が落ちる):"
+    printf '%s\n' "$BADMODE" | sed 's/^/   - /'
+    echo "   復旧: git update-index --chmod=+x [パス](chmod だけでは core.fileMode=false の環境で index に反映されない)"
+  fi
+fi
+
+# ベンダー非依存の防衛線(.husky/* → check-protected-branch.sh)が生きているか。
+# .husky/ は template-manifest の merge 対象=手動統合のため、/sync-template の統合ミスで
+# 呼び出しごと落ちても誰も気づかない。層が無いことより、無くなったのに気づけない方が悪い。
+# 判定の実体は共有スクリプトに集約する(CI の harness-integrity と同じ結果になることが要件)。
+if [ -f .claude/scripts/check-guard-integrity.sh ]; then
+  GUARD_ISSUES="$(bash .claude/scripts/check-guard-integrity.sh 2>/dev/null || true)"
+  [ -n "$GUARD_ISSUES" ] && printf '%s\n' "$GUARD_ISSUES" | sed 's/^/⚠️ /'
+fi
+
+# git hook 自体が有効化されているか。husky は prepare スクリプトが core.hooksPath を
+# 設定して初めて効くため、依存未インストールのクローン直後は .husky/ が丸ごと無効。
+if [ -d .husky ] && [ -z "$(git config --get core.hooksPath 2>/dev/null)" ]; then
+  echo "⚠️ git hook が無効(core.hooksPath 未設定)。npm ci で husky が有効化されるまで .husky/ のフックは一切動かない"
+fi
 
 # --- 4) 司令塔専用ルールの注入(全 source: startup / resume / clear / compact) ---
 # .claude/rules/lead/*.md は CLAUDE.md から @ インポートしない。CLAUDE.md 経由にすると

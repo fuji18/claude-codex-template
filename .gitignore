@@ -43,3 +43,6 @@ coverage/
 
 .claude/settings.local.json
 .claude/.lint-on-edit.lock
+
+# devcontainer が features 解決時に生成するロックファイル(環境ごとに揺れるため追跡しない)
+.devcontainer/devcontainer-lock.json

@@ -13,6 +13,30 @@
 
 ---
 
+## 2026-08-19
+
+保護ブランチへの直接コミットを止める層の**ベンダー非依存化**。従来この層は Claude の PreToolUse hook だけが持っており、Codex・手動 `git`・その他のツールからのコミットには一切効かなかった。
+
+> **同日中の追補(レビューで発見した欠陥の修正)**: 下の 6 項目は上記の実装そのものの不具合修正と、実測で見つかった取りこぼしの追補です。**上の `.husky/pre-commit` 移植を取り込む場合は、必ずセットで取り込んでください**(単体では「保護ブランチ以外でもコミットが止まる」状態になりえます)。
+
+- **[manual]** ⚠️ **`.husky/prepare-commit-msg` を新設**(新規ファイル)。`pre-commit` フックは `git commit` と `git commit --amend` でしか発火せず、**`git revert` / `git cherry-pick` では発火しない**(git の仕様)。どちらも保護ブランチへの直接コミットそのものなので、全操作で発火する `prepare-commit-msg` 側にも同じ検査を置いた。`git merge` / `git pull` の取り込みだけを通す(**`.git/MERGE_HEAD` があるときだけ素通し**。第 2 引数が `merge` かどうかで判断すると `git revert -e` / `git cherry-pick -e` もすり抜けるため — git 2.53 で実測)。**副次効果として `git commit --no-verify` も塞がる** — `--no-verify` が無効化するのは `pre-commit` と `commit-msg` だけで、このフックは迂回できない。**取り込む側の作業**: `merge` 対象なので手作業。テンプレート側の `.husky/prepare-commit-msg` をコピーする。無いと CI の `harness-integrity` が落ちる
+- **[auto]** ハーネス自壊検知の実体を **`.claude/scripts/check-guard-integrity.sh` に集約**(新規)。SessionStart hook と CI が別々の判定を持つとずれるため。あわせて 2 つの穴を修正: **(1)** 従来は `if [ -f .husky/pre-commit ]` で囲っており、**フックごと消すと検査全体がスキップされて緑になった**(husky を使う構成かは `package.json` の依存でも判定するようにした)。**(2)** 呼び出しの検査が単なる文字列一致で、**説明コメントにファイル名があるだけで通った**(コメントでない行からの `bash` / `sh` / `source` 起動を要求する形に変更)
+- **[auto]** `check-branch-policy.sh`(PreToolUse hook)の検査対象に `git revert` / `git cherry-pick` を追加。git hook 層と Claude 経由で判定がずれないようにするため。`--abort` / `--quit` / `--skip` / `--continue` は除外する(止めると revert 途中の保護ブランチから抜け出せなくなる)
+- **[manual]** `.husky/pre-commit` の `lint-staged` 起動を 2 段構えに変更(`command -v lint-staged` → 無ければ `npx --no-install lint-staged`)。husky が `node_modules/.bin` を PATH に足さない構成(husky v8 形式など)では直呼びが 127 で落ち、**検査ではなくコミット自体が死ぬ**ため。**取り込む側の作業**: `merge` 対象なので手で置き換える
+- **[manual]** ⚠️ `.husky/pre-commit` の**フェイルオープンが機能していなかった**。husky はこのファイルを `sh -e` で実行するため、`bash "$GUARD"` が非ゼロを返した時点でシェルごと終了し、`case $? in 1) exit 1 ;; esac` に制御が渡らない。結果として**内部エラー(`bash` 不在 = 127・共有スクリプトの構文エラー = 2・権限落ち = 126)でも全コミットがブロックされる**状態だった。終了コードを `&& / ||` のリスト内で受ける形に修正(リスト内は `set -e` が発火しない)。**取り込む側の作業**: `merge` 対象なので手作業。自分の `.husky/pre-commit` が `bash "$GUARD"` の直後に `case` / `if` を単独行で置いている場合は、テンプレート側の新しい形に置き換える
+- **[auto]** 保護ブランチ検査の**ポリシー空洞化検知**を追加(実体は `check-guard-integrity.sh`、SessionStart hook と CI の `harness-integrity` から呼ぶ)。全層(PreToolUse / `.husky/*` / CI の `branch-policy`)はいずれも `protectedBranches` という同じ配列を読むため、ここが空になると**全層が「正常に動作したうえで素通し」という形で同時に無効化される**。呼び出しの有無だけを見る従来の自壊検知では検出できなかった経路
+
+- **[manual]** ⚠️ 保護ブランチ検査を `.husky/pre-commit` に移植。判定の実体は新設の `.claude/scripts/check-protected-branch.sh` に一本化し、git hook(ベンダー非依存)と PreToolUse hook(Claude 専用)の両方から呼ぶ。**取り込む側の作業**: `.husky/pre-commit` は `merge` 対象なので自動では反映されない。テンプレート側の `.husky/pre-commit` を見て、`npx lint-staged` の**前**に guard 呼び出しブロックを手で足す。足さないと CI の `harness-integrity` ジョブが落ちる
+- **[manual]** 保護ブランチへの直接コミットが**人間の手動 `git commit` でも止まる**ようになる。これは意図した挙動だが、`main` に直接コミットする運用が残っているプロジェクトは先に運用を変えるか、`.claude/branch-policy.json` の `protectedBranches` を実態に合わせること。**取り込む側の作業**: `git config core.hooksPath` が空でないことを確認する(空なら husky が無効で、この層は動かない。`npm ci` で有効化される)
+- **[auto]** CI に `harness-integrity` ジョブを追加(`quality` から分離)。lint やテストの失敗で fail-fast すると自壊検知が実行されずに終わるため独立させた。`.husky/pre-commit` の構文検査と、ベンダー非依存層(スクリプトの存在 + 呼び出し)の検証を行う
+- **[auto]** SessionStart hook に、ベンダー非依存層の自壊検知と `core.hooksPath` 未設定(husky 無効)の警告を追加
+- **[auto]** `design.md` に完成マーカー(`<!-- status: draft -->` / `<!-- status: ready -->`)を導入。書きかけの設計が実装に渡るのを入口で止める。**印が無い `design.md` は検査対象外**なので、既存のステアリングは影響を受けない
+- **[auto]** `check-implementation-phase.sh` の通過パスに `.husky/` を追加(ハーネスの一部になったため、司令塔が編集できる必要がある)
+- **[manual]** ⚠️ `core.fileMode=false` の環境で新規シェルスクリプトを追加すると、ディスクが `+x` でも **git の index には 100644 で入る**。CI の `harness-integrity` は実行権限を必須にしているため、**その PR は必ず落ちる**。SessionStart hook に index 側の権限検知を追加し、CI のエラーメッセージにも復旧コマンドを載せた。**取り込む側の作業**: `git ls-files -s .claude/scripts/ .claude/hooks/` で 100755 以外が無いか確認し、あれば `git update-index --chmod=+x [パス]`(`chmod +x` だけでは index に反映されない)
+- **[auto]** `implementer` エージェント定義にも完成マーカーの入口検査を追加(スキル側だけに書くと、エージェントの手順書と食い違う)。`/add-feature` の `判断待ち` 分岐にも「マーカーを `ready` に変えないと同じところで止まる」を明記
+- **[auto]** `/kickoff` フェーズ5 のテンプレート由来 `.steering/` 削除を、名前パターンではなく `grep -l 'main-edit-ok' .steering/*/tasklist.md` による機械的検出に変更。テンプレート側の改修記録は増えていくため、名前で数え上げると取りこぼす
+- **[manual]** `.gitignore` に `.devcontainer/devcontainer-lock.json` を追加。devcontainer CLI が features 解決時に生成するファイルで、環境ごとに内容が揺れる。**取り込む側の作業**: `.gitignore` は `merge` 対象なので、自分の `.gitignore` に同じ 1 行を足す(既にコミット済みなら `git rm --cached .devcontainer/devcontainer-lock.json` も要る)
+
 ## 2026-08-12 (2)
 
 fork 委譲構成の点検で見つかった欠陥の修正。**同日の初回同期分(下の「2026-08-12」)を取り込む場合は、こちらもまとめて取り込むこと**(単体では実装フェーズが動かない欠陥を含む)。

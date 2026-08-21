@@ -6,7 +6,7 @@
 # クライアントによらず同じ判定になる。
 #
 # 検査するのは「名前」ではなく「どこへ PR するか / どこにコミットするか」:
-#   1) 保護ブランチ(main / develop)上での git commit
+#   1) 保護ブランチ(main / develop)上での git commit / git revert / git cherry-pick
 #   2) --base 無し、またはポリシー外の base を指定した gh pr create
 #
 # 注意: block-dangerous-cmds.sh と同じく文字列パターンによるベストエフォート。
@@ -32,11 +32,22 @@ RELEASE_BASE="$(jq -r '.releaseBase // "main"' "$POLICY" 2>/dev/null || echo mai
 CUR="$(git branch --show-current 2>/dev/null || true)"
 
 # --- 1) 保護ブランチへの直接コミット ---
-if printf '%s' "$cmd" | grep -qE "${CMD_START}git[[:space:]]+commit([[:space:]]|$)"; then
-  if [ -n "$CUR" ] && jq -e --arg b "$CUR" '.protectedBranches // [] | index($b)' "$POLICY" >/dev/null 2>&1; then
-    echo "check-branch-policy.sh: 保護ブランチ '$CUR' への直接コミットはポリシーで禁止されています(.claude/branch-policy.json)。作業ブランチを切ってからコミットしてください。" >&2
-    exit 2
-  fi
+# commit だけでなく revert / cherry-pick も対象にする。どちらも保護ブランチへの直接
+# コミットそのものだが、git の仕様上 pre-commit フックが発火しない(prepare-commit-msg
+# 側で塞いである)。ここで見ないと、Claude 経由と git hook 経由で判定がずれる。
+# --abort / --quit / --skip / --continue は状態機械の操作なので除外する
+# (これを止めると revert 途中の保護ブランチから抜け出せなくなる)。
+if printf '%s' "$cmd" | grep -qE "${CMD_START}git[[:space:]]+(commit|revert|cherry-pick)([[:space:]]|$)" &&
+  ! printf '%s' "$cmd" | grep -qE '[[:space:]]--(abort|quit|skip|continue)([[:space:]]|$)'; then
+  # 判定の実体は共有スクリプト(.husky/pre-commit と同じルールになることが要件)。
+  # 共有スクリプトは違反を exit 1 で返すが、PreToolUse hook のブロックは exit 2 なので読み替える。
+  # 1 以外(0 = 問題なし / 127 = スクリプト不在 / その他 = 内部エラー)はすべて素通しする。
+  # このハーネスはフェイルオープン設計であり、同期漏れや権限落ちで全コミットを
+  # 止めてはならない。最終的な砦は CI の branch-policy ジョブが担う。
+  bash .claude/scripts/check-protected-branch.sh
+  case $? in
+    1) exit 2 ;;
+  esac
 fi
 
 # --- 2) gh pr create の base 検査 ---

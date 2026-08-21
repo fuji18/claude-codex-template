@@ -1,0 +1,40 @@
+# 保護ブランチ上で「コミットを作る」操作のうち、pre-commit が捕まえられないものを止める。
+#
+# 実測(git 2.53): pre-commit が発火するのは git commit と git commit --amend だけで、
+# git revert / git cherry-pick では発火しない。両者は保護ブランチへの直接コミットそのものな
+# ので、全操作で発火する prepare-commit-msg 側にも同じ検査を置く。
+#
+# $2 = コミットメッセージの出所。ただし $2 だけでは「本物のマージ」を判別できない:
+#   message … git commit / git revert / git cherry-pick(既定)→ 検査する
+#   merge   … git merge / git pull の統合コミット……だけではなく、
+#             **git revert -e / git cherry-pick -e も merge を渡してくる**(実測)
+#
+# つまり $2 = merge を無条件に素通しすると、保護ブランチ上の
+#   git revert -e <commit>  /  git cherry-pick -e <commit>
+# が pre-commit(発火しない)と このフック(素通し)の両方をすり抜ける。
+# 判別には .git/MERGE_HEAD の有無を使う。実測値(git 2.53):
+#   git merge(クリーン)                    … $2=merge / MERGE_HEAD あり
+#   git merge(コンフリクト解決後の git commit)… $2=merge / MERGE_HEAD あり(pre-commit も発火)
+#   git revert -e                            … $2=merge / MERGE_HEAD なし
+#   git cherry-pick -e                       … $2=merge / MERGE_HEAD なし(CHERRY_PICK_HEAD あり)
+#
+# 【重要】husky はこのファイルを `sh -e` で実行する(.husky/_/h)。終了コードは必ず
+# `&& / ||` のリスト内か if の条件部で受けること — case や単独コマンドが非ゼロを返すと
+# シェルごと終了してコミットが死ぬ。理由と実例は .husky/pre-commit の冒頭コメント参照。
+if [ "${2:-}" = "merge" ]; then
+  GITDIR="$(git rev-parse --git-dir 2>/dev/null || echo .git)"
+  # 取り込み(merge / pull)は違反ではないので通す。
+  # ここを塞ぐと保護ブランチで git pull すらできなくなる。
+  if [ -f "$GITDIR/MERGE_HEAD" ]; then exit 0; fi
+fi
+
+GUARD=".claude/scripts/check-protected-branch.sh"
+if [ -f "$GUARD" ]; then
+  bash "$GUARD" && rc=0 || rc=$?
+  if [ "$rc" = 1 ]; then exit 1; fi
+  if [ "$rc" != 0 ]; then
+    echo "⚠️ 保護ブランチ検査が内部エラーで終了しました (code $rc)。検査をスキップします — $GUARD を確認してください" >&2
+  fi
+else
+  echo "⚠️ $GUARD が無いため保護ブランチ検査をスキップしました(ベンダー非依存の防衛線が失われています)" >&2
+fi
