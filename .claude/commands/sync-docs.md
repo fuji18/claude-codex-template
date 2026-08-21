@@ -21,6 +21,7 @@ Agent ツールで調査用 subagent（`general-purpose`、model: sonnet）を�
 1. `docs/` の永続ドキュメントを全て読む（引数で対象が指定されている場合はそのドキュメントを中心に読む）。
 2. `.steering/` の各ディレクトリの `tasklist.md` から、直近の実装作業の履歴を把握する。
 3. 実装コード（`src/` 等）の構造を確認する。
+   3-1. リポジトリ直下に `AGENTS.md` があれば読む（Codex 向けの規約の写像。`docs/` の外にあるので上の 1 では拾われない）。
 4. 下表の観点で乖離を洗い出し、**乖離リストのみ**（ドキュメントの記述 ⇔ 実装の実態、各項目の該当ファイル）を返す。ファイル全文の引用は返さない。**編集は一切しない**よう明示する。
 
 | ドキュメント | 確認する観点 |
@@ -31,6 +32,9 @@ Agent ツールで調査用 subagent（`general-purpose`、model: sonnet）を�
 | repository-structure.md | ディレクトリ構造の記述が実態と一致するか |
 | development-guidelines.md | 規約と実際のコードスタイルが一致するか |
 | glossary.md | コード内の主要な概念・命名が用語集に登録されているか |
+| **AGENTS.md** | **`CLAUDE.md` / `development-guidelines.md` との乖離**。検証コマンド・コーディング規約・スコープガード・ブランチ運用が一致するか。`<!-- verify-probe: ... -->` が実際に成功するか |
+
+> **AGENTS.md を見る理由**: Codex は `CLAUDE.md` も hooks も permissions も読まない。`AGENTS.md` が規約の唯一の写像なので、ここが古いと**Codex だけが古い規約で動く**。しかも Claude 側は何も壊れないため気づけない。
 
 ### ステップ3: 乖離レポートの提示
 

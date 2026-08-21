@@ -1,0 +1,30 @@
+# Codex CLI のプロジェクト設定。
+#
+# ── このファイルは防衛線ではない(重要)─────────────────────────
+#
+# Codex の設定解決順は
+#   CLI フラグ / -c  >  project config(このファイル)  >  profile
+#   >  user config(~/.codex/config.toml)  >  system  >  既定
+# であり、さらに**プロジェクトを untrusted にすると .codex/ レイヤは
+# 丸ごと読まれない**(project-local な config・hooks・rules がすべて無効化される)。
+#
+# つまり「ここに書いたから安全」は成り立たない。
+# .claude/scripts/delegate-codex.sh は sandbox を必ず --sandbox フラグで
+# 明示的に渡す。ここに書くのは「人間が codex を直接叩くとき(モード C)の既定」。
+#
+# 参照: docs/template-dev/codex-delegation-plan.md §7.2 / §9
+# ───────────────────────────────────────────────────────────
+
+# 書き込みはワークツリー内に限る。
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+# ネットワーク無効を既定にする。
+# 帰結: 新規依存の追加を伴うタスクは委託対象外になる。
+#       必要な依存は委託前に人間 / 司令塔がインストールしておくこと。
+network_access = false
+
+# model / model_reasoning_effort は既定のまま使う。
+# 変更する場合だけ次のコメントを外す(プロジェクト裁量)。
+# model = "..."
+# model_reasoning_effort = "..."

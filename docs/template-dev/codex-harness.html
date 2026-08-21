@@ -507,8 +507,8 @@
     <p class="standfirst">実装フェーズを Codex に移し、Claude が週間上限に当たっても作業が止まらない構成。設計・検収は Claude に残す。</p>
     <div class="meta">
       <span>改訂 <b>2026-08-20</b></span>
-      <span>段階 <b>1 / 6 完了</b></span>
-      <span>ブランチ <b>feature/vendor-neutral-branch-guard</b></span>
+      <span>段階 <b>2 / 6 完了</b></span>
+      <span>ブランチ <b>feature/codex-minimal-harness</b></span>
       <span>正 <b>docs/template-dev/codex-delegation-plan.md</b></span>
     </div>
     <div class="legend">
@@ -1029,15 +1029,16 @@ npm ci</code>
     <p>Claude Code on the web のリモート実行にはローカル Codex CLI が無いため <code>3</code> を返す。この経路を残さないと環境依存で作業が止まる。</p>
 
     <details class="callout warn">
-      <summary class="callout-label">上限の検出そのものが脆い</summary>
-      <p>Codex CLI が上限に固有の終了コードを返すかは<strong>未確認</strong>。返さない場合は stderr のパターン(<code>rate</code> / <code>quota</code> / <code>429</code> / <code>limit</code>)で判定することになり、文言変更で壊れる。<strong>生のエラー 3 行を必ず run record に保存</strong>し、検出をすり抜けても人間が判断できる状態にしておく。</p>
+      <summary class="callout-label">上限の検出方法(2026-08-20 に確定)</summary>
+      <p>Codex CLI は上限に固有の<strong>終了コードを返さない</strong>。代わりに <code>codex exec --json</code> の改行区切りイベントに <code>rate_limit_reached</code> / <code>usage_limit_reached</code> / <code>credits_depleted</code> という<strong>構造化された識別子</strong>が流れる。これを一次判定にした(文言そのものより変化しにくい)。</p>
+      <p>二次の保険として文言パターン(<code>rate limit</code> / <code>usage limit</code> / <code>quota</code> / <code>429</code>)も残す。<strong>識別子が改名されたときに上限を「タスク起因の失敗」と誤分類すると、司令塔が原因分析に入ってさらに枠を溶かす</strong>ため、誤検知より見逃しの方が高くつくという非対称に合わせている。<strong>生のエラー 3 行は必ず run record に保存</strong>し、検出をすり抜けても人間が判断できる状態にしておく。</p>
     </details>
 
     <details class="callout warn">
       <summary class="callout-label">送信は事後に回収できない唯一のリスク</summary>
       <p><strong><code>.gitignore</code> は守りにならない。</strong> ignore されたファイルもディスク上にあれば <code>workspace-write</code> sandbox は読める(<code>.env</code> が典型)。委託はそれを OpenAI 側へ送りうる。</p>
       <p>対策は 2 段。<strong>(1)</strong> <code>delegate-codex.sh</code> が委託前に <code>.env</code> / <code>*.pem</code> / <code>id_rsa*</code> / <code>credentials*</code> の存在を検査して確認を求める(存在しないのが正常なので普段は無言)。<strong>(2)</strong> kickoff のガバナンス判断を「使うか / 使わないか」ではなく「<strong>どのパスを送ってよいか</strong>」まで決めるものに格上げし、その一覧をスクリプトへ渡す。</p>
-      <p>他のリスクは検収で回収できるが、<strong>これだけは送信した時点で終わり</strong>。<code>.codex/config.toml</code> にパス単位の除外があるかは未確認なので、当てにせず (1) を必ず実装する。</p>
+      <p>他のリスクは検収で回収できるが、<strong>これだけは送信した時点で終わり</strong>。<strong>2026-08-20 に確定: Codex にパス単位の読み取り除外は存在しない</strong>(sandbox は書き込みの制限であり、読み取りの deny-list は無い)。したがって (1) が唯一の層であり、段階2 で実装済み(<code>CODEX_DELEGATE_ACK_SECRETS=1</code> が無ければ止まる。<code>.env.example</code> 等は除外)。</p>
     </details>
 
     <h3>run record — 委託を挟んで <code>/clear</code> するための仕掛け</h3>
@@ -1192,8 +1193,8 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
       <p><strong>検査は「呼び出しの有無」と「呼ばれる実体の有無」を両方見る。</strong> 当初は <code>[ -f script ] &amp;&amp; ! grep …</code> の形で書いており、<strong>スクリプトごと消えると検査自体がスキップされ <code>exit 0</code></strong> になっていた。層が完全に消滅した最悪のケースが最も静かに通るという、この節の主張がそのまま裏返った状態だった。一般化すると <strong>「X が壊れていないか」を X の存在を前提に検査してはいけない</strong>。<code>.husky/pre-commit</code> 側も、スクリプト不在時に stderr へ警告を出す(フェイルオープンは維持)。</p>
     </details>
 
-    <h3>Codex 関連ファイルのマニフェスト登録(段階2 で行う)</h3>
-    <p>AGENTS.md も <code>.codex/</code> も現在マニフェストに<strong>未登録</strong>で、<code>/sync-template</code> の扱いが未定義。生成と同時に登録する。</p>
+    <h3>Codex 関連ファイルのマニフェスト登録(段階2 で実施済み)</h3>
+    <p>AGENTS.md も <code>.codex/</code> もマニフェストに未登録で <code>/sync-template</code> の扱いが未定義だった。生成と同時に登録した。</p>
     <div class="scroller">
       <table>
         <thead><tr><th>パス</th><th>区分</th><th>理由</th></tr></thead>
@@ -1201,7 +1202,7 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
           <tr><td class="mono">AGENTS.md</td><td><span class="chip todo">merge</span></td><td>雛形はテンプレート、検証コマンドはスタック依存でプロジェクトが書き換える</td></tr>
           <tr><td class="mono">.codex/config.toml</td><td><span class="chip todo">merge</span></td><td>sandbox 既定はテンプレートの方針、model / effort はプロジェクト裁量</td></tr>
           <tr><td class="mono">.codex/prompts/</td><td><span class="chip todo">owned</span></td><td>ワークフローの写像。<code>.claude/commands/</code> と同じ扱い</td></tr>
-          <tr><td class="mono">.harness/</td><td><span class="chip todo">never</span></td><td>ローカルの一時状態。gitignore 対象</td></tr>
+          <tr><td class="mono">.harness/</td><td><span class="chip todo">never</span></td><td>ローカルの一時状態。ただし <strong>gitignore するのは <code>mode</code> と <code>codex-runs/</code> だけ</strong>(<code>decisions.jsonl</code> は永続ログなので追跡する)</td></tr>
         </tbody>
       </table>
     </div>
@@ -1370,10 +1371,10 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
         <div class="stage-body"><b>ベンダー中立ガードレール</b><span><code>.husky/pre-commit</code> に保護ブランチ検査を移植 — Codex にコミットを許す前提条件</span></div>
         <span class="chip ok">完了</span>
       </div>
-      <div class="stage">
+      <div class="stage is-done">
         <span class="stage-n">02</span>
-        <div class="stage-body"><b>最小ハーネス</b><span>AGENTS.md ・ <code>.codex/config.toml</code> ・ <code>delegate-codex.sh</code>(<code>explore</code> / <code>review</code> のみ)。書き込みが無いので安全</span></div>
-        <span class="chip todo">次</span>
+        <div class="stage-body"><b>最小ハーネス</b><span>AGENTS.md ・ <code>.codex/config.toml</code> ・ <code>delegate-codex.sh</code>(<code>explore</code> / <code>review</code> のみ)。書き込みが無いので安全。<strong>ただし検証できたのは「経路が正しく壊れること」まで</strong> — Codex CLI 未導入のため、委託の品質は段階3 で判定する</span></div>
+        <span class="chip ok">完了</span>
       </div>
       <div class="stage">
         <span class="stage-n">03</span>
@@ -1401,14 +1402,21 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
   <section>
     <div class="sec-head"><span class="sec-num">11</span><h2>未確認の前提</h2></div>
 
-    <p>着手前に実機で確かめる必要があるもの。ここが崩れると設計の一部を差し替える。</p>
+    <p>着手前に実機で確かめる必要があるもの。ここが崩れると設計の一部を差し替える。<strong>2026-08-20 に公開仕様で 4 件が確定し、残りは実機待ちになった。</strong></p>
+
+    <details class="callout done">
+      <summary class="callout-label">確定したもの(2026-08-20)</summary>
+      <p><strong>オプション体系</strong>: <code>codex exec [--cd,-C] [--sandbox,-s read-only|workspace-write|danger-full-access] [--json] [--output-last-message,-o PATH] [--model,-m] [-c key=value] PROMPT</code>。認証確認は <code>codex login status</code>(ログイン済みなら exit 0)。</p>
+      <p><strong>レート上限に固有の終了コードは無い</strong> — 代わりに <code>--json</code> の識別子で判定する(§04 参照)。</p>
+      <p><strong>sandbox のネットワーク無効は CLI 自身の通信を妨げない</strong> — sandbox はエージェントが実行するコマンドに掛かる層で、モデル API 通信は外側。</p>
+      <p><strong>パス単位の読み取り除外は存在しない</strong> — 機密の送信を止める層は <code>delegate-codex.sh</code> の入口検査だけ。</p>
+      <p>ただし<strong>これは実機検証の代わりにならない</strong>。確定したのは「ドキュメントに書かれた仕様」であって、<code>delegate-codex.sh</code> が実際に Codex を正しく駆動できるかは段階3 で初めて分かる。段階2 のスタブ検証は<strong>自分が書いた契約を自分で満たしているか</strong>しか見ていない。</p>
+    </details>
 
     <ul>
-      <li><strong>Codex CLI は現在この devcontainer に未インストール。</strong> <code>codex</code> コマンド・<code>~/.codex</code> ともに無い。契約後に <code>codex exec</code> のオプション体系と sandbox 仕様を再確認する</li>
-      <li><strong><code>.codex/prompts/</code> の project スコープ対応が未確認。</strong> ユーザースコープ(<code>~/.codex/prompts/</code>)は確認できている。非対応なら <code>docs/playbook/codex-standalone.md</code> に手順書を置き、人間が起動時に参照させる形へ降格する</li>
-      <li><strong>レート上限に固有の終了コードを返すか。</strong> 返さなければ stderr のパターンマッチに降格する(誤検知するので生エラーを run record に必ず残す)</li>
-      <li><strong>サンドボックスのネットワーク無効が CLI 自身の通信を妨げないか。</strong> 妨げるなら「上限」ではない別のエラーになり、検出が破綻する。ネットワーク無効を諦めて防衛線をガードレール層に寄せる判断になる</li>
-      <li><strong>レート上限のリセット単位(5 時間枠 / 週次)と <code>resetAt</code> の取得可否。</strong> 取得できなければ「待つ」判断を人間に委ねる</li>
+      <li><strong>Codex CLI は現在この devcontainer に未インストール。</strong> <code>codex</code> コマンド・<code>~/.codex</code> ともに無い。段階0(契約)の直後に導入して実機確認する</li>
+      <li><strong><code>.codex/prompts/</code> の project スコープ対応が未確認。</strong> project スコープの <code>.codex/</code> レイヤに config・hooks・rules があることは確認できたが、prompts の記載が見つからない。非対応なら <code>docs/playbook/codex-standalone.md</code> に手順書を置き、人間が起動時に参照させる形へ降格する</li>
+      <li><strong><code>resetAt</code> の取得可否。</strong> リセット単位(5 時間枠 + 週次)は確定。スクリプトはログ中の <code>"resets_at"</code> を拾う実装にしてあるが、実機で出るかは未確認。取得できなければ「待つ」判断を人間に委ねる</li>
       <li><strong>GitHub のブランチ保護が使えるプランか。</strong> 現状このリポジトリは Free の private で <code>403 Upgrade to GitHub Pro</code> が返る。残る穴 3 件のうち 2 件をブランチ保護に集約している設計なので、<strong>モード C(Codex にコミット権)へ進む前に決着が要る</strong>(§07)</li>
       <li><strong>環境構築手順で <code>npm ci</code> を担保する必要がある。</strong> 今回の作業開始時点で husky は無効(<code>core.hooksPath</code> 未設定)であり、移植前の <code>lint-staged</code> すら動いていなかった</li>
     </ul>
@@ -1470,11 +1478,13 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
 
     <h3>12.4 Codex 契約後、最初にやること</h3>
 
-    <p>§11 の未確認の前提のうち、<strong>設計の差し替えに直結する 2 件</strong>を最初に実測する。ここが崩れたまま段階 2 に進むと、モード間フォールバックが<strong>「壊れたことに気づけない形」で壊れる</strong>。</p>
+    <p>当初ここに挙げていた 2 件(上限の終了コード / ネットワーク無効の影響)は<strong>公開仕様で決着した</strong>ため、契約後に実測すべきものは次に置き換わった。</p>
 
     <ul>
-      <li><strong>レート上限で固有の終了コードを返すか。</strong> 返さなければ stderr のパターンマッチに降格する(文言変更で静かに壊れるため、生エラーを run record に必ず残す)</li>
-      <li><strong>sandbox のネットワーク無効が CLI 自身の API 通信を妨げないか。</strong> 妨げるなら「ネットワーク無効を既定にする」防衛線ごと差し替えになる</li>
+      <li><strong><code>delegate-codex.sh</code> が実際に Codex を駆動できるか。</strong> 段階2 のスタブ検証は自分の契約を自分で満たしているかしか見ていない。実機で <code>explore</code> を 1 回通すのが最初のタスク</li>
+      <li><strong>委託の品質。</strong> 指示どおりのサマリー(結論 3 行 + <code>path:line</code> の根拠)が返るか。返らないならプロンプトの作り直しであって、経路の問題ではない</li>
+      <li><strong>上限に当たったとき <code>resets_at</code> が実際にログへ出るか。</strong> 出なければ「あと何時間で復帰するか」は人間の判断に委ねる</li>
+      <li><strong><code>codex</code> がこの devcontainer で動くか</strong>(§10.6 の環境差の吸収)</li>
     </ul>
 
     <h3>12.5 モード運用中、恒常的に人間が担うもの</h3>

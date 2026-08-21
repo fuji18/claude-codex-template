@@ -17,7 +17,8 @@
     ".github/workflows/claude-code-review.yml",
     ".github/workflows/template-update-check.yml",
     ".github/pull_request_template.md",
-    "docs/ui-design-request-template.md"
+    "docs/ui-design-request-template.md",
+    ".codex/prompts/"
   ],
   "merge": [
     "docs/ui-design-guidelines.md",
@@ -29,7 +30,9 @@
     ".husky/prepare-commit-msg",
     ".secretlintrc.json",
     ".gitattributes",
-    ".gitignore"
+    ".gitignore",
+    "AGENTS.md",
+    ".codex/config.toml"
   ],
   "never": [
     "CLAUDE.md",
@@ -46,6 +49,7 @@
     "tsconfig.json",
     "vitest.config.ts",
     "eslint.config.js",
-    ".prettierrc"
+    ".prettierrc",
+    ".harness/"
   ]
 }
