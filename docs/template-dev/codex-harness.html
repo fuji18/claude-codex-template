@@ -170,6 +170,19 @@
     color: var(--ink);
   }
 
+  h4 {
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    font-weight: 600;
+    font-size: var(--step--1);
+    letter-spacing: 0.02em;
+    margin: 1.75rem 0 0.6rem;
+    padding-left: 0.6rem;
+    border-left: 3px solid var(--rule-strong);
+    color: var(--ink-2);
+  }
+
+  .note { color: var(--ink-3); font-size: 0.85em; font-weight: 400; }
+
   p { margin: 0 0 1rem; max-width: 68ch; }
   p:last-child { margin-bottom: 0; }
 
@@ -506,9 +519,9 @@
     <h1>Codex 併用ハーネス</h1>
     <p class="standfirst">実装フェーズを Codex に移し、Claude が週間上限に当たっても作業が止まらない構成。設計・検収は Claude に残す。</p>
     <div class="meta">
-      <span>改訂 <b>2026-08-20</b></span>
+      <span>改訂 <b>2026-08-23</b></span>
       <span>段階 <b>2 / 6 完了</b></span>
-      <span>ブランチ <b>feature/codex-minimal-harness</b></span>
+      <span>ブランチ <b>feature/codex-stage-issues</b></span>
       <span>正 <b>docs/template-dev/codex-delegation-plan.md</b></span>
     </div>
     <div class="legend">
@@ -763,7 +776,7 @@ npm ci</code>
 
     <details class="callout warn">
       <summary class="callout-label">この表のうち、いま動くのは Mode A の Sonnet fork 経路だけ</summary>
-      <p>段階 2 まで実装済み(<code>AGENTS.md</code>・<code>.codex/config.toml</code>・<code>delegate-codex.sh</code> の <code>explore</code> / <code>review</code>)。ただし <code>impl</code> モードと <code>.harness/mode</code> は<strong>未実装</strong>で、Codex CLI もこの devcontainer に<strong>未インストール</strong>(段階0 未達)。したがって現時点で Claude の枠が尽きたら<strong>作業は止まる</strong> — 表は到達目標であって現状ではない。段階の内訳は §10 を参照。</p>
+      <p>段階 2 まで実装済み(<code>AGENTS.md</code>・<code>.codex/config.toml</code>・<code>delegate-codex.sh</code> の <code>explore</code> / <code>review</code>)。<strong>2026-08-23: 段階0 が完了した</strong> — ChatGPT Plus 契約・Codex CLI(v0.149.0)導入・<code>codex login</code>(<code>chatgpt</code> モード)・seccomp 修正による sandbox 起動まで<strong>すべて実機で確認済み</strong>。したがって <code>explore</code> / <code>review</code> の読み取り委託は<strong>いま実際に動く</strong>。ただし <code>impl</code> モードと <code>.harness/mode</code> は<strong>未実装</strong>のままなので、現時点で Claude の枠が尽きたら<strong>実装は止まる</strong> — 表は到達目標であって現状ではない。次の一手は <a href="#manual-ops">§12.4</a>、段階の内訳は §10 を参照。</p>
     </details>
 
     <details class="callout done">
@@ -965,7 +978,7 @@ npm ci</code>
       <div class="spine"></div>
       <div class="node hub"><b>.claude/scripts/delegate-codex.sh</b><span>入力 = .steering/ のパス &nbsp;/&nbsp; 出力 = サマリーのみ</span></div>
       <div class="spine"></div>
-      <div class="node sink"><b>codex exec</b><span>sandbox: workspace-write ・ ネットワーク無効</span></div>
+      <div class="node sink"><b>codex exec</b><span>sandbox はモード別(impl / fix-ci = workspace-write、explore / review = read-only)・ ネットワーク無効</span></div>
     </div>
 
     <p>入力も出力も呼び出し元によらず同一なので、<strong>ハーネスの二重管理が起きない</strong>。プラグインは導入してもよいが「モード A で人間が対話的に使う糖衣」に格下げし、テンプレートのフローからは呼ばない。</p>
@@ -989,7 +1002,7 @@ npm ci</code>
     <pre><code>&lt;!-- status: draft --&gt;   … 執筆中。実装に渡してはいけない
 &lt;!-- status: ready --&gt;   … 実装可能。設計判断は書き切られている</code></pre>
 
-    <p><code>delegate-codex.sh</code> と <code>implement-ticket</code> は <strong><code>ready</code> 以外なら <code>exit 5</code> で拒否</strong>する(<code>2</code> = タスク起因の失敗 とは<strong>別コードにするのが要点</strong> — 回復手段が「司令塔が設計を書き切る」と「原因分析」で全く違う)。マーカーが無ければ <code>draft</code> とみなす(既存の steering を安全側に倒す)。<code>tasklist.md</code> の <code>&lt;!-- main-edit-ok --&gt;</code> を hook が読む既存の作法と同じ — <strong>散文の規約ではなく機械が読める印にする</strong>ことで、Claude が突然止まっても状態がファイルに残る。</p>
+    <p><code>delegate-codex.sh</code> と <code>implement-ticket</code> は <strong><code>ready</code> 以外なら <code>exit 5</code> で拒否</strong>する(<code>2</code> = タスク起因の失敗 とは<strong>別コードにするのが要点</strong> — 回復手段が「司令塔が設計を書き切る」と「原因分析」で全く違う)。ただし強制の強さは非対称 — Codex 側はスクリプトの機械検査、fork 側は SKILL.md の散文であり hook ではない。この非対称は実装漏れではなく設計判断として扱う(段階3 で実測し、fork が <code>draft</code> を踏むようなら機械化を再検討)。マーカーが<strong>無いものは検査対象外</strong>として通す(「無ければ draft とみなす」に倒さない理由は下の callout)。<code>tasklist.md</code> の <code>&lt;!-- main-edit-ok --&gt;</code> を hook が読む既存の作法と同じ — <strong>散文の規約ではなく機械が読める印にする</strong>ことで、Claude が突然止まっても状態がファイルに残る。</p>
 
     <p><strong>ただしモード C ではこのゲートは無効化される。</strong> 司令塔がいないので Codex が <code>design.md</code> を書いて自分で <code>ready</code> を立てる(自己認証)。塞ぐ手段が無いため、<strong>Claude 復帰時の検収で <code>design.md</code> 自体をレビュー対象に含める</strong>ことで回収する — 入口で検査できない分を出口で見る。</p>
 
@@ -1051,7 +1064,7 @@ npm ci</code>
   "steering": ".steering/20260818-issue12-user-crud/",
   "codexSessionId": "01JQ...",
   "pid": 48213,
-  "status": "running | completed | failed | rate-limited",
+  "status": "running | completed | failed | rate-limited | unavailable",
   "resetAt": null,
   "summary": "tasklist 3/3 完了・変更 3 ファイル・lint/型/関連テスト pass",
   "error": null,
@@ -1363,8 +1376,8 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
     <div class="stages">
       <div class="stage">
         <span class="stage-n">00</span>
-        <div class="stage-body"><b>前提</b><span>ChatGPT Plus 契約 ・ <code>codex login</code> ・ データガバナンス判断 ・ <a href="https://github.com/fuji18/claude-codex-template/issues/4">Issue #4</a></span></div>
-        <span class="chip todo">契約待ち</span>
+        <div class="stage-body"><b>前提</b><span><s>ChatGPT Plus 契約</s>・ <s>CLI 導入</s>(v0.149.0)・ <s><code>codex login</code></s>(<code>chatgpt</code> モード)・ <s>sandbox 起動</s>(seccomp 修正)<span class="note"> — すべて 2026-08-23 完了</span>。残るのは<strong>データガバナンス判断</strong>と<strong>環境の恒久化</strong> ・ <a href="https://github.com/fuji18/claude-codex-template/issues/4">Issue #4</a></span></div>
+        <span class="chip ci">進行中</span>
       </div>
       <div class="stage is-done">
         <span class="stage-n">01</span>
@@ -1413,8 +1426,29 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
       <p>ただし<strong>これは実機検証の代わりにならない</strong>。確定したのは「ドキュメントに書かれた仕様」であって、<code>delegate-codex.sh</code> が実際に Codex を正しく駆動できるかは段階3 で初めて分かる。段階2 のスタブ検証は<strong>自分が書いた契約を自分で満たしているか</strong>しか見ていない。</p>
     </details>
 
+    <details class="callout done">
+      <summary class="callout-label">実機で確定したもの(2026-08-23 · codex-cli 0.149.0)</summary>
+      <p>上の callout は公開仕様による確定だった。CLI を導入したので、<strong><code>delegate-codex.sh</code> が渡している引数を実際のバイナリと突き合わせた</strong>結果が次のとおり。</p>
+      <div class="scroller">
+        <table>
+          <thead><tr><th>検証項目</th><th class="center">結果</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td><code>codex exec</code> のフラグ</td><td class="center"><span class="chip ok">一致</span></td><td><code>-C/--cd</code> ・ <code>-s/--sandbox</code>(<code>read-only</code> / <code>workspace-write</code> / <code>danger-full-access</code>)・ <code>--json</code> ・ <code>--color</code>(<code>always</code>/<code>never</code>/<code>auto</code>)・ <code>-o/--output-last-message</code> すべて実在。<strong>スクリプトの呼び出しは無修正で通る</strong></td></tr>
+            <tr><td><code>codex login status</code></td><td class="center"><span class="chip ok">一致</span></td><td>未認証で <code>Not logged in</code> + <strong>exit 1</strong>。入口検査4 が前提にしている「非ゼロ = 未認証」が成立する</td></tr>
+            <tr><td><code>delegate-codex.sh explore</code></td><td class="center"><span class="chip ok">exit 3</span></td><td><strong>スタブではなく実機の <code>codex</code> に対して</strong> 入口検査4 が発火し、恒久フォールバックの <code>3</code> を返した。段階2 が検証できていなかった「経路が実物に対しても正しく壊れるか」がこれで埋まった</td></tr>
+            <tr><td><code>codex doctor</code></td><td class="center"><span class="chip ok">新発見</span></td><td>計画に載っていない診断サブコマンド。auth・ネットワーク・インストール整合を一括で見る。<strong>初回セットアップの検証手段として <code>#4</code> に採り入れる価値がある</strong></td></tr>
+            <tr><td>WebSocket 疎通</td><td class="center"><span class="chip ok">解決</span></td><td>未認証時は <code>Responses WebSocket failed</code> を警告していたが、<strong>認証後は <code>✓ connected (HTTP 101 Switching Protocols)</code> に変わった</strong>。ネットワークの問題ではなく<strong>認証されていないことが原因</strong>だった</td></tr>
+            <tr class="is-changed"><td><strong>sandbox の起動</strong></td><td class="center"><span class="chip ok">解決</span></td><td><strong>2026-08-23 に判明 → 同日解決。</strong>Codex の sandbox は <strong>bubblewrap</strong> 実装で非特権 user namespace を作るが、Docker 既定の seccomp がこれを禁じており <code>bwrap: No permissions to create a new namespace</code> で落ちていた。<code>"runArgs": ["--security-opt", "seccomp=unconfined"]</code> を足してリビルドし、<code class="cmd">unshare --user --map-root-user true</code> と <code class="cmd">codex sandbox echo hello</code>(exit 0)で<strong>実機確認済み</strong>。<code>codex doctor</code> の <code>sandbox</code> も <strong>✓ <code>restricted fs + restricted network</code></strong> — §07 が前提にしている「ネットワーク無効が既定」もそのまま成立している。経緯は §12.4 の発見1</td></tr>
+            <tr class="is-risk"><td><strong>npm インストールの<br>サイレント失敗</strong></td><td class="center"><span class="chip gap">罠</span></td><td><strong>2026-08-23 に判明。</strong><code>@openai/codex</code> 本体はランチャー(<code>bin/codex.js</code>)だけを含み、実体は <code>optionalDependencies</code> の<strong>エイリアス指定</strong>(<code>npm:@openai/codex@0.149.0-linux-x64</code>)で降ってくる。<strong>optional なので取得に失敗しても <code>npm install</code> は成功扱いで終わり</strong>、実行時に初めて <code>Error: Missing optional dependency @openai/codex-linux-x64</code> で落ちる。<strong>インストール成否は npm の終了コードではなく <code>codex --version</code> で判定する必要がある</strong>(<code>post_create.sh</code> に検証と再試行を実装済み)</td></tr>
+            <tr class="is-risk"><td><strong>終了コードの意味</strong></td><td class="center"><span class="chip gap">契約の穴</span></td><td><strong>2026-08-23 に判明。</strong>上の sandbox 失敗で何も達成できなかった委託が <code>exit 0</code>(完了)を返した。<code>codex exec</code> の終了コードは<strong>ターンが完了したか</strong>を表し、タスクの成否を見ていない。§12.4 の発見2</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>§13 #1(オプション体系)と #5(devcontainer で動くか)は、これで完全に解けた。</strong> 認証・sandbox 起動・WebSocket 疎通まで実機で確認済み。残るのは #4(<code>.codex/prompts/</code> の project スコープ)と #6(<code>resetAt</code> の取得可否)で、どちらも<strong>実際に委託を投げないと確かめられない</strong>。</p>
+    </details>
+
     <ul>
-      <li><strong>Codex CLI は現在この devcontainer に未インストール。</strong> <code>codex</code> コマンド・<code>~/.codex</code> ともに無い。段階0(契約)の直後に導入して実機確認する</li>
+      <li><s><strong>Codex CLI は現在この devcontainer に未インストール。</strong></s> <strong>2026-08-23 解消</strong> — v0.149.0 を導入して認証・sandbox 起動まで実機で確認し、<code>post_create.sh</code> に<strong>インストールを恒久化した</strong>(上の callout)。<strong>残るのは認証キャッシュ <code>~/.codex/auth.json</code> の永続化</strong> — これはリビルドのたびに消えるため、mounts を張るか毎回入り直すかを #4 で決める</li>
       <li><strong><code>.codex/prompts/</code> の project スコープ対応が未確認。</strong> project スコープの <code>.codex/</code> レイヤに config・hooks・rules があることは確認できたが、prompts の記載が見つからない。非対応なら <code>docs/playbook/codex-standalone.md</code> に手順書を置き、人間が起動時に参照させる形へ降格する</li>
       <li><strong><code>resetAt</code> の取得可否。</strong> リセット単位(5 時間枠 + 週次)は確定。スクリプトはログ中の <code>"resets_at"</code> を拾う実装にしてあるが、実機で出るかは未確認。取得できなければ「待つ」判断を人間に委ねる</li>
       <li><strong>GitHub のブランチ保護が使えるプランか。</strong> 現状このリポジトリは Free の private で <code>403 Upgrade to GitHub Pro</code> が返る。残る穴 3 件のうち 2 件をブランチ保護に集約している設計なので、<strong>モード C(Codex にコミット権)へ進む前に決着が要る</strong>(§07)</li>
@@ -1427,7 +1461,7 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
 
     <p>他の節は「仕組みがどうなっているか」の説明。この節は<strong>人間が手を動かさないと進まないもの</strong>だけを集めた。権限・課金・アカウント設定に属するため、Claude / Codex / CI のいずれも代行できない。</p>
 
-    <h3>12.1 完了済み(2026-08-20)</h3>
+    <h3>12.1 完了済み(2026-08-20 / 2026-08-23)</h3>
 
     <div class="scroller">
       <table>
@@ -1436,6 +1470,11 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
           <tr><td>コミットの author / committer を統一</td><td>未 push の 8 コミットを GitHub の noreply(<code>109528067+fuji18@users.noreply.github.com</code>)に書き換え。到達可能な履歴から個人アドレスが消えた。内容差分ゼロを確認済み</td></tr>
           <tr><td><code>user.email</code> の設定</td><td>リポジトリ(<code>.git/config</code>)とコンテナのグローバル(<code>~/.gitconfig</code>)の両方</td></tr>
           <tr><td><code>prepare-commit-msg</code> の判別修正</td><td>第 2 引数ではなく <code>.git/MERGE_HEAD</code> の有無で判別する(§07)</td></tr>
+          <tr class="is-changed"><td><strong>ChatGPT Plus の契約</strong><br><span class="note">2026-08-23</span></td><td><strong>段階0 の最大の前提が解けた。</strong>これで全後続チケット(#5〜#8)のブロックが外れる</td></tr>
+          <tr class="is-changed"><td><strong>Codex CLI の導入</strong><br><span class="note">2026-08-23</span></td><td><code>npm install -g @openai/codex</code> で v0.149.0。<strong><code>post_create.sh</code> の <code>[3/4]</code> ステップとして恒久化済み</strong> — <code>codex --version</code> による検証と 1 回の再試行を含む(上記「npm インストールのサイレント失敗」への対処)</td></tr>
+          <tr class="is-changed"><td><strong><code>codex login</code></strong><br><span class="note">2026-08-23</span></td><td><code>Logged in using ChatGPT</code> / exit 0。<code>codex doctor</code> は <code>stored auth mode = chatgpt</code> ・ <code>stored API key = false</code> — <strong>契約した Plus 枠を使っており、API 従量課金には落ちていない</strong>。<strong>リビルドで消えるため永続化は未決(下の 12.4)</strong></td></tr>
+          <tr class="is-changed"><td><strong>sandbox の起動<br>(seccomp 修正)</strong><br><span class="note">2026-08-23</span></td><td><code>.devcontainer/devcontainer.json</code> に <code>"runArgs": ["--security-opt", "seccomp=unconfined"]</code> を追加してリビルド。<code>codex sandbox echo hello</code> が exit 0 で通り、<strong>発見1 が解消した</strong></td></tr>
+          <tr><td>Live Preview 拡張の追加<br><span class="note">2026-08-23</span></td><td><code>devcontainer.json</code> の <code>extensions</code> に <code>ms-vscode.live-server</code>。本ドキュメントのような HTML をエディタ内で確認するため</td></tr>
         </tbody>
       </table>
     </div>
@@ -1476,16 +1515,105 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
       </table>
     </div>
 
-    <h3>12.4 Codex 契約後、最初にやること</h3>
+    <h3>12.4 次にやること(2026-08-23 · sandbox 解決後)</h3>
 
-    <p>当初ここに挙げていた 2 件(上限の終了コード / ネットワーク無効の影響)は<strong>公開仕様で決着した</strong>ため、契約後に実測すべきものは次に置き換わった。</p>
+    <p><strong>環境側のブロッカーは全部片付いた。</strong>認証・sandbox 起動・WebSocket 疎通まで実機で確認済みで、<code>codex doctor</code> は全項目 ✓。<strong>残っているのは「委託の中身が使いものになるか」の判定だけ</strong> — 段階2 の価値判定(手順 5)がそれに当たり、ここで初めて Codex 側の枠を消費する。</p>
 
-    <ul>
-      <li><strong><code>delegate-codex.sh</code> が実際に Codex を駆動できるか。</strong> 段階2 のスタブ検証は自分の契約を自分で満たしているかしか見ていない。実機で <code>explore</code> を 1 回通すのが最初のタスク</li>
-      <li><strong>委託の品質。</strong> 指示どおりのサマリー(結論 3 行 + <code>path:line</code> の根拠)が返るか。返らないならプロンプトの作り直しであって、経路の問題ではない</li>
-      <li><strong>上限に当たったとき <code>resets_at</code> が実際にログへ出るか。</strong> 出なければ「あと何時間で復帰するか」は人間の判断に委ねる</li>
-      <li><strong><code>codex</code> がこの devcontainer で動くか</strong>(§10.6 の環境差の吸収)</li>
-    </ul>
+    <ol class="rail">
+      <li><b>1. <s><code>codex login</code> を通す</s> <span class="chip ok">完了</span></b><span><code>codex login status</code> → <code>Logged in using ChatGPT</code> / exit 0。<code>codex doctor</code> の <code>auth</code> は <strong>✓・mode = <code>chatgpt</code></strong>(= 契約した Plus 枠。API 従量課金ではない)</span></li>
+      <li><b>2. <s>委託を実機で 1 回通す</s> <span class="chip ok">経路は完走</span> <span class="chip gap">中身は空</span></b><span>認証 → モデル応答 → 指定フォーマットのサマリー → run record まで<strong>端から端まで動いた</strong>。しかし Codex が実行する読み取りコマンドが<strong>すべて sandbox の起動失敗で落ち</strong>、「調査不能」という正直な報告が返った。<strong>段階2 の価値判定は手順 3 の後に持ち越し</strong></span></li>
+      <li><b>3. <s>Issue #4 の <code>blocked</code> ラベルを外す</s> <span class="chip ok">完了</span></b><span><code class="cmd">gh issue edit 4 --remove-label blocked</code><br>契約が前提条件だったので、ラベルの根拠が消えた(#4 は <code>ticket, P0</code> のみになった)</span></li>
+      <li><b>4. <s>devcontainer の seccomp を緩めてリビルドする</s> <span class="chip ok">完了</span></b><span><code>.devcontainer/devcontainer.json</code> に <code class="cmd">"runArgs": ["--security-opt", "seccomp=unconfined"]</code> を追加してリビルド。<code class="cmd">unshare --user --map-root-user true</code> が通るようになり、<code class="cmd">codex sandbox echo hello</code> も exit 0。<strong>詳細と代替案は下の callout</strong>。<strong>リビルドで CLI と <code>~/.codex/auth.json</code> が消えるため、再インストールと再認証が必要になった</strong> — CLI 側は <code>post_create.sh</code> で恒久化済み、認証は未決</span></li>
+      <li class="is-loop"><b>5. 手順 2 を再実行して段階2 の価値を判定する<span class="note"> — 次の一手 / 5 分</span></b><span><code class="cmd">bash .claude/scripts/delegate-codex.sh explore "このリポジトリで保護ブランチへのコミットを止めている層をすべて挙げよ"</code><br>計画 §11 は「段階2 に価値があったか」の判定を<strong>ここまで保留</strong>している。見るのは 2 点 — <strong>サマリーだけが返るか</strong>(ファイル全文が流れ込まないか)と <strong><code>path:line</code> の根拠が付くか</strong>。<strong>検算しやすい問いを選ぶこと</strong>(上の問いの正解は §07 の 4 層)</span></li>
+      <li><b>6. <code>/next-ticket</code> で #4 を消化する<span class="note"> — 通常フロー</span></b><span>手順 1〜5 で分かったことを<strong>リポジトリに固定する</strong>のが #4 の中身。下の「#4 に足すべき項目」を design.md に含める</span></li>
+      <li><b>7. #4 が閉じたら #5(段階3 = 実装委託)へ</b><span>ここで初めて <strong>Claude の枠が実際に温存され始める</strong>。それまでの段階は準備であって節約ではない。<strong>ただし着手前に下の「終了コード契約の穴」を #5 のスコープへ入れること</strong></span></li>
+    </ol>
+
+    <details class="callout done">
+      <summary class="callout-label">発見1: この devcontainer では Codex の sandbox が起動しなかった <span class="chip ok">2026-08-23 解決</span></summary>
+      <p><strong>対処 1(seccomp を緩める)を採用してリビルドし、解消した。</strong>以下は経緯の記録。</p>
+      <p>初回の実機委託で、Codex が実行する読み取りコマンドが<strong>ことごとく失敗した</strong>。ログに出ていたのはこれ:</p>
+      <pre><code>bwrap: No permissions to create a new namespace, likely because the kernel
+does not allow non-privileged user namespaces.</code></pre>
+      <p>Codex の Linux sandbox は <strong>bubblewrap</strong> 実装で、コマンドごとに非特権 user namespace を作る。このコンテナの状態は <code>Seccomp: 2</code>(フィルタ有効)・<code>CapEff: 0000000000000000</code>(ケーパビリティ全剥奪)で、<code>.devcontainer/devcontainer.json</code> に <code>runArgs</code> の指定が無い = <strong>Docker 既定の seccomp プロファイルがそのまま効いている</strong>。このプロファイルは <code>unshare(CLONE_NEWUSER)</code> を拒否する。実際 <code class="cmd">unshare --user --map-root-user true</code> は <code>Operation not permitted</code> で落ちる。</p>
+      <p><strong>カーネル側は許可している</strong>(<code>/proc/sys/user/max_user_namespaces</code> = 63110)ので、エラーメッセージが勧める <code>sysctl kernel.unprivileged_userns_clone=1</code> は<strong>この環境では的外れ</strong>。塞いでいるのは seccomp。</p>
+      <div class="scroller">
+        <table>
+          <thead><tr><th class="center">#</th><th>対処</th><th>効果</th><th>代償</th></tr></thead>
+          <tbody>
+            <tr class="is-changed"><td class="center num">1</td><td><strong>seccomp を緩める</strong><br><span class="note">推奨</span><br><code class="mono">"runArgs": ["--security-opt", "seccomp=unconfined"]</code></td><td>bwrap が動き、<strong>Codex 自身の sandbox という防衛線がそのまま残る</strong></td><td>コンテナのシステムコール制限が外れる。開発用コンテナなので許容範囲</td></tr>
+            <tr><td class="center num">2</td><td><code class="mono">"privileged": true</code></td><td>同上</td><td>1 より広く緩む。1 で足りるなら選ばない</td></tr>
+            <tr class="is-risk"><td class="center num">3</td><td>sandbox を諦め <code>--dangerously-bypass-approvals-and-sandbox</code> を使う</td><td>設定変更なしで動く。公式も「外側でサンドボックス化された環境向け」と位置づけており、devcontainer は形式上それに当たる</td><td><strong>§09 が「防衛線は <code>--sandbox</code> フラグ」と宣言している設計の土台が消える。</strong>このコンテナには <code>gh</code> の認証済みトークンとリポジトリ全体の書き込み権があり、境界がコンテナ 1 枚になる。<strong>モード C(Codex にコミット権)では特に採らない</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>1 を採用した。</strong> リビルド後の確認は <code class="cmd">codex sandbox echo hello</code> — <strong>モデル枠を消費せずに sandbox 層だけを試せる</strong>ので、委託を投げる前にこれを通すこと。実測では <code>hello</code> / exit 0 が返り、<code>codex doctor</code> の <code>sandbox</code> も <code>✓ restricted fs + restricted network · approval OnRequest</code> になった。</p>
+      <p><strong>seccomp を緩めても Codex 自身の sandbox は無効化されない</strong>点が重要。緩めたのは「bwrap が user namespace を作れるようにする」ことだけで、<strong>§09 が防衛線と位置づけている <code>--sandbox</code> フラグはそのまま効いている</strong>。対処 3(<code>--dangerously-bypass-approvals-and-sandbox</code>)を採らずに済んだ意味はここにある。</p>
+    </details>
+
+    <details class="callout warn" open>
+      <summary class="callout-label">発見2: <code>exit 0</code> は「タスクが成功した」を意味しない(終了コード契約の穴)</summary>
+      <p>上の委託は<strong>何一つ達成していないのに <code>exit 0</code>(= 完了)を返した</strong>。run record も <code>"status": "completed"</code> / <code>"error": null</code> で、機械的には成功と区別がつかない。</p>
+      <p>原因は <code>codex exec</code> の終了コードが<strong>「エージェントのターンが完了したか」</strong>を表していること。ログの最終イベントは <code>turn.completed</code> で、タスクの成否は見ていない。Codex は<strong>散文では正直に「調査不能」と報告した</strong>が、その情報は終了コードに載らない。</p>
+      <p><strong>これは §04 の終了コード契約の前提が崩れている。</strong> 契約は「司令塔はこの値だけを見て分岐する(推測しない)」と定めており、<code>0</code> なら検収へ進む。つまり<strong>空の成果物がそのまま検収に回る</strong>。<code>explore</code> ならサマリーを読めば人間が気づくが、<strong>段階3 の <code>impl</code> では致命的</strong> — 「完了」を信じて <code>code-reviewer</code> と <code>/check</code> を起動し、何も変わっていないコードをレビューして枠を溶かす。</p>
+      <p><strong>#5(段階3)のスコープに入れる対処:</strong></p>
+      <ul>
+        <li><code>impl</code> では<strong>成果の実在を機械的に確かめる</strong> — <code>git diff --stat</code> が空、または <code>tasklist.md</code> のチェック数が増えていなければ <code>exit 2</code>(失敗)に落とす。§04 が既に「tasklist のチェック数と変更ファイル数の乖離を <code>summary</code> に警告として残す」と書いている検査を、<strong>警告ではなく終了コードに昇格させる</strong></li>
+        <li><code>explore</code> / <code>review</code> では成果物が散文なので機械判定が難しい。<strong>サマリーを必ず人間か司令塔に見せる</strong>現在の作りを維持し、「exit 0 = 内容も妥当」と読み替えないことを運用側の前提として明記する</li>
+      </ul>
+    </details>
+
+    <h4>参考: devcontainer で <code>codex login</code> を通す 3 択<span class="note"> — 2026-08-23 に解決済み。リビルド後に再認証が要るとき用の記録</span></h4>
+
+    <p>ChatGPT サブスクの認証はブラウザ OAuth で、CLI は<strong>コンテナ内の <code>localhost:1455</code></strong> でコールバックを待ち受ける。ホストのブラウザからそこへ届くとは限らないのが問題の全体。<strong>手順 4 のリビルドで <code>~/.codex/auth.json</code> は消えるため、下のどれかをもう一度通すことになる</strong>(だから #4 で永続化を決める価値がある)。</p>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th class="center">#</th><th>方法</th><th>コマンド</th><th>備考</th></tr></thead>
+        <tbody>
+          <tr><td class="center num">1</td><td><strong>そのまま試す</strong></td><td class="mono">codex login</td><td>VS Code の devcontainer は待ち受けポートを自動転送することがある。<strong>成功すれば一番速いので最初に試す</strong></td></tr>
+          <tr class="is-changed"><td class="center num">2</td><td><strong>デバイスコード認証</strong><br><span class="note">推奨フォールバック</span></td><td class="mono">codex login --device-auth</td><td>ワンタイムコードをホストのブラウザに入力する方式。<strong>ポート転送が要らない</strong>ので headless に最も素直。v0.149.0 に実在することを確認済み(beta 扱い)</td></tr>
+          <tr><td class="center num">3</td><td>ホストで認証してコピー</td><td class="mono">~/.codex/auth.json</td><td>認証キャッシュはホストに紐付かないので、ホストで <code>codex login</code> して <code>auth.json</code> をコンテナへコピーすれば通る。1・2 が駄目なときの最終手段</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <details class="callout warn" open>
+      <summary class="callout-label"><code>--with-api-key</code> は使わない(二重課金になる)</summary>
+      <p><code>codex login --with-api-key</code> というオプションが目に入るが、<strong>これは今回契約した ChatGPT Plus とは別の課金体系</strong>(OpenAI API の従量課金)。これで認証すると Plus のサブスク枠は一切使われず、トークン単位で別途請求される。</p>
+      <p>計画 §1 が「認証は<strong>ChatGPT Plus サブスク</strong>」と確定させているのは、<strong>枠の総量を増やすのが目的</strong>だから。従量課金に逃げると「上限に当たっても止まらない」は達成できるが、それは<strong>金で解決しているだけ</strong>で、この設計が解こうとしている問題ではない。</p>
+    </details>
+
+    <details class="callout done">
+      <summary class="callout-label">認証できたかの確かめ方</summary>
+      <p><code>codex login status</code> が <strong>exit 0</strong> を返せば成立(未認証だと <code>Not logged in</code> + exit 1)。<code>delegate-codex.sh</code> の入口検査4 はこの終了コードだけを見ている。</p>
+      <p>あわせて <code class="cmd">codex doctor</code> を叩くと auth・ネットワーク・インストール整合をまとめて見られる。<strong>2026-08-23 の実測では全項目 ✓</strong> — <code>auth</code>(<code>stored auth mode = chatgpt</code> / <code>stored API key = false</code>)・<code>sandbox</code>(<code>restricted fs + restricted network</code>)・<code>websocket</code>(<code>HTTP 101 Switching Protocols</code>)・<code>reachability</code>。<strong>未認証時に出ていた <code>websocket</code> の警告は認証で消えた</strong>ので、ネットワークの問題ではなく認証が原因だったと確定した。</p>
+      <p><strong><code>~/.codex/</code> と <code>&lt;repo&gt;/.codex/</code> を混同しない。</strong> 前者はユーザー設定と <code>auth.json</code>、後者はこのリポジトリのプロジェクト設定(<code>config.toml</code>)。§04 の設定解決順で「project config は上から 2 番目」と書いているのは後者のこと</p>
+    </details>
+
+    <h4>#4 に足すべき項目(実機で分かったこと)</h4>
+
+    <p>Issue #4 の元のスコープ(ガバナンス判断 / <code>post_create.sh</code> / §13 の残り検証)に、今回の導入で判明した次を加える。</p>
+
+    <div class="scroller">
+      <table>
+        <thead><tr><th>項目</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td><s><strong>sandbox を動かす<br>コンテナ設定</strong></s> <span class="chip ok">実装済み</span></td><td><code>.devcontainer/devcontainer.json</code> に <code>"runArgs": ["--security-opt", "seccomp=unconfined"]</code> を追加してリビルド済み。<strong>#4 では「なぜこの設定が要るか」を README か開発ガイドラインに残すことが残件</strong> — 設定だけ見ても理由が分からず、将来「セキュリティ上外すべき」と誤って消される</td></tr>
+          <tr><td><s><strong>CLI の恒久化</strong></s> <span class="chip ok">実装済み</span></td><td><code>post_create.sh</code> の <code>[3/4]</code> ステップとして追加済み。<strong>単なる <code>npm install -g</code> では足りない</strong> — プラットフォーム別バイナリが optional dependency なので取得失敗が握り潰される。<code>codex --version</code> による検証と 1 回の再試行を挟み、失敗しても <code>|| true</code> で後続の GitHub 認証ステップを止めない作りにしてある</td></tr>
+          <tr class="is-risk"><td><strong>認証の永続化を決める</strong><br><span class="note">最優先の残件</span></td><td><strong>2026-08-23 のリビルドで実際に失われ、再認証が必要になった</strong>(想定が実測で裏付けられた)。<code>.devcontainer/devcontainer.json</code> に <code>mounts</code> は無く、<code>~/.codex/auth.json</code> も<strong>リビルドで消える</strong>。①ホストの <code>~/.codex</code> をマウントする ②毎回 <code>--device-auth</code> で入り直す のどちらかを選ぶ。<strong>①が既存の作法に近い</strong> — <code>post_create.sh</code> は既にホストの <code>GH_TOKEN</code> を <code>LOCAL_GH_TOKEN</code> 経由で受け取る形を採っている</td></tr>
+          <tr class="is-changed"><td><code>codex doctor</code> の採用</td><td>計画に載っていない診断サブコマンド。<code>post_create.sh</code> か README の環境構築確認に組み込むと、<strong>「依存は入っているが認証されていない」を人間が自力で切り分けられる</strong></td></tr>
+          <tr class="is-changed"><td>終了コード契約の補強</td><td>発見2 の対処(<code>impl</code> で成果の実在を機械的に確かめ、空なら <code>exit 2</code> に落とす)は段階3 の設計に食い込むため、<strong>#4 で方針だけ決めて #5 で実装する</strong>のが素直</td></tr>
+          <tr><td>機密パターンの確定</td><td>ガバナンス判断(§10.2)で「どのパスを送ってよいか」を決め、<code>delegate-codex.sh</code> の機密チェックに反映する。<strong>現在の検査は <code>find -maxdepth 3</code> + 4 パターンのみ</strong>で、深い階層の秘密・<code>*.key</code>・トークン入り <code>.npmrc</code> は素通りする。<strong>これが唯一の層</strong>である以上、確定するまで委託対象はこのテンプレート自身のコードに限る</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <details class="callout warn">
+      <summary class="callout-label"><code>blocked</code> ラベルは誰も読んでいない(手順 3 が要る理由)</summary>
+      <p><code>/next-ticket</code> の選定条件は「<code>in-progress</code> でない / <code>depends:</code> が全て closed / 優先度が最上位」の 3 つだけで、<strong><code>blocked</code> ラベルはコマンドにもスキルにも登場しない</strong>。#4 は P0 かつ <code>depends:</code> 無しなので、契約前でも <code>/next-ticket</code> は #4 を選んでいた(選定結果は人間に提示されるので実害は出ていない)。</p>
+      <p>契約が済んだ今は結果的に正しい選定になるためラベルを外せば済むが、<strong>ラベルが飾りである状態は残る</strong>。<code>.claude/commands/next-ticket.md</code> の選定条件に「<code>blocked</code> が付いていないこと」を 1 行足すのを、#4 か #8 のついでに入れておくとよい。</p>
+    </details>
 
     <h3>12.5 モード運用中、恒常的に人間が担うもの</h3>
 

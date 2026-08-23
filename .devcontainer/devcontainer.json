@@ -15,8 +15,12 @@
       "settings": {
         "chat.mcp.autoStart": "newAndOutdated"
       },
-      "extensions": ["GitHub.vscode-pull-request-github"]
+      "extensions": [
+        "GitHub.vscode-pull-request-github",
+        "ms-vscode.live-server"
+      ]
     }
   },
-  "postCreateCommand": "bash .devcontainer/post_create.sh"
+  "postCreateCommand": "bash .devcontainer/post_create.sh",
+  "runArgs": ["--security-opt", "seccomp=unconfined"]
 }
