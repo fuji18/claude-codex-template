@@ -1386,7 +1386,7 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
       </div>
       <div class="stage is-done">
         <span class="stage-n">02</span>
-        <div class="stage-body"><b>最小ハーネス</b><span>AGENTS.md ・ <code>.codex/config.toml</code> ・ <code>delegate-codex.sh</code>(<code>explore</code> / <code>review</code> のみ)。書き込みが無いので安全。<strong>ただし検証できたのは「経路が正しく壊れること」まで</strong> — Codex CLI 未導入のため、委託の品質は段階3 で判定する</span></div>
+        <div class="stage-body"><b>最小ハーネス</b><span>AGENTS.md ・ <code>.codex/config.toml</code> ・ <code>delegate-codex.sh</code>(<code>explore</code> / <code>review</code> のみ)。書き込みが無いので安全。<strong>2026-08-23 に実機で価値判定を実施し、続行の判断に至った</strong>(下の callout)</span></div>
         <span class="chip ok">完了</span>
       </div>
       <div class="stage">
@@ -1524,10 +1524,37 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
       <li><b>2. <s>委託を実機で 1 回通す</s> <span class="chip ok">経路は完走</span> <span class="chip gap">中身は空</span></b><span>認証 → モデル応答 → 指定フォーマットのサマリー → run record まで<strong>端から端まで動いた</strong>。しかし Codex が実行する読み取りコマンドが<strong>すべて sandbox の起動失敗で落ち</strong>、「調査不能」という正直な報告が返った。<strong>段階2 の価値判定は手順 3 の後に持ち越し</strong></span></li>
       <li><b>3. <s>Issue #4 の <code>blocked</code> ラベルを外す</s> <span class="chip ok">完了</span></b><span><code class="cmd">gh issue edit 4 --remove-label blocked</code><br>契約が前提条件だったので、ラベルの根拠が消えた(#4 は <code>ticket, P0</code> のみになった)</span></li>
       <li><b>4. <s>devcontainer の seccomp を緩めてリビルドする</s> <span class="chip ok">完了</span></b><span><code>.devcontainer/devcontainer.json</code> に <code class="cmd">"runArgs": ["--security-opt", "seccomp=unconfined"]</code> を追加してリビルド。<code class="cmd">unshare --user --map-root-user true</code> が通るようになり、<code class="cmd">codex sandbox echo hello</code> も exit 0。<strong>詳細と代替案は下の callout</strong>。<strong>リビルドで CLI と <code>~/.codex/auth.json</code> が消えるため、再インストールと再認証が必要になった</strong> — CLI 側は <code>post_create.sh</code> で恒久化済み、認証は未決</span></li>
-      <li class="is-loop"><b>5. 手順 2 を再実行して段階2 の価値を判定する<span class="note"> — 次の一手 / 5 分</span></b><span><code class="cmd">bash .claude/scripts/delegate-codex.sh explore "このリポジトリで保護ブランチへのコミットを止めている層をすべて挙げよ"</code><br>計画 §11 は「段階2 に価値があったか」の判定を<strong>ここまで保留</strong>している。見るのは 2 点 — <strong>サマリーだけが返るか</strong>(ファイル全文が流れ込まないか)と <strong><code>path:line</code> の根拠が付くか</strong>。<strong>検算しやすい問いを選ぶこと</strong>(上の問いの正解は §07 の 4 層)</span></li>
-      <li><b>6. <code>/next-ticket</code> で #4 を消化する<span class="note"> — 通常フロー</span></b><span>手順 1〜5 で分かったことを<strong>リポジトリに固定する</strong>のが #4 の中身。下の「#4 に足すべき項目」を design.md に含める</span></li>
+      <li><b>5. <s>手順 2 を再実行して段階2 の価値を判定する</s> <span class="chip ok">完了 · 続行判断</span></b><span><code class="cmd">bash .claude/scripts/delegate-codex.sh explore "このリポジトリで保護ブランチへのコミットを止めている層をすべて挙げよ"</code><br>計画 §11 は「段階2 に価値があったか」の判定を<strong>ここまで保留</strong>している。見るのは 2 点 — <strong>サマリーだけが返るか</strong>(ファイル全文が流れ込まないか)と <strong><code>path:line</code> の根拠が付くか</strong>。<strong>検算しやすい問いを選ぶこと</strong>(上の問いの正解は §07 の 4 層)</span></li>
+      <li class="is-loop"><b>6. <code>/next-ticket</code> で #4 を消化する<span class="note"> — 次の一手 / 通常フロー</span></b><span>手順 1〜5 で分かったことを<strong>リポジトリに固定する</strong>のが #4 の中身。下の「#4 に足すべき項目」を design.md に含める</span></li>
       <li><b>7. #4 が閉じたら #5(段階3 = 実装委託)へ</b><span>ここで初めて <strong>Claude の枠が実際に温存され始める</strong>。それまでの段階は準備であって節約ではない。<strong>ただし着手前に下の「終了コード契約の穴」を #5 のスコープへ入れること</strong></span></li>
     </ol>
+
+    <details class="callout done" open>
+      <summary class="callout-label">段階2 の価値判定(2026-08-23 · 保留していた結論)<span class="chip ok">続行</span></summary>
+      <p>計画 §11 は「段階2 に価値があったか」の判定を、CLI 導入・認証・sandbox 修正が済むまで<strong>保留</strong>していた。環境が揃ったので <code>explore</code> を 1 回実走させた。問いは<strong>検算しやすいもの</strong>を選んでいる — 「保護ブランチへのコミットを止めている層をすべて挙げ、<code>path:line</code> で示せ」(正解は §07 に書いてある)。</p>
+
+      <div class="scroller">
+        <table>
+          <thead><tr><th>見るべき点</th><th class="center">結果</th><th>実測</th></tr></thead>
+          <tbody>
+            <tr><td><strong>サマリーだけが返るか</strong><br><span class="note">ファイル全文が司令塔に流れ込まないか</span></td><td class="center"><span class="chip ok">成立</span></td><td>生ログ <strong>114,919 B</strong> は <code>.harness/codex-runs/[id].log</code> に落ち、司令塔に返ったのは <strong>1,518 B</strong>(<strong>約 1.3%</strong>)。§03 の「出力はサマリーのみ」が実測で成立した</td></tr>
+            <tr><td><strong><code>path:line</code> の根拠が付くか</strong></td><td class="center"><span class="chip ok">成立</span></td><td>10 件中 <strong>7 件が完全一致</strong>、残り 3 件も<strong>同一ブロック内で ±2〜4 行</strong>。<strong>存在しないファイルや誤ったファイルの引用はゼロ</strong>。全件を手で検算した</td></tr>
+            <tr><td>内容の妥当性</td><td class="center"><span class="chip ok">期待以上</span></td><td>強制層を <code>PreToolUse</code> ・ <code>.husky/pre-commit</code> ・ <code>.husky/prepare-commit-msg</code> の 3 実装に絞り、<strong>「CI は PR の base とブランチ名を見るだけで直接コミットは阻止しない」と明言した</strong>。これは §07 の「残る穴」と一致する</td></tr>
+            <tr><td>不確実性の自己申告</td><td class="center"><span class="chip ok">正確</span></td><td>「GitHub 側の branch protection / ruleset はリポジトリ内ファイルから確認できない」と申告。<strong>まさにこのリポジトリの未解決論点</strong>(Free の private で <code>403</code>)を、答えを知らない状態で言い当てている</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><strong>判定: 価値あり。段階3(#5)へ進む。</strong> 読み取り委託は「第二意見」として成立しており、司令塔のコンテキストをほとんど消費せずに根拠つきの回答が得られることが確認できた。</p>
+
+      <details class="callout warn">
+        <summary class="callout-label">ただし本ドキュメントの記述の方が不正確だった点がある</summary>
+        <p>Codex は <strong>SessionStart hook を強制層として挙げなかった</strong>。§07 と <code>.claude/rules/lead/branch-and-tickets.md</code> は「強制層は 4 段」と書き、その 1 段目に SessionStart hook を置いている。しかし SessionStart hook が<strong>やっているのは現在地とベースの注入だけ</strong>で、何も阻止しない。<strong>Codex の切り分けの方が精密</strong>である。</p>
+        <p>「4 段」という表現は<strong>強制層と情報提供層を混ぜている</strong>ので、次に §07 を触るときに「強制 3 層 + 情報提供 1 層」へ書き直すとよい。<strong>これは第二意見が実際に価値を出した例</strong>として記録しておく — 自分で書いたドキュメントの粗は自分では見つけにくい。</p>
+      </details>
+
+      <p class="note"><strong>なお今回は <code>exit 0</code> の中身も伴っていた</strong>が、発見2(<code>exit 0</code> はタスク成否を表さない)は解消していない。<code>explore</code> はサマリーを人間が読むので気づけるだけで、<strong>契約の穴そのものは残っている</strong>。</p>
+    </details>
 
     <details class="callout done">
       <summary class="callout-label">発見1: この devcontainer では Codex の sandbox が起動しなかった <span class="chip ok">2026-08-23 解決</span></summary>
