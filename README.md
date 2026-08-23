@@ -23,6 +23,8 @@
    - リポジトリ内の secretlint(pre-commit / CI)と合わせた二段構えになる
 4. devcontainer で開く(VS Code / GitHub Codespaces)
    - `post_create.sh` が Claude Code のインストールと GitHub 認証を自動で行う(GitHub は OS の環境変数から認証。Claude Code の認証は初回 `claude` 実行時に一度だけ走る)
+   - Codex CLI も同時に入る(Codex 併用ハーネス用)。**認証は初回と devcontainer リビルドのたびに手動**で `codex login` を実行する(通らなければ `codex login --device-auth`)。`~/.codex` はコンテナ内にしか無く、永続化していない(判断の根拠: `docs/template-dev/codex-delegation-plan.md` §11)
+     - `--with-api-key` は使わないこと(ChatGPT Plus 枠ではなく API 従量課金になる)
    - devcontainer の表示名(`devcontainer.json` の `name`)は `/kickoff` フェーズ5がプロダクト名に書き換える
 5. ターミナルで `claude` を起動し、以下を確認する:
    - `/model` が **Opus** になっていること(`.claude/settings.json` で司令塔として固定済み)

@@ -108,15 +108,44 @@ done
 # ---------- 入口検査1: 機密ファイル ----------
 #
 # Codex の sandbox は「書き込み」の制限であり、読み取りの deny-list は
-# 存在しない(段階2 で公式ドキュメントを確認済み)。.gitignore されていても
-# ディスク上にあれば読めるため、委託は機密を委託先へ送りうる。
-# 入口の人間確認が唯一の層。
+# 存在しない(§13 #7 で確定)。.gitignore されていてもディスク上にあれば
+# 読めるため、委託は機密を委託先へ送りうる。入口の人間確認が唯一の層。
+#
+# 何を機密とみなすかはプロジェクト固有(§10.2)なので、パターンは
+# .claude/codex-denylist.txt に外出しし、ここでは読むだけにする。
 
+DENYLIST=".claude/codex-denylist.txt"
+
+if [ ! -f "$DENYLIST" ]; then
+  echo "delegate-codex: $DENYLIST がありません。機密チェックが成立しないため委託しません。" >&2
+  exit "$EX_UNAVAIL"
+fi
+
+# find の式を denylist から組み立てる。
+# / を含むパターンはパス一致、含まないパターンはファイル名一致。
+FIND_EXPR=()
+while IFS= read -r _line || [ -n "$_line" ]; do
+  _line="${_line%%#*}"
+  _line="$(printf '%s' "$_line" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  [ -z "$_line" ] && continue
+  [ ${#FIND_EXPR[@]} -gt 0 ] && FIND_EXPR+=(-o)
+  case "$_line" in
+    */*) FIND_EXPR+=(-path "./$_line") ;;
+    *) FIND_EXPR+=(-name "$_line") ;;
+  esac
+done <"$DENYLIST"
+
+if [ ${#FIND_EXPR[@]} -eq 0 ]; then
+  echo "delegate-codex: $DENYLIST に有効なパターンがありません。委託しません。" >&2
+  exit "$EX_UNAVAIL"
+fi
+
+# -maxdepth は付けない。深い階層の .env を見逃すため。
+# 代わりに node_modules / .git / .harness を prune して走査量を抑える。
 SENSITIVE="$(
-  find . -maxdepth 3 \
+  find . \
     \( -name node_modules -o -name .git -o -name .harness \) -prune -o \
-    \( -name '.env' -o -name '.env.*' -o -name '*.pem' -o -name 'id_rsa*' -o -name 'credentials*' \) \
-    -type f -print 2>/dev/null |
+    \( "${FIND_EXPR[@]}" \) -type f -print 2>/dev/null |
     grep -Ev '\.(example|sample|template)$' |
     head -20
 )"
