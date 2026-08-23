@@ -294,7 +294,7 @@ AGENTS.md              Codex 向けの規約(Codex は CLAUDE.md も hooks も�
 ├── commands/          スラッシュコマンド
 ├── rules/             全エージェント共通ルール(テンプレート所有。CLAUDE.md が @ インポート)
 │   └── lead/          司令塔専用ルール(SessionStart hook が注入。サブエージェントには載らない)
-├── scripts/           PreToolUse hook のスクリプト(危険コマンド・ブランチ・実装フェーズの検査)、共通ロジック(最新 steering・保護ブランチの判定)、Codex への委託経路(delegate-codex.sh)
+├── scripts/           PreToolUse hook のスクリプト(危険コマンド・ブランチ・実装フェーズの検査)、共通ロジック(最新 steering・保護ブランチの判定)、Codex への委託経路(delegate-codex.sh)、Codex 委託の run record 操作(codex-run.sh)
 ├── hooks/             SessionStart hook(現在地の注入・lead ルールの注入)
 ├── docs/              恒久参照ガイド(MCP 導入ガイド・serena 再導入手順。プロジェクト開始後も残す)
 ├── template-manifest.json  テンプレート追従の所有権マニフェスト(owned / merge / never + syncedAt)

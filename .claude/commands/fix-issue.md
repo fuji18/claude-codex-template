@@ -40,12 +40,11 @@ description: GitHub Issueを読み込み、steeringフローで修正を実装�
    - `requirements.md` にはIssueの内容とIssue番号を記載する
    - 軽微な修正（1〜2ファイル・数行程度）の場合、design.mdは簡潔でよい
 
-### ステップ4: 実装(implement-ticket への委譲)
+### ステップ4: 実装(委託)
 
-**司令塔は実装コードを書かない。** `Skill('implement-ticket')` に `.steering/` のパスを渡して委譲する(`context: fork` / Sonnet。司令塔のモデル切替は不要)。委譲前に `git status` で作業ツリーがクリーンであることを確認する。
+**司令塔は実装コードを書かない。** 委譲前に `git status` で作業ツリーがクリーンであることを確認したうえで、**既定は `bash .claude/scripts/delegate-codex.sh impl .steering/[dir]`**、`exit 3` なら `Skill('implement-ticket')`(`context: fork` / Sonnet)に切り替える。**分岐は `/add-feature` ステップ5 の手順ごとに従う**(3 コマンドで同一)。終了コード表だけでなく、**`exit 3` を一度受けたらそのセッションでは `delegate-codex.sh` を呼び直さない**という恒久フォールバックの手順も含む。
 
 - `design.md` に「修正に対応するテストを追加または更新する(回帰防止)」を必ず含めてから委譲する
-- 戻り値が `判断待ち` / `失敗` の場合は、判断を `design.md` に追記してから再実行する(詳細は `/add-feature` ステップ5 の分岐表と同じ)
 
 ### ステップ5: 検証
 

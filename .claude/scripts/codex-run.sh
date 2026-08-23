@@ -46,7 +46,12 @@ rec_field() {
   if command -v jq >/dev/null 2>&1; then
     _out="$(jq -r --arg k "$2" '.[$k] // empty' "$1" 2>/dev/null)"
   else
+    # クォートされていない値(pid 等)では `[^"]*` が末尾のカンマまで飲み込む。
+    # 剥がさないと pid が "82711," になり kill -0 が必ず失敗する。
     _out="$(sed -n "s/^[[:space:]]*\"$2\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([^\"]*\)\"\{0,1\},\{0,1\}[[:space:]]*$/\1/p" "$1" | head -1)"
+    _out="${_out%"${_out##*[![:space:]]}"}"
+    _out="${_out%,}"
+    _out="${_out%"${_out##*[![:space:]]}"}"
   fi
   [ "$_out" = "null" ] && _out=""
   printf '%s' "$_out"
@@ -54,6 +59,11 @@ rec_field() {
 
 find_record() {
   local _id="$1" _f
+  # id は record のファイル名になる。/ や .. を含むものは受け付けない
+  # (RUN_DIR の外の .json を読み書きできてしまうため)。
+  case "$_id" in
+    '' | */* | *..*) return 1 ;;
+  esac
   [ -d "$RUN_DIR" ] || return 1
   _f="$RUN_DIR/$_id.json"
   [ -f "$_f" ] || return 1
@@ -141,8 +151,20 @@ write_field() {
   cp "$_file" "$_bak"
   mv "$_tmp" "$_file"
 
+  # 妥当性確認。jq があれば本物のパーサで見る。無い環境でも「無検査で
+  # バックアップを捨てる」のは避ける — sed 経路こそ壊れる余地が大きい。
+  # 括弧の対応までは見ないが、丸ごと空・先頭/末尾が壊れた・キーが消えた、
+  # という壊れ方はここで捕まえて復元できる。
   if command -v jq >/dev/null 2>&1; then
     if ! jq -e . "$_file" >/dev/null 2>&1; then
+      mv "$_bak" "$_file"
+      return 1
+    fi
+  else
+    if [ ! -s "$_file" ] ||
+      ! head -1 "$_file" | grep -q '^[[:space:]]*{' ||
+      ! tail -1 "$_file" | grep -q '^[[:space:]]*}' ||
+      ! grep -q "\"$_key\"[[:space:]]*:" "$_file"; then
       mv "$_bak" "$_file"
       return 1
     fi

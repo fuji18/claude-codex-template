@@ -776,7 +776,7 @@ npm ci</code>
 
     <details class="callout warn">
       <summary class="callout-label">この表のうち、いま動くのは Mode A の Sonnet fork 経路だけ</summary>
-      <p>段階 2 まで実装済み(<code>AGENTS.md</code>・<code>.codex/config.toml</code>・<code>delegate-codex.sh</code> の <code>explore</code> / <code>review</code>)。<strong>2026-08-23: 段階0 が完了した</strong> — ChatGPT Plus 契約・Codex CLI(v0.149.0)導入・<code>codex login</code>(<code>chatgpt</code> モード)・seccomp 修正による sandbox 起動まで<strong>すべて実機で確認済み</strong>。したがって <code>explore</code> / <code>review</code> の読み取り委託は<strong>いま実際に動く</strong>。ただし <code>impl</code> モードと <code>.harness/mode</code> は<strong>未実装</strong>のままなので、現時点で Claude の枠が尽きたら<strong>実装は止まる</strong> — 表は到達目標であって現状ではない。次の一手は <a href="#manual-ops">§12.4</a>、段階の内訳は §10 を参照。</p>
+      <p>段階 2 まで実装済み(<code>AGENTS.md</code>・<code>.codex/config.toml</code>・<code>delegate-codex.sh</code> の <code>explore</code> / <code>review</code>)。<strong>2026-08-23: 段階0 が完了した</strong> — ChatGPT Plus 契約・Codex CLI(v0.149.0)導入・<code>codex login</code>(<code>chatgpt</code> モード)・seccomp 修正による sandbox 起動まで<strong>すべて実機で確認済み</strong>。したがって <code>explore</code> / <code>review</code> の読み取り委託は<strong>いま実際に動く</strong>。<strong>2026-08-23: 段階3 で <code>impl</code> モードも実装済み</strong>(終了コード契約 <code>0</code>〜<code>5</code> + run record + 3 コマンドの分岐改訂)。残っているのは <code>.harness/mode</code> の司令塔側運用(未検収委託の SessionStart 注入・モード B 作法)で、これは段階4 のスコープ。次の一手は <a href="#manual-ops">§12.4</a>、段階の内訳は §10 を参照。</p>
     </details>
 
     <details class="callout done">
@@ -1390,10 +1390,10 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
         <div class="stage-body"><b>最小ハーネス</b><span>AGENTS.md ・ <code>.codex/config.toml</code> ・ <code>delegate-codex.sh</code>(<code>explore</code> / <code>review</code> のみ)。書き込みが無いので安全。<strong>2026-08-23 に実機で価値判定を実施し、続行の判断に至った</strong>(下の callout)</span></div>
         <span class="chip ok">完了</span>
       </div>
-      <div class="stage">
+      <div class="stage is-done">
         <span class="stage-n">03</span>
-        <div class="stage-body"><b>実装委託</b><span><code>delegate-codex.sh impl</code> + <code>/next-ticket</code> の分岐(§03)+ CLAUDE.md 条件ペア ・ <a href="https://github.com/fuji18/claude-codex-template/issues/5">Issue #5</a></span></div>
-        <span class="chip todo">未着手</span>
+        <div class="stage-body"><b>実装委託</b><span><code>delegate-codex.sh impl</code> + 終了コード契約 + run record + <code>/add-feature</code> / <code>/next-ticket</code> / <code>/fix-issue</code> の分岐改訂・ <code>codex-run.sh</code> ・ <a href="https://github.com/fuji18/claude-codex-template/issues/5">Issue #5</a></span></div>
+        <span class="chip ok">完了</span>
       </div>
       <div class="stage">
         <span class="stage-n">04</span>
@@ -1424,7 +1424,7 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
       <p><strong>レート上限に固有の終了コードは無い</strong> — 代わりに <code>--json</code> の識別子で判定する(§04 参照)。</p>
       <p><strong>sandbox のネットワーク無効は CLI 自身の通信を妨げない</strong> — sandbox はエージェントが実行するコマンドに掛かる層で、モデル API 通信は外側。</p>
       <p><strong>パス単位の読み取り除外は存在しない</strong> — 機密の送信を止める層は <code>delegate-codex.sh</code> の入口検査だけ。</p>
-      <p>ただし<strong>これは実機検証の代わりにならない</strong>。確定したのは「ドキュメントに書かれた仕様」であって、<code>delegate-codex.sh</code> が実際に Codex を正しく駆動できるかは段階3 で初めて分かる。段階2 のスタブ検証は<strong>自分が書いた契約を自分で満たしているか</strong>しか見ていない。</p>
+      <p>ただし<strong>これは実機検証の代わりにならない</strong>。確定したのは「ドキュメントに書かれた仕様」であって、<code>delegate-codex.sh</code> が実際に Codex を正しく駆動できるかは段階3 で初めて分かる。段階2 のスタブ検証は<strong>自分が書いた契約を自分で満たしているか</strong>しか見ていない。<strong>2026-08-23: 段階3 で <code>impl</code> モードのスタブ検証(V1〜V15)を完走</strong>。実機での <code>impl</code> 委託そのものは司令塔が別途検証する(自己参照を避けるため実装者はスタブまで)。</p>
     </details>
 
     <details class="callout done">
