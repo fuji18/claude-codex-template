@@ -785,7 +785,7 @@ Codex が「並行実装」と「第二意見レビュー」を担うなら、�
   **検収の往復は 1 回**(§10.7 の記録は `.harness/decisions.jsonl`)。実装の fork は差し戻し 0 回で完走したが、`code-reviewer` が Critical 1 件・Major 4 件を出した。Critical は **`rec_field` の sed フォールバックが `pid` の末尾カンマを飲み込み、`kill -0 "82711,"` が常に失敗して再入防止が jq 不在環境で静かにフェイルオープンしていた**もの。**段階2 と同じ形の事故が再発している** — 「検査を書いたら空振りする条件を列挙する」だけでは足りず、**その条件を実際に再現するテストまで要る**(今回のスタブ検証は `accepted` が JSON の末尾フィールドでカンマが付かないため、この経路を通らなかった)
 - **段階4 完了(2026-08-23)**: モード読み取りを `harness-mode.sh` に集約し、Claude の SessionStart と Codex の `delegate-codex.sh` という 2 系統の読み手が同じ値を返す構造にした。未検収 run record は `codex-run.sh pending` が整形し、hook に判定を直書きしない。SessionStart 注入は `/clear` だけでなく **`startup` でも出す**。モード B の既定経路が「司令塔がセッションを閉じる → 人間が委託 → 新セッションを開く」であり、再開が `/clear` とは限らないため。
 
-  **draft PR の実機確認**: [PR 作成後に司令塔が記入]
+  **draft PR の実機確認(2026-08-23)**: 本チケットの PR([#11](https://github.com/fuji18/claude-codex-template/pull/11))を**意図的に draft で開いて**確かめた。結果は `CI | pull_request | success` / `Claude Code Review | pull_request | skipped`。**§2.6 の主張どおり、draft では機械的検証だけが走りレビューは走らない。** 正確には `claude-code-review.yml` の**ワークフローは起動するがジョブが `if: draft == false` で skip される**ため、Claude の枠は消費されない。`ready_for_review` に切り替えると `types: [opened, ready_for_review]` により同じワークフローが今度は skip されずに走る。
 
   **既知の逸脱**: 週枠の実効寿命は 1 チケットでは実測できない縦断指標であるため、本チケットでは測定方法とベースラインを `.harness/decisions.jsonl` に記録した。段階6(#8)完了時点で econ 運用分と比較する。
 

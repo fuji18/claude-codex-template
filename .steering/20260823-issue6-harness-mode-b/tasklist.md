@@ -44,10 +44,10 @@
 
 ## 司令塔が担当(実装者は行わない)
 
-- [ ] L1. draft PR を作り、`ci.yml` が走り `claude-code-review.yml` が走らないことを Actions で確認する
-- [ ] L2. L1 の結果を `docs/template-dev/codex-delegation-plan.md` §11 の placeholder に記入する
+- [x] L1. draft PR を作り、`ci.yml` が走り `claude-code-review.yml` が走らないことを Actions で確認する(PR #11: CI=success / Claude Code Review=skipped)
+- [x] L2. L1 の結果を `docs/template-dev/codex-delegation-plan.md` §11 に記入した
 - [ ] L3. 週枠の実効寿命の測定ベースライン(`/usage` の実数)を振り返りフェーズで記録する
-- [ ] L4. コミット時に `git update-index --chmod=+x .claude/scripts/harness-mode.sh` を実行し、index が `100755` になっていることを確認する(委託先は `.git` に書けないため司令塔の担当)
+- [x] L4. コミット時に `git update-index --chmod=+x` を実行し index が `100755` であることを確認した
 
 ## 申し送り
 
