@@ -3,10 +3,11 @@
 #
 #   .claude/scripts/delegate-codex.sh <mode> <target>
 #
-# 段階2 で実装するのは読み取り専用の 2 モードだけ:
-#   explore <調査指示 | ファイルパス>  … 広域コード探索。サマリーのみ返す
-#   review  <base-ref>                … 敵対的レビュー。指摘リストを返す
-# impl / fix-ci(workspace-write)と --background は段階3。
+# 実装済みの 3 モード:
+#   explore <調査指示 | ファイルパス>  … 広域コード探索。サマリーのみ返す(read-only)
+#   review  <base-ref>                … 敵対的レビュー。指摘リストを返す(read-only)
+#   impl    <.steering/[dir]>         … 実装フェーズの委託(workspace-write)
+# fix-ci と --background は未実装(fix-ci は段階外、--background は段階4)。
 #
 # 終了コード契約(司令塔はこの値だけを見て分岐する。推測しない):
 #   0 完了                             → 検収へ
@@ -14,7 +15,7 @@
 #   2 失敗(タスク起因・使い方の誤り)  → 原因分析
 #   3 Codex 利用不可(CLI 不在・未認証・依存未インストール)→ 恒久フォールバック
 #   4 Codex 側のレート上限             → 一時フォールバック(待つ or Sonnet fork)
-#   5 計画が未完成(段階3 の impl でのみ使う)
+#   5 計画が未完成(impl の design.md が draft のまま)
 #
 # 3 と 4 を混ぜないこと。前者は環境の欠落(恒久)、後者は枠切れ(一時)で
 # 回復手段が違う。
@@ -32,6 +33,8 @@ set -uo pipefail
 EX_FAIL=2
 EX_UNAVAIL=3
 EX_RATELIMIT=4
+EX_BLOCKED=1    # 判断待ち
+EX_NOTREADY=5   # design.md が ready でない
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [ -z "$ROOT" ]; then
@@ -53,6 +56,7 @@ usage() {
 
   explore <調査指示 | ファイルパス>   広域コード探索(read-only)
   review  <base-ref>                 敵対的レビュー(read-only)
+  impl <.steering/[dir]>             実装フェーズの委託(workspace-write)
 
 環境変数:
   CODEX_HARNESS_MODE          ハーネスモードの上書き(既定は .harness/mode)
@@ -61,9 +65,9 @@ USAGE
 }
 
 case "$MODE" in
-  explore | review) ;;
-  impl | fix-ci)
-    echo "delegate-codex: '$MODE' は段階3 で実装します(現在は explore / review のみ)" >&2
+  explore | review | impl) ;;
+  fix-ci)
+    echo "delegate-codex: 'fix-ci' は本テンプレートでは未実装です" >&2
     exit "$EX_FAIL"
     ;;
   *)
@@ -83,7 +87,7 @@ fi
 if [ $# -gt 0 ]; then
   case "$1" in
     --background)
-      echo "delegate-codex: --background は段階3(impl)で実装します" >&2
+      echo "delegate-codex: --background は段階4で実装します(未検収委託が SessionStart に出るようになるまで非同期にしない)" >&2
       ;;
     *)
       echo "delegate-codex: 未知のオプション: $1" >&2
@@ -225,28 +229,12 @@ MSG
   exit "$EX_UNAVAIL"
 fi
 
-# ---------- ハーネスモード ----------
+# ---------- JSON / run record ヘルパー(入口検査5 より前に置く) ----------
 #
-# 読む順序は固定する: プロンプト経由の上書き > .harness/mode > normal。
-# AGENTS.md 側にも同じ順序を書いてある(モード C はこの経路を通らないため)。
+# RUN_DIR は再入判定(5-5)が run record を読むために、この位置で確定させる。
+# mkdir -p は従来どおり run record 節で行う(ここではまだ作らない)。
 
-HMODE="${CODEX_HARNESS_MODE:-}"
-if [ -z "$HMODE" ] && [ -f .harness/mode ]; then
-  HMODE="$(tr -d '[:space:]' <.harness/mode)"
-fi
-[ -n "$HMODE" ] || HMODE="normal"
-
-# ---------- run record ----------
-#
-# §3.2: これが状態の正。会話に依存しないので、委託を挟んで /clear できる。
-
-RUN_ID="$(date +%Y%m%d-%H%M%S)"
 RUN_DIR=".harness/codex-runs"
-mkdir -p "$RUN_DIR" || exit "$EX_FAIL"
-LOG="$RUN_DIR/$RUN_ID.log"
-REC="$RUN_DIR/$RUN_ID.json"
-LAST="$RUN_DIR/$RUN_ID.last.txt"
-BRANCH="$(git branch --show-current 2>/dev/null || true)"
 
 json_str() {
   # jq が使えれば任せる。ただし空を返させないこと — record は状態の正なので、
@@ -269,6 +257,159 @@ json_or_null() {
   if [ -z "${1:-}" ]; then printf 'null'; else json_str "$1"; fi
 }
 
+# $1=json ファイル $2=キー名。無い/null は空文字列を返す。
+# codex-run.sh にも同じ実装をコピーする(2 箇所・十数行のため共有ファイルは作らない)。
+#
+# sed フォールバックの既知の癖(検収で実測): クォートされていない値
+# (pid / accepted など)では `[^"]*` が末尾のカンマまで飲み込む。
+# "pid": 82711, → 82711, が返り、kill -0 "82711," が引数エラーで必ず失敗する。
+# = 再入防止(5-5)が jq 不在環境で静かにフェイルオープンしていた。
+# 捕獲後に末尾のカンマと空白を必ず剥がす。クォートされた値は `[^"]*` が
+# 閉じ引用符で止まるためもともと影響を受けない。
+rec_field() {
+  local _out=""
+  if command -v jq >/dev/null 2>&1; then
+    # `// empty` は使わない。jq の // は false も falsy として捨てるため、
+    # "accepted": false が「キーが無い」と区別できなくなり、sed 経路と
+    # 結果が食い違う(実測)。null のときだけ空を返す形にする。
+    _out="$(jq -r --arg k "$2" '.[$k] | if . == null then empty else . end' "$1" 2>/dev/null)"
+  else
+    _out="$(sed -n "s/^[[:space:]]*\"$2\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([^\"]*\)\"\{0,1\},\{0,1\}[[:space:]]*$/\1/p" "$1" | head -1)"
+    _out="${_out%"${_out##*[![:space:]]}"}"
+    _out="${_out%,}"
+    _out="${_out%"${_out##*[![:space:]]}"}"
+  fi
+  [ "$_out" = "null" ] && _out=""
+  printf '%s' "$_out"
+}
+
+STEERING=""
+
+# ---------- 入口検査5: impl 専用 ----------
+#
+# STEERING はグローバル変数として常に定義する(impl 以外では空文字列)。
+# run record の steering フィールドがこれを使う。
+
+if [ "$MODE" = "impl" ]; then
+  # ---- 5-1: target がステアリングディレクトリであること ----
+  STEERING="${TARGET#./}"
+  STEERING="${STEERING%/}/"
+  DESIGN="${STEERING}design.md"
+  TASKLIST="${STEERING}tasklist.md"
+
+  if [ ! -d "$STEERING" ] || [ ! -f "$DESIGN" ] || [ ! -f "$TASKLIST" ]; then
+    echo "delegate-codex: impl の target は design.md と tasklist.md を持つステアリングディレクトリである必要があります: $STEERING" >&2
+    exit "$EX_FAIL"
+  fi
+
+  # ---- 5-2: design.md の完成マーカー(§2.5)----
+  # draft = 拒否(exit 5)/ ready = 通す / 印なし = 通す(マーカー導入以前のものを止めない)
+  # 空振り条件: 印が無い design.md は書きかけでも通る。implement-ticket スキルと
+  # AGENTS.md §4 が同じ規則なので、経路によらず結果が一致することを優先している。
+  if grep -q '<!-- status: draft -->' "$DESIGN"; then
+    cat >&2 <<MSG
+delegate-codex: $DESIGN が <!-- status: draft --> です(計画が未完成)。
+
+書きかけの設計で Codex の枠を溶かさないため委託しません。司令塔が design.md を
+書き切り、印を <!-- status: ready --> に変えてから再委託してください。
+MSG
+    exit "$EX_NOTREADY"
+  fi
+  if ! grep -q '<!-- status: ready -->' "$DESIGN"; then
+    echo "delegate-codex: 警告 — $DESIGN に完成マーカーがありません。検査対象外として通します。" >&2
+  fi
+
+  # ---- 5-3: git hook が有効か ----
+  # .husky/ があるのに core.hooksPath が未設定 = husky が丸ごと無効。
+  # 保護ブランチへのコミットを止めるベンダー非依存の層が存在しない状態で
+  # workspace-write の委託をしない。
+  # 空振り条件: .husky/ を持たないプロジェクト(Python/Go 等)ではこの検査は
+  # 何も見ない。そこでは git hook 層そのものが存在しないので、判定できない。
+  #
+  # 「非空」だけでは足りない — 別ツールが core.hooksPath を実在しないパスに
+  # 設定していると husky は無効なのにこの検査は素通りする。指すディレクトリの
+  # 実在まで見る。値そのものを ".husky" と比較してはいけない: husky v9 が
+  # 設定するのは ".husky/_" であり、決め打ちすると全委託が止まる(実測)。
+  HOOKS_PATH="$(git config --get core.hooksPath 2>/dev/null || true)"
+  if [ -d .husky ] && { [ -z "$HOOKS_PATH" ] || [ ! -d "$HOOKS_PATH" ]; }; then
+    cat >&2 <<'MSG'
+delegate-codex: git hook が無効です(core.hooksPath が未設定か実在しない / Codex 利用不可)。
+
+husky が有効化されていないため、保護ブランチへのコミットを止めるベンダー非依存の
+層が存在しません。sandbox はネットワーク無効なので Codex 自身では復旧できません。
+
+  npm ci        (または npx husky)
+
+を実行してから再委託してください。当面は Sonnet fork にフォールバック。
+MSG
+    exit "$EX_UNAVAIL"
+  fi
+
+  # ---- 5-4: 保護ブランチ上で実装委託しない ----
+  # 判定の実体は共有スクリプトに委ねる(hook・CI と同じ結果になることが要件)。
+  # 空振り条件: check-protected-branch.sh は jq / ポリシーファイルが無いとき
+  # フェイルオープン(exit 0)する。そこでは保護ブランチでも通る。
+  if [ -f .claude/scripts/check-protected-branch.sh ] &&
+    ! bash .claude/scripts/check-protected-branch.sh 2>/dev/null; then
+    echo "delegate-codex: 保護ブランチ上では実装を委託しません。作業ブランチを切ってください。" >&2
+    exit "$EX_FAIL"
+  fi
+
+  # ---- 5-5: 再入防止(同じ steering への二重起動)----
+  if [ -d "$RUN_DIR" ]; then
+    for _f in "$RUN_DIR"/*.json; do
+      [ -f "$_f" ] || continue
+      [ "$(rec_field "$_f" steering)" = "$STEERING" ] || continue
+      _st="$(rec_field "$_f" status)"
+      [ "$_st" = "running" ] || continue
+      _pid="$(rec_field "$_f" pid)"
+      _rid="$(rec_field "$_f" id)"
+      # pid は数字でなければ「取れなかった」として扱う。kill -0 に非数字を渡すと
+      # 引数エラーで必ず失敗し、実行中の委託を「プロセス不在」と誤認して素通しする。
+      # rec_field 側でも直したが、この層でも明示的に落とす(検査が空振りする条件を減らす)。
+      case "$_pid" in
+        '' | *[!0-9]*) _pid="" ;;
+      esac
+      if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+        echo "delegate-codex: 同じステアリングへの委託が実行中です(id=$_rid pid=$_pid)。二重起動しません。" >&2
+        exit "$EX_FAIL"
+      fi
+      # プロセスが居ない running = 強制終了の疑い。止めはしないが必ず知らせる。
+      echo "delegate-codex: 警告 — 過去の委託 $_rid が status=running のまま残っています(プロセス不在 = 強制終了の可能性)。" >&2
+      echo "  回復手順は codex-delegation-plan.md §12.6。tasklist.md と git diff --stat を突き合わせてから続けてください。" >&2
+    done
+  fi
+fi
+
+# ---------- ハーネスモード ----------
+#
+# 読む順序は固定する: プロンプト経由の上書き > .harness/mode > normal。
+# AGENTS.md 側にも同じ順序を書いてある(モード C はこの経路を通らないため)。
+
+HMODE="${CODEX_HARNESS_MODE:-}"
+if [ -z "$HMODE" ] && [ -f .harness/mode ]; then
+  HMODE="$(tr -d '[:space:]' <.harness/mode)"
+fi
+[ -n "$HMODE" ] || HMODE="normal"
+
+# ---------- run record ----------
+#
+# §3.2: これが状態の正。会話に依存しないので、委託を挟んで /clear できる。
+
+# pid を足すのは衝突回避。秒までしか持たない ID だと、別ステアリングへの
+# 委託を同じ秒に始めたとき log と record が無条件に上書きされる。再入防止は
+# 同一ステアリングしか見ないのでこの経路は塞げない。
+RUN_ID="$(date +%Y%m%d-%H%M%S)-$$"
+mkdir -p "$RUN_DIR" || exit "$EX_FAIL"
+LOG="$RUN_DIR/$RUN_ID.log"
+REC="$RUN_DIR/$RUN_ID.json"
+LAST="$RUN_DIR/$RUN_ID.last.txt"
+BRANCH="$(git branch --show-current 2>/dev/null || true)"
+
+STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+ENDED_AT=""
+CODEX_SESSION_ID=""
+
 # $1=status $2=summary $3=error $4=resetAt
 write_record() {
   cat >"$REC" <<JSON
@@ -276,11 +417,14 @@ write_record() {
   "id": $(json_str "$RUN_ID"),
   "mode": $(json_str "$MODE"),
   "target": $(json_str "$TARGET"),
-  "steering": null,
+  "steering": $(json_or_null "$STEERING"),
   "branch": $(json_str "$BRANCH"),
   "harnessMode": $(json_str "$HMODE"),
+  "codexSessionId": $(json_or_null "$CODEX_SESSION_ID"),
   "pid": $$,
   "status": $(json_str "$1"),
+  "startedAt": $(json_str "$STARTED_AT"),
+  "endedAt": $(json_or_null "$ENDED_AT"),
   "resetAt": $(json_or_null "${4:-}"),
   "summary": $(json_or_null "${2:-}"),
   "error": $(json_or_null "${3:-}"),
@@ -298,10 +442,17 @@ emit() {
 
 # ---------- プロンプト構築(参照渡し。内容は貼らない) ----------
 
-PREAMBLE="あなたは読み取り専用(--sandbox read-only)で起動されています。ファイルの変更・コミットは行わないでください。
+if [ "$MODE" = "impl" ]; then
+  PREAMBLE="あなたは実装フェーズ(--sandbox workspace-write)で起動されています。
 
 まず $AGENTS を読み、そこに書かれた規約に従ってください。
 現在のハーネスモード: $HMODE"
+else
+  PREAMBLE="あなたは読み取り専用(--sandbox read-only)で起動されています。ファイルの変更・コミットは行わないでください。
+
+まず $AGENTS を読み、そこに書かれた規約に従ってください。
+現在のハーネスモード: $HMODE"
+fi
 
 case "$MODE" in
   explore)
@@ -329,6 +480,27 @@ git diff $TARGET...HEAD の差分を敵対的にレビューしてください�
 - [P0|P1|P2] path:line — 指摘の要旨(1 行)/ 失敗シナリオ(1 行)
 指摘が無ければ「指摘なし」とだけ書いてください。"
     ;;
+  impl)
+    PROMPT="$PREAMBLE
+
+対象のステアリングディレクトリ: $STEERING
+
+${STEERING}design.md と ${STEERING}tasklist.md を読み、tasklist の未完了タスクを
+先頭から 1 つずつ実装してください。内容はこの指示に貼っていません。自分で読んでください。
+
+守ること:
+- **1 タスク完了ごとに tasklist.md を - [x] へ更新する**(まとめ更新は禁止)。途中で
+  停止しても別の実装者が続きから引き継げることが要件です
+- design.md に書かれていない設計判断が必要になったら、推測せず停止して「判断待ち」で報告する
+- 変更したファイルだけを対象に lint・型チェック・関連テストを回す(全体フォーマットは禁止)
+- ネットワークは無効。新規依存の追加が必要になったら実装せず「判断待ち」で報告する
+- コミットの可否は AGENTS.md のモード表に従う
+
+**最後に、次のどれか 1 行を単独の行として出力してください。司令塔はこの行だけで分岐します:**
+完了: tasklist N/M / 変更 K ファイル / lint・型・関連テスト pass
+判断待ち: [何が決まっていないか] / [考えられる選択肢]
+失敗: [何が起きたか] / [試したこと]"
+    ;;
 esac
 
 # ---------- 実行 ----------
@@ -337,16 +509,38 @@ esac
 # 優先し、untrusted なプロジェクトでは .codex/ が丸ごと読まれないため、
 # .codex/config.toml が効いている保証が無い(§7.2 / §9)。
 
+SANDBOX="read-only"
+[ "$MODE" = "impl" ] && SANDBOX="workspace-write"
+
+# ---- 事前スナップショット(exit 0 の裏取りに使う。impl 以外では取らない) ----
+
+tree_snapshot() { git status --porcelain 2>/dev/null | LC_ALL=C sort; }
+count_done() {
+  local _n
+  _n="$(grep -cE '^[[:space:]]*- \[[xX]\]' "$TASKLIST" 2>/dev/null)"
+  printf '%s' "${_n:-0}"
+}
+
+if [ "$MODE" = "impl" ]; then
+  TREE_BEFORE="$(tree_snapshot)"
+  HEAD_BEFORE="$(git rev-parse HEAD 2>/dev/null || echo none)"
+  DONE_BEFORE="$(count_done)"
+fi
+
 write_record "running" "" "" ""
 
 codex exec \
   --cd "$ROOT" \
-  --sandbox read-only \
+  --sandbox "$SANDBOX" \
   --json \
   --color never \
   --output-last-message "$LAST" \
   "$PROMPT" >"$LOG" 2>&1
 CODEX_EXIT=$?
+
+CODEX_SESSION_ID="$(grep -Eo '"(thread_id|session_id|conversation_id)"[[:space:]]*:[[:space:]]*"[^"]+"' "$LOG" 2>/dev/null |
+  head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
+ENDED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 # ---------- 出口判定 ----------
 #
@@ -411,6 +605,59 @@ if [ "$CODEX_EXIT" -ne 0 ]; then
   emit "failed" "$EX_FAIL"
   printf -- '--- error ---\n%s\n' "$ERR3" >&2
   exit "$EX_FAIL"
+fi
+
+if [ "$MODE" = "impl" ]; then
+  # 報告フォーマット(AGENTS.md §7)の判定行。複数あれば最後のものを採る。
+  # 全角コロンと箇条書きの接頭辞も拾う。日本語で書かせている以上、Codex が
+  # 「判断待ち:」を全角や「- 判断待ち:」で返すことは十分ありうる。ここで
+  # 取りこぼすと、正しく停止した判断待ち(差分が無いのが正常)が下の
+  # 成果実在確認に落ちて exit 2 に化ける。
+  VERDICT="$(grep -hE '^[[:space:]]*([-*+][[:space:]]*)?(\*\*)?(完了|判断待ち|失敗)(\*\*)?[:：]' "$LAST" 2>/dev/null | tail -1)"
+
+  case "$VERDICT" in
+    *判断待ち*)
+      write_record "blocked" "$SUMMARY" "" ""
+      emit "blocked" "$EX_BLOCKED"
+      printf -- '--- 判断待ち ---\n%s\n' "$SUMMARY"
+      exit "$EX_BLOCKED"
+      ;;
+    *失敗*)
+      write_record "failed" "$SUMMARY" "" ""
+      emit "failed" "$EX_FAIL"
+      printf -- '--- 失敗 ---\n%s\n' "$SUMMARY"
+      exit "$EX_FAIL"
+      ;;
+  esac
+
+  # ---- 成果の実在確認 ----
+  # codex exec の exit 0 は「ターンが完了した」であってタスクの成否ではない
+  # (段階0 の実測)。何も動いていない委託を検収に回さない。
+  # 空振り条件: Codex が判定行を書かずに何かを 1 バイトでも変更した場合、
+  # ここは通る。そのときの防衛線は司令塔の検収(code-reviewer + test-runner)。
+  TREE_AFTER="$(tree_snapshot)"
+  HEAD_AFTER="$(git rev-parse HEAD 2>/dev/null || echo none)"
+  DONE_AFTER="$(count_done)"
+
+  if [ "$TREE_AFTER" = "$TREE_BEFORE" ] &&
+    [ "$HEAD_AFTER" = "$HEAD_BEFORE" ] &&
+    [ "$DONE_AFTER" -le "$DONE_BEFORE" ]; then
+    write_record "failed" "$SUMMARY" "exit 0 だが成果物が確認できない(作業ツリー・HEAD・tasklist のいずれも変化なし)" ""
+    emit "failed" "$EX_FAIL"
+    cat >&2 <<'MSG'
+delegate-codex: Codex は正常終了しましたが、成果物が確認できません。
+作業ツリー・HEAD・tasklist の進捗がいずれも変化していないため、失敗として扱います。
+生ログで原因(sandbox の起動失敗など)を確認してください。
+MSG
+    exit "$EX_FAIL"
+  fi
+
+  if [ "$DONE_AFTER" -le "$DONE_BEFORE" ]; then
+    SUMMARY="$SUMMARY
+
+⚠️ tasklist.md の [x] が増えていません(変更はあります)。逐次更新がされていない
+可能性があるため、進捗の判断は tasklist ではなく git diff --stat を根拠にしてください。"
+  fi
 fi
 
 write_record "completed" "$SUMMARY" "" ""

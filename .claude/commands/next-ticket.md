@@ -47,10 +47,10 @@ gh issue edit [番号] --add-label in-progress
 | フェーズ | 担当 |
 | --- | --- |
 | Issue 選定・ブランチ作成・steering 計画(requirements / design / tasklist) | 司令塔(Opus) |
-| **実装(tasklist の消化)** | **`Skill('implement-ticket')` の fork(Sonnet)** |
+| **実装(tasklist の消化)** | **委託(既定 = `delegate-codex.sh impl` / フォールバック = `Skill('implement-ticket')` の Sonnet fork)** |
 | 検収の判断・振り返り・コミット・PR | 司令塔(Opus) |
 
-- **司令塔は実装コードを書かない。** モデルの手動切替も不要(fork の frontmatter が Sonnet を指定している)
+- **司令塔は実装コードを書かない。** モデルの手動切替も不要。分岐は `/add-feature` ステップ5 の**手順ごと**に従う(終了コード表だけでなく、**`exit 3` を一度受けたらそのセッションでは `delegate-codex.sh` を呼び直さない**という恒久フォールバックの手順も含む)
 - **`design.md` は、実装者が設計判断を一切せずに実装できる粒度まで書き切る。** fork は会話履歴も Issue 本文も持たず `design.md` / `tasklist.md` だけを読むため、ここの不足がそのまま往復コストになる
 - `.steering/` のディレクトリ名は `[YYYYMMDD]-issue[番号]-[短い名前]` とする
 - PR ボディに **`Closes #[番号]`** を必ず含める(マージ時に Issue が自動クローズされる)
