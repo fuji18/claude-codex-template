@@ -283,7 +283,7 @@ docs/                  永続ドキュメント(プロジェクトの北極星)
 .steering/             作業単位の計画・タスクリスト(作業ごとに作成、履歴として保持。テンプレート由来のものは /kickoff で削除)
 .harness/              ハーネス状態(decisions.jsonl 等。/harness-setup が生成)
                        ├ decisions.jsonl … 横断的な判断ログ(削除禁止・追記のみ。**コミットする**)
-                       ├ mode            … Codex 併用時の運用モード(gitignore 済み)
+                       ├ mode            … Codex 併用時の運用モード(normal / econ / degraded。切替は人間が宣言。gitignore 済み)
                        └ codex-runs/     … Codex 委託の run record と生ログ(gitignore 済み)
 AGENTS.md              Codex 向けの規約(Codex は CLAUDE.md も hooks も読まないため、写像はここだけ)
 .codex/
@@ -293,7 +293,8 @@ AGENTS.md              Codex 向けの規約(Codex は CLAUDE.md も hooks も�
 ├── skills/            スキル(implement-ticket, steering, harness-setup ほか)
 ├── commands/          スラッシュコマンド
 ├── rules/             全エージェント共通ルール(テンプレート所有。CLAUDE.md が @ インポート)
-│   └── lead/          司令塔専用ルール(SessionStart hook が注入。サブエージェントには載らない)
+│   ├── lead/          司令塔専用ルール(SessionStart hook が注入。サブエージェントには載らない)
+│   └── mode/          モード別の司令塔ルール(SessionStart hook が normal 以外のときだけ注入)
 ├── scripts/           PreToolUse hook のスクリプト(危険コマンド・ブランチ・実装フェーズの検査)、共通ロジック(最新 steering・保護ブランチの判定)、Codex への委託経路(delegate-codex.sh)、Codex 委託の run record 操作(codex-run.sh)
 ├── hooks/             SessionStart hook(現在地の注入・lead ルールの注入)
 ├── docs/              恒久参照ガイド(MCP 導入ガイド・serena 再導入手順。プロジェクト開始後も残す)

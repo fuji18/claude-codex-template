@@ -58,6 +58,7 @@ description: GitHub Issueを読み込み、steeringフローで修正を実装�
 
 1. `Skill('commit')` を実行して変更をコミットし(粒度と Conventional Commits はスキルが担う。件名に `(#[Issue番号])` を含める)、`git push` する。
 2. PRを作成する（ベースブランチは **`.claude/branch-policy.json` の `baseBranch`** を使う。ポリシーファイルが無い場合のみデフォルトブランチ `main`。ボディは `.github/pull_request_template.md` の構成に従う）:
+   - **ハーネスモードが `econ` の場合は `--draft` を付ける**(`bash .claude/scripts/harness-mode.sh` で確認する)。理由と運用は `.claude/rules/mode/econ.md`(モード B のセッションには自動注入される)。**このとき直前の検証ステップ(code-reviewer + test-runner)も丸ごと飛ばす** — 検収は CI と、枠が戻ってからの一括レビューに委ねる
    ```bash
    gh pr create \
      --title "fix: [修正内容の要約]" \

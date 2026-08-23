@@ -31,6 +31,7 @@ usage() {
 使い方: .claude/scripts/codex-run.sh <subcommand> [args]
 
   list [--all]          未検収(accepted != true)の record を一覧する。--all で全件
+  pending               SessionStart 注入用に未検収 record を整形して出す(無ければ何も出さない)
   show <id>              record を丸ごと出す
   accept <id>             accepted を true にする
   set-status <id> <status>  status を差し替える
@@ -115,6 +116,83 @@ cmd_list() {
   if [ "$_found" -eq 0 ]; then
     echo "未検収の Codex 委託はありません"
   fi
+  exit 0
+}
+
+# SessionStart hook 用。未検収 record を「現在地」ブロックに貼れる形で出す。
+# 見つからなければ**何も出さない**(list と違い「ありません」も出さない。
+# 注入先はセッションのコンテキストであり、無い情報に行を使わない)。
+cmd_pending() {
+  local _f _id _mode _status _branch _steering _target _summary _log _pid _started _ended
+  local _cur_branch _now _start_epoch _stale _out="" _count=0
+
+  [ -d "$RUN_DIR" ] || exit 0
+
+  _cur_branch="$(git branch --show-current 2>/dev/null || true)"
+  _now="$(date -u +%s 2>/dev/null || echo 0)"
+
+  for _f in "$RUN_DIR"/*.json; do
+    [ -f "$_f" ] || continue
+    [ "$(rec_field "$_f" accepted)" = "true" ] && continue
+
+    _id="$(rec_field "$_f" id)"
+    _mode="$(rec_field "$_f" mode)"
+    _status="$(rec_field "$_f" status)"
+    _branch="$(rec_field "$_f" branch)"
+    _steering="$(rec_field "$_f" steering)"
+    _target="$(rec_field "$_f" target)"
+    _summary="$(rec_field "$_f" summary)"
+    # summary は複数行になりうる(delegate-codex.sh は成果実在確認の警告を
+    # 改行込みで追記する)。そのまま出すと 2 行目以降がラベルもインデントも
+    # 失った裸の行になり、注入先の「現在地」ブロックの構造が壊れる。
+    # 1 行に潰す(情報は落とさない)。
+    _summary="$(printf '%s' "$_summary" | tr '\n' ' ')"
+    _log="$(rec_field "$_f" log)"
+    _started="$(rec_field "$_f" startedAt)"
+    _ended="$(rec_field "$_f" endedAt)"
+
+    # status=running は信用しすぎない(§3.4)。スクリプトが終了時に書く値なので、
+    # レート上限・OOM・端末切断で殺されると running のまま残る。
+    if [ "$_status" = "running" ]; then
+      _pid="$(rec_field "$_f" pid)"
+      if [ -z "$_pid" ] || ! kill -0 "$_pid" 2>/dev/null; then
+        _status="running(プロセス不在 = 異常終了の可能性。tasklist.md と git diff で実態を確認せよ)"
+      fi
+    fi
+
+    # 7 日以上前の未検収は「古い記録」として調子を落とす(§3.4)。消さずに、
+    # 現役の警告と区別する。毎セッション同じ警告が出続けると読まれなくなる。
+    # `date -u -d` は GNU date 専用。非 GNU 環境(macOS 等)では _start_epoch が
+    # 空になり「古い記録」判定が働かないだけで済む(フェイルセーフ側に倒れる)。
+    _stale=0
+    if [ "$_now" != "0" ] && [ -n "$_started" ]; then
+      _start_epoch="$(date -u -d "$_started" +%s 2>/dev/null || true)"
+      if [ -n "$_start_epoch" ] && [ "$((_now - _start_epoch))" -gt 604800 ]; then
+        _stale=1
+      fi
+    fi
+
+    _count=$((_count + 1))
+    _out="${_out}  - ${_id} / mode=${_mode} / 対象 ${_steering:-$_target}"
+    [ "$_stale" = "1" ] && _out="${_out}(古い記録: 7 日以上前)"
+    if [ -n "$_branch" ] && [ -n "$_cur_branch" ] && [ "$_branch" != "$_cur_branch" ]; then
+      _out="${_out} [別ブランチ: ${_branch}]"
+    fi
+    _out="${_out}"$'\n'"    状態: ${_status}${_started:+(${_started}${_ended:+ → ${_ended}})}"$'\n'
+    _out="${_out}    サマリー: ${_summary:-なし}"$'\n'
+    _out="${_out}    ログ: ${_log:-なし}"$'\n'
+
+    # 行動を促すのは「今のブランチの・古くない」委託だけにする(§3.4)。
+    # 別ブランチ・古い記録にまで手順を出すと、警告そのものが読み飛ばされる。
+    if [ "$_stale" = "0" ] && { [ -z "$_branch" ] || [ -z "$_cur_branch" ] || [ "$_branch" = "$_cur_branch" ]; }; then
+      _out="${_out}    → 検収を通したら \`bash .claude/scripts/codex-run.sh accept ${_id}\`"$'\n'
+    fi
+  done
+
+  [ "$_count" -eq 0 ] && exit 0
+
+  echo "- Codex 委託(未検収): ${_count} 件"
+  printf '%s' "$_out"
   exit 0
 }
 
@@ -230,6 +308,7 @@ SUBCOMMAND="${1:-}"
 
 case "$SUBCOMMAND" in
   list) cmd_list "${1:-}" ;;
+  pending) cmd_pending ;;
   show) cmd_show "${1:-}" ;;
   accept) cmd_accept "${1:-}" ;;
   set-status) cmd_set_status "${1:-}" "${2:-}" ;;

@@ -67,7 +67,11 @@ printf '%s\n' "$MODE"
 exit 0
 ```
 
-**実行権限**: 作成後に `chmod +x` と **`git update-index --chmod=+x .claude/scripts/harness-mode.sh`** の両方を行う。ディスク側だけでは `core.fileMode=false` の環境で index に反映されず、CI の `harness-integrity` が落ちる(既知の踏み方。SessionStart hook が警告する)。
+**実行権限**: 作成後に **`chmod +x .claude/scripts/harness-mode.sh` だけ**を行う。
+
+> **`git update-index --chmod=+x` は実装者が実行しない(2026-08-23 に実機で判明)。** Codex の `workspace-write` sandbox では **`.git` が読み取り専用**であり、index を書き換えるコマンドは委託先では必ず失敗する。ディスク側の `chmod +x` だけでは `core.fileMode=false` の環境で index に反映されず CI の `harness-integrity` が落ちるため、**index への反映は司令塔がコミット時に行う**(tasklist の L4)。
+>
+> **一般則: `.git` を書き換えるタスクは委託対象外。** この制約はモード C(Codex がコミットする設計)の前提にも直接効くため、段階5(#7)の設計時に必ず参照すること。
 
 ---
 
@@ -339,7 +343,7 @@ fi
 ### 5.6 CI の自壊検知との整合(§8.1)
 
 - 新規スクリプト `harness-mode.sh` は `.claude/scripts/*.sh` のループに自動で入るため、`ci.yml` の `harness-integrity` は**変更不要**(実行権限と `bash -n` が自動で検査される)
-- ただし **git index 上の実行権限**(`100755`)を忘れると CI が落ちる。§1 の `git update-index --chmod=+x` を必ず行う
+- ただし **git index 上の実行権限**(`100755`)を忘れると CI が落ちる。これは**司令塔がコミット時に `git update-index --chmod=+x` で担保する**(§1 の但し書き。委託先は `.git` に書けない)
 - `check-guard-integrity.sh`(husky ↔ 共有スクリプトの検査)は**触らない**。あれは保護ブランチ強制層の検査であって、オリエンテーション層は対象外
 
 ---
@@ -401,6 +405,8 @@ PR 作成のコード例の**直前**に、次の 1 行を足す:
    - `codex-run.sh pending` に集約し、hook にインライン実装を置かなかったこと(§3.4 の例示との差分)
    - **draft PR の実機確認結果**(実際の PR 番号・`ci.yml` が走ったこと・`claude-code-review.yml` が走らなかったことを Actions の実績で示す)。**この項目は司令塔が PR 作成後に記入する。実装者は「[PR 作成後に司令塔が記入]」と placeholder を置く**
    - **週枠の実効寿命は本チケットでは実測できない**こと、代わりに測定方法とベースラインを `.harness/decisions.jsonl` に記録したこと(既知の逸脱)
+   - **実機で判明した制約: Codex の `workspace-write` sandbox では `.git` が読み取り専用**であり、`git update-index` を含む index 操作は委託先で必ず失敗する(本チケットの 1 回目の委託が `exit 2` で停止した実因)。**`.git` を書き換えるタスクは委託対象外**であり、この制約は**モード C(Codex がコミットする設計)の前提に直接効く**ため段階5(#7)で必ず検証すること
+4. §9(リスクと注意点)に上と同じ制約を 1 項目として追加する(段階5 の設計者が §11 の完了記録まで読まない可能性があるため、リスク節にも置く)
 3. §3.4 の hook インライン実装例の直後に 1 行注記する:
    `> **実装は hook 直書きではなく \`codex-run.sh pending\` に集約した(段階4)。** \`list\` と判定(未検収・プロセス不在・別ブランチ)を共有するため。`
 
@@ -477,4 +483,5 @@ JSON
 - `.harness/mode` を書き換えるコマンド/スキルを作らない(切替の宣言は人間の担当。§2.2)
 - `docs/template-dev/codex-harness.html` を更新しない(スコープ外)
 - `docs/development-guidelines.md` は**このリポジトリには存在しない**(プロジェクト開始後に生成される)。作らない
+- **`.git` を書き換えるコマンドを実行しない**(`git add` / `git commit` / `git update-index` など)。sandbox で読み取り専用のため必ず失敗する。コミットと index 操作は司令塔の担当
 - `.claude/template-manifest.json` を変更しない(`.claude/rules/` は既に `owned` 配下)

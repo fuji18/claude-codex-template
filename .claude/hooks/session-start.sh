@@ -82,6 +82,37 @@ if [ -d .claude/rules/lead ]; then
   fi
 fi
 
+# --- 5) ハーネスモードの注入(全 source: startup / resume / clear / compact) ---
+# モードは推測させない(§2.2)。単一ソースは .harness/mode で、読み取りの実体は
+# harness-mode.sh に集約してある(Codex 側 = delegate-codex.sh と同じ結果になることが要件)。
+# normal のときは何も出さない: 既定モードのセッションで毎回数十行を注入するのは、
+# モード B が節約しようとしているコンテキストそのものを食う。
+HMODE="normal"
+if [ -f .claude/scripts/harness-mode.sh ]; then
+  # 不正値の警告は stderr に出る。stderr はコンテキストに載らないため、拾って stdout に回す。
+  HMODE_WARN="$(bash .claude/scripts/harness-mode.sh 2>&1 >/dev/null || true)"
+  HMODE="$(bash .claude/scripts/harness-mode.sh 2>/dev/null || echo normal)"
+  [ -n "$HMODE_WARN" ] && printf '%s\n' "$HMODE_WARN"
+fi
+[ -n "$HMODE" ] || HMODE="normal"
+
+if [ "$HMODE" != "normal" ] && [ -f ".claude/rules/mode/$HMODE.md" ]; then
+  echo "# ハーネスモード(SessionStart 注入 / 切替を宣言するのは人間です)"
+  echo
+  cat ".claude/rules/mode/$HMODE.md"
+  echo
+fi
+
+# --- 6) Codex 委託の未検収(§3.4) ---
+# 判定の実体は codex-run.sh に集約する(list と同じ規則になることが要件)。
+# 「現在地」ブロックが出る source ではその中に混ぜ、出ない source(通常の startup)では
+# 単独の見出しで出す。モード B の実運用では「司令塔がセッションを閉じる → 人間が委託 →
+# 新セッションを開く」が既定経路であり、再開が /clear とは限らない。
+CODEX_PENDING=""
+if [ -f .claude/scripts/codex-run.sh ]; then
+  CODEX_PENDING="$(bash .claude/scripts/codex-run.sh pending 2>/dev/null || true)"
+fi
+
 # --- 2) serena MCP 再導入の規模検知(startup 時のみ・検知は自動、判断は人間) ---
 # しきい値と判断材料・再導入手順は .claude/docs/serena-reintroduction.md を参照
 # (.mcp.json には context7 等の他サーバーもあるため、serena エントリの有無で判定する)
@@ -156,6 +187,8 @@ if [ "$SOURCE" = "resume" ] || [ "$SOURCE" = "clear" ] || { [ "${CLAUDE_CODE_REM
     echo "- in-progress チケット: 未取得(gh CLI が無い環境。GitHub MCP ツールで確認する)"
   fi
 
+  [ -n "$CODEX_PENDING" ] && printf '%s\n' "$CODEX_PENDING"
+
   # 選定規則は latest-steering.sh に集約する(hook・fork と同じ結果になることが要件)
   LATEST_STEERING="$(bash .claude/scripts/latest-steering.sh 2>/dev/null || true)"
   if [ -n "$LATEST_STEERING" ] && [ -f "${LATEST_STEERING}tasklist.md" ]; then
@@ -165,6 +198,13 @@ if [ "$SOURCE" = "resume" ] || [ "$SOURCE" = "clear" ] || { [ "${CLAUDE_CODE_REM
       printf '%s\n' "$UNDONE" | sed 's/^/  /'
       echo "- 作業を再開する場合は /resume-work、次のチケットに進む場合は /next-ticket"
     fi
+  fi
+else
+  # 現在地ブロックが出ない source(通常の startup)でも、未検収委託だけは出す。
+  # 委託を挟んだ再開は /clear とは限らない(モード B ではセッションを閉じるのが既定)。
+  if [ -n "$CODEX_PENDING" ]; then
+    echo "## Codex 委託(未検収)"
+    printf '%s\n' "$CODEX_PENDING"
   fi
 fi
 
