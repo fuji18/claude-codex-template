@@ -44,7 +44,9 @@ USAGE
 rec_field() {
   local _out=""
   if command -v jq >/dev/null 2>&1; then
-    _out="$(jq -r --arg k "$2" '.[$k] // empty' "$1" 2>/dev/null)"
+    # `// empty` は false も捨ててしまう(accepted: false が「キー無し」と
+    # 区別できなくなり sed 経路と食い違う)。null のときだけ空を返す。
+    _out="$(jq -r --arg k "$2" '.[$k] | if . == null then empty else . end' "$1" 2>/dev/null)"
   else
     # クォートされていない値(pid 等)では `[^"]*` が末尾のカンマまで飲み込む。
     # 剥がさないと pid が "82711," になり kill -0 が必ず失敗する。

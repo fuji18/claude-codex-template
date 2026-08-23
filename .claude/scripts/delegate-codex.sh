@@ -269,7 +269,10 @@ json_or_null() {
 rec_field() {
   local _out=""
   if command -v jq >/dev/null 2>&1; then
-    _out="$(jq -r --arg k "$2" '.[$k] // empty' "$1" 2>/dev/null)"
+    # `// empty` は使わない。jq の // は false も falsy として捨てるため、
+    # "accepted": false が「キーが無い」と区別できなくなり、sed 経路と
+    # 結果が食い違う(実測)。null のときだけ空を返す形にする。
+    _out="$(jq -r --arg k "$2" '.[$k] | if . == null then empty else . end' "$1" 2>/dev/null)"
   else
     _out="$(sed -n "s/^[[:space:]]*\"$2\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([^\"]*\)\"\{0,1\},\{0,1\}[[:space:]]*$/\1/p" "$1" | head -1)"
     _out="${_out%"${_out##*[![:space:]]}"}"
