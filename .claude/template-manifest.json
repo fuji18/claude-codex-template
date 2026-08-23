@@ -17,13 +17,13 @@
     ".github/workflows/claude-code-review.yml",
     ".github/workflows/template-update-check.yml",
     ".github/pull_request_template.md",
-    "docs/ui-design-request-template.md",
-    ".codex/prompts/"
+    "docs/ui-design-request-template.md"
   ],
   "merge": [
     "docs/ui-design-guidelines.md",
     ".claude/settings.json",
     ".claude/branch-policy.json",
+    ".claude/codex-denylist.txt",
     ".claude/template-manifest.json",
     ".github/dependabot.yml",
     ".husky/pre-commit",

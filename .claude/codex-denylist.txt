@@ -1,0 +1,33 @@
+# Codex 委託の送信禁止パターン(単一ソース)。
+#
+# .claude/scripts/delegate-codex.sh の入口検査1 がこのファイルを読む。
+# Codex の sandbox には読み取りの除外機能が無い(計画 §13 #7 で確定)ため、
+# ワークツリーにある機密はそのまま委託先へ送られうる。ここが唯一の層。
+#
+# 書式:
+#   - 1 行 1 パターン。空行と # 始まりの行は無視される
+#   - パターンに / を含む   → リポジトリルートからのパス一致(find -path "./PATTERN")
+#   - パターンに / を含まない → ファイル名一致(find -name "PATTERN")
+#   - シェルの glob がそのまま使える(* ? [])
+#
+# 末尾が .example / .sample / .template のファイルは常に対象外(プレースホルダ)。
+# node_modules / .git / .harness は走査自体をしない。
+#
+# このファイルが無い、または有効パターンが 0 件のときは委託を止める(フェイルクローズ)。
+# 根拠: docs/template-dev/codex-delegation-plan.md §10.2
+
+# --- 実行時シークレット ---
+.env
+.env.*
+
+# --- 鍵・資格情報 ---
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+credentials*
+*.p12
+*.pfx
+
+# --- ローカル固有設定(トークンが入りうる) ---
+.claude/settings.local.json

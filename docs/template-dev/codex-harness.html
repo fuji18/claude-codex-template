@@ -1052,6 +1052,7 @@ npm ci</code>
       <p><strong><code>.gitignore</code> は守りにならない。</strong> ignore されたファイルもディスク上にあれば <code>workspace-write</code> sandbox は読める(<code>.env</code> が典型)。委託はそれを OpenAI 側へ送りうる。</p>
       <p>対策は 2 段。<strong>(1)</strong> <code>delegate-codex.sh</code> が委託前に <code>.env</code> / <code>*.pem</code> / <code>id_rsa*</code> / <code>credentials*</code> の存在を検査して確認を求める(存在しないのが正常なので普段は無言)。<strong>(2)</strong> kickoff のガバナンス判断を「使うか / 使わないか」ではなく「<strong>どのパスを送ってよいか</strong>」まで決めるものに格上げし、その一覧をスクリプトへ渡す。</p>
       <p>他のリスクは検収で回収できるが、<strong>これだけは送信した時点で終わり</strong>。<strong>2026-08-20 に確定: Codex にパス単位の読み取り除外は存在しない</strong>(sandbox は書き込みの制限であり、読み取りの deny-list は無い)。したがって (1) が唯一の層であり、段階2 で実装済み(<code>CODEX_DELEGATE_ACK_SECRETS=1</code> が無ければ止まる。<code>.env.example</code> 等は除外)。</p>
+      <p><strong>このリポジトリの判断(2026-08-23)</strong>: テンプレート本体は OSS で顧客コード・個人情報・本番シークレットを含まないため、<strong>Codex 委託を使う</strong>。送信してよいのはトラッキング対象ファイルすべて。送信禁止の一覧は <strong><code>.claude/codex-denylist.txt</code></strong> を単一ソースとし、<code>delegate-codex.sh</code> の入口検査1 がそれを読む(ファイルが無い / 有効パターンが 0 件なら委託を止める = フェイルクローズ)。<code>.harness/</code> 配下(過去の委託ログ)は検出対象ではなく走査除外で扱う。</p>
     </details>
 
     <h3>run record — 委託を挟んで <code>/clear</code> するための仕掛け</h3>
@@ -1374,10 +1375,10 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
     <p>要件が上限対策になったため、初版の「読み取り試用 → 実装委託」から<strong>ガードレールを先頭に</strong>組み替えた。各段階で価値が確認できなければそこで止めてよい。</p>
 
     <div class="stages">
-      <div class="stage">
+      <div class="stage is-done">
         <span class="stage-n">00</span>
-        <div class="stage-body"><b>前提</b><span><s>ChatGPT Plus 契約</s>・ <s>CLI 導入</s>(v0.149.0)・ <s><code>codex login</code></s>(<code>chatgpt</code> モード)・ <s>sandbox 起動</s>(seccomp 修正)<span class="note"> — すべて 2026-08-23 完了</span>。残るのは<strong>データガバナンス判断</strong>と<strong>環境の恒久化</strong> ・ <a href="https://github.com/fuji18/claude-codex-template/issues/4">Issue #4</a></span></div>
-        <span class="chip ci">進行中</span>
+        <div class="stage-body"><b>前提</b><span><s>ChatGPT Plus 契約</s>・ <s>CLI 導入</s>(v0.149.0)・ <s><code>codex login</code></s>(<code>chatgpt</code> モード)・ <s>sandbox 起動</s>(seccomp 修正)・ <s>データガバナンス判断</s>(§10.2)・ <s>環境の恒久化</s>(認証は毎回入り直す運用に決定)<span class="note"> — すべて 2026-08-23 完了</span>。<strong>判定は続行 → 段階3(<a href="https://github.com/fuji18/claude-codex-template/issues/5">Issue #5</a>)へ</strong> ・ <a href="https://github.com/fuji18/claude-codex-template/issues/4">Issue #4</a></span></div>
+        <span class="chip ok">完了</span>
       </div>
       <div class="stage is-done">
         <span class="stage-n">01</span>
@@ -1444,13 +1445,19 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
           </tbody>
         </table>
       </div>
-      <p><strong>§13 #1(オプション体系)と #5(devcontainer で動くか)は、これで完全に解けた。</strong> 認証・sandbox 起動・WebSocket 疎通まで実機で確認済み。残るのは #4(<code>.codex/prompts/</code> の project スコープ)と #6(<code>resetAt</code> の取得可否)で、どちらも<strong>実際に委託を投げないと確かめられない</strong>。</p>
+      <p><strong>§13 #1(オプション体系)と #5(devcontainer で動くか)は、これで完全に解けた。</strong> 認証・sandbox 起動・WebSocket 疎通まで実機で確認済み。<strong>#4 と #6 も 2026-08-23 に決着した(下記)。</strong> 未確認として残るのは <code>.codex/skills/</code> の project スコープが実際に効くか(段階5 / <a href="https://github.com/fuji18/claude-codex-template/issues/7">Issue #7</a>)だけである。</p>
+    </details>
+
+    <details class="callout done">
+      <summary class="callout-label">§13 #4・#6 の決着(2026-08-23 実機)</summary>
+      <p><strong>#4(<code>.codex/prompts/</code> の project スコープ対応)</strong>: <span class="chip gap">存在しない</span> v0.149.0 に <code>prompts</code> サブコマンドは無く、<code>~/.codex/</code> にも <code>prompts/</code> は無い。ネイティブバイナリの文字列走査でも <code>.codex/prompts</code> / <code>CODEX_HOME/prompts</code> は 0 件。<strong>カスタムプロンプトの仕組みは skills に置き換わっている</strong>(<code>CODEX_HOME/skills</code> と <code>/.codex/skills</code> の両方が出る)。project スコープのレイヤ自体は存在するが実機の動作確認は未実施 — 段階5(<a href="https://github.com/fuji18/claude-codex-template/issues/7">#7</a>)で確認し、動かなければ <code>docs/playbook/codex-standalone.md</code> に降格する。</p>
+      <p><strong>#6(<code>resetAt</code> の取得可否)</strong>: <span class="chip ok">単位は確定</span> 5 時間枠 + 週次。<span class="chip gap">resetAt は未取得</span> <code>codex exec --json</code> からは取れないと確定した。成功した委託 1 回(114,919 B)のイベント型は <code>thread.started</code> / <code>turn.started</code> / <code>item.started</code> / <code>item.completed</code> / <code>turn.completed</code> の 5 種のみで、<code>turn.completed</code> が持つのは <code>usage</code> だけ。<code>resets_at</code> / <code>rate_limit</code> は 0 件。バイナリにある <code>AccountRateLimitsUpdated</code> は app-server プロトコル側の通知で <code>exec</code> には流れない。<strong>採用する代替: 「待つ」判断を人間に委ねる(§12.6)</strong>。スクリプトの <code>resets_at</code> 抽出はそのまま残す(上限時のエラー出力に出れば埋まる。出なければ <code>null</code>)。</p>
     </details>
 
     <ul>
-      <li><s><strong>Codex CLI は現在この devcontainer に未インストール。</strong></s> <strong>2026-08-23 解消</strong> — v0.149.0 を導入して認証・sandbox 起動まで実機で確認し、<code>post_create.sh</code> に<strong>インストールを恒久化した</strong>(上の callout)。<strong>残るのは認証キャッシュ <code>~/.codex/auth.json</code> の永続化</strong> — これはリビルドのたびに消えるため、mounts を張るか毎回入り直すかを #4 で決める</li>
-      <li><strong><code>.codex/prompts/</code> の project スコープ対応が未確認。</strong> project スコープの <code>.codex/</code> レイヤに config・hooks・rules があることは確認できたが、prompts の記載が見つからない。非対応なら <code>docs/playbook/codex-standalone.md</code> に手順書を置き、人間が起動時に参照させる形へ降格する</li>
-      <li><strong><code>resetAt</code> の取得可否。</strong> リセット単位(5 時間枠 + 週次)は確定。スクリプトはログ中の <code>"resets_at"</code> を拾う実装にしてあるが、実機で出るかは未確認。取得できなければ「待つ」判断を人間に委ねる</li>
+      <li><s><strong>Codex CLI は現在この devcontainer に未インストール。</strong></s> <strong>2026-08-23 解消</strong> — v0.149.0 を導入して認証・sandbox 起動まで実機で確認し、<code>post_create.sh</code> に<strong>インストールを恒久化した</strong>(上の callout)。<strong>認証キャッシュ <code>~/.codex/auth.json</code> は永続化しない(決定・2026-08-23)</strong> — <code>mounts</code> を張らず、リビルド後は <code>codex login</code> で入り直す運用にする(理由は §12.4 の決定ログを参照)</li>
+      <li><s><strong><code>.codex/prompts/</code> の project スコープ対応が未確認。</strong></s> <strong>2026-08-23 決着</strong> — そもそも存在しない。カスタムプロンプトの仕組みは <code>.codex/skills/</code> に置き換わっている(project スコープの実機確認は段階5(<a href="https://github.com/fuji18/claude-codex-template/issues/7">#7</a>)へ)</li>
+      <li><s><strong><code>resetAt</code> の取得可否。</strong></s> <strong>2026-08-23 決着</strong> — リセット単位(5 時間枠 + 週次)は確定。<code>resetAt</code> は <code>codex exec --json</code> からは取得不可と確定。「待つ」判断は人間に委ねる(§12.6)</li>
       <li><strong>GitHub のブランチ保護が使えるプランか。</strong> 現状このリポジトリは Free の private で <code>403 Upgrade to GitHub Pro</code> が返る。残る穴 3 件のうち 2 件をブランチ保護に集約している設計なので、<strong>モード C(Codex にコミット権)へ進む前に決着が要る</strong>(§07)</li>
       <li><strong>環境構築手順で <code>npm ci</code> を担保する必要がある。</strong> 今回の作業開始時点で husky は無効(<code>core.hooksPath</code> 未設定)であり、移植前の <code>lint-staged</code> すら動いていなかった</li>
     </ul>
@@ -1554,6 +1561,17 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
       </details>
 
       <p class="note"><strong>なお今回は <code>exit 0</code> の中身も伴っていた</strong>が、発見2(<code>exit 0</code> はタスク成否を表さない)は解消していない。<code>explore</code> はサマリーを人間が読むので気づけるだけで、<strong>契約の穴そのものは残っている</strong>。</p>
+    </details>
+
+    <details class="callout done" open>
+      <summary class="callout-label">認証キャッシュ(<code>~/.codex/auth.json</code>)の永続化: 決定(2026-08-23)</summary>
+      <p><strong>決定: devcontainer の <code>mounts</code> は張らない。リビルド後は <code>codex login</code> で入り直す運用にする。</strong></p>
+      <ul>
+        <li><strong>既存の一貫性</strong>: Claude Code の認証(<code>~/.claude</code>)も同じくコンテナ内にしか無く、リビルド後に入り直す運用で通っている。Codex だけ named volume を張ると、認証の寿命がツールごとに違うという分かりにくさが増える</li>
+        <li><strong>消し忘れのリスク</strong>: OAuth 資格情報を named volume に置くと、コンテナを捨てても資格情報だけが残る。devcontainer を作り直す動機の一つが「環境を綺麗にする」ことなので、逆行する</li>
+        <li><strong>回復コストが小さい</strong>: リビルドは稀で、回復は <code>codex login</code> 1 コマンド。<code>post_create.sh</code> が未認証を検出して案内する実装は既に入っている</li>
+      </ul>
+      <p>手順は <code>README.md</code> の初回セットアップに追記した。<code>--with-api-key</code> は使わない(ChatGPT Plus 枠ではなく API 従量課金になるため)。</p>
     </details>
 
     <details class="callout done">
