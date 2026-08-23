@@ -658,7 +658,7 @@ AGENTS.md も `.codex/` も現在マニフェストに**未登録**で、`/sync-
 | --- | --- | --- |
 | `AGENTS.md` | `merge` | テンプレートが雛形を持つが、検証コマンドはスタック依存でプロジェクトが書き換える(`.claude/settings.json` と同じ位置づけ) |
 | `.codex/config.toml` | `merge` | sandbox 既定はテンプレートの方針、model / reasoning_effort はプロジェクト裁量 |
-| `.codex/prompts/` | `owned` | ワークフローの写像。`.claude/commands/` と同じくテンプレートが正 |
+| ~~`.codex/prompts/`~~ | — | **登録を撤回(2026-08-23、§13 #4)**: `.codex/prompts/` は Codex CLI に存在しないと実機で確定したため、マニフェストから削除した。段階5([#7](https://github.com/fuji18/claude-codex-template/issues/7))で `.codex/skills/` を実機確認したうえで改めて区分を決める |
 | `.harness/` | `never` | ハーネスのローカル状態。**gitignore するのは `mode` と `codex-runs/` だけ**(下記) |
 
 **`.harness/` を丸ごと gitignore してはいけない。** `.harness/decisions.jsonl`(横断的な判断ログ)は `harness-setup` スキルが「削除禁止・追記のみ」と定めた**永続ログ**であり、README のディレクトリ構造にも載っている。今回追加するのは一時状態だけなので、`.gitignore` に書くのは次の 2 行に限定する:
@@ -765,7 +765,7 @@ Codex が「並行実装」と「第二意見レビュー」を担うなら、�
 - **⚠️ 初回の実機委託で 2 つの問題が判明(2026-08-23)**。手順と対処は `codex-harness.html` §12.4:
   1. ~~**この devcontainer では Codex の sandbox(bubblewrap)が起動しない。**~~ **2026-08-23 に解決。** Docker 既定の seccomp が非特権 user namespace を禁じていたため、Codex はファイルを 1 つも読めなかった。`.devcontainer/devcontainer.json` に `"runArgs": ["--security-opt", "seccomp=unconfined"]` を足してリビルドし、`codex sandbox echo hello`(exit 0)で実機確認済み。**Codex 自身の `--sandbox` による防衛線はそのまま効いている**(`codex doctor` = `restricted fs + restricted network`)
   2. **`exit 0` が「タスク成功」を意味しない**(下記 §3.2 の追記を参照)
-- **段階0 の環境面が完了(2026-08-23)**: 契約・CLI 導入・認証・sandbox 起動まで実機で確認済み。`codex doctor` は全項目 ✓。**残るのはデータガバナンス判断と環境の恒久化**(下記)で、`explore` / `review` の読み取り委託は現時点で実際に動く
+- **段階0 の環境面が完了(2026-08-23)**: 契約・CLI 導入・認証・sandbox 起動まで実機で確認済み。`codex doctor` は全項目 ✓。`explore` / `review` の読み取り委託は現時点で実際に動く。**当初ここに残していたデータガバナンス判断と環境の恒久化も同日中に片付いた**(下記)
 - **リビルドの副作用と恒久化(2026-08-23)**: seccomp 修正のリビルドで **Codex CLI と `~/.codex/auth.json` が両方消えた**。CLI は `post_create.sh` の `[3/4]` ステップとして恒久化した。ただし単純な `npm install -g @openai/codex` では不足で、**プラットフォーム別バイナリが optional dependency(エイリアス指定)のため取得失敗が握り潰され、実行時に `Missing optional dependency @openai/codex-linux-x64` で落ちる**。成否は npm の終了コードではなく `codex --version` で判定し、失敗時は 1 回再試行する実装にしてある。**認証キャッシュは永続化しない(決定)**。`mounts` を張らず、リビルド後は `codex login` で入り直す。理由は (1) Claude Code の認証も同じくコンテナ内にしか無く運用が通っている、(2) OAuth 資格情報が named volume に残り続けるのは devcontainer を作り直す動機に逆行する、(3) 回復が 1 コマンドで済む。手順は `README.md` に明記した
 - **段階0 完了(2026-08-23)**: 契約・CLI 導入・認証・sandbox・データガバナンス判断(§10.2)・§13 の実機検証がすべて片付いた。判定は**続行**(下記の価値判定)。次は段階3([#5](https://github.com/fuji18/claude-codex-template/issues/5))
 - 本ドキュメントは調査時点の Codex CLI 仕様に基づく。着手前に **§13 の未確認項目を一括で検証する**
@@ -879,7 +879,7 @@ Codex CLI が未インストール(段階0 が未達)のため、確かめられ
 | 2 | **レート上限に固有の終了コードを返すか** | ✅ **返さない**。ただし `--json` のイベントに `rate_limit_reached` / `usage_limit_reached` / `credits_depleted` という**識別子**が流れる。文言マッチより良い材料が使える(§3.2 に反映済み) | stderr のパターンマッチに降格(§3.2)。誤検知するので生エラーを run record に必ず残す |
 | 3 | サンドボックスのネットワーク無効が **CLI 自身の通信を妨げないか** | ✅ **妨げない**。sandbox はエージェントが実行する**コマンド**に掛かる層で、CLI 自身のモデル API 通信は外側 | 妨げるならネットワーク無効を諦め、防衛線を §8 に寄せる |
 | 4 | `.codex/prompts/` の project スコープ対応 | ❌ **そもそも存在しない(2026-08-23 実機)**。v0.149.0 に `prompts` サブコマンドは無く、`~/.codex/` にも `prompts/` は無い。ネイティブバイナリの文字列走査でも `.codex/prompts` / `CODEX_HOME/prompts` は 0 件。**カスタムプロンプトの仕組みは skills に置き換わっている**(`CODEX_HOME/skills` と `/.codex/skills` の両方が出る)。project スコープのレイヤ自体は存在するが**実機の動作確認は未実施** | 段階5(#7)で `.codex/skills/` を実機確認し、動かなければ `docs/playbook/codex-standalone.md` に降格(§7.3) |
-| 5 | Codex CLI がこの devcontainer で動くか | ✅ **確定(2026-08-23)**。導入・認証(`chatgpt` モード)・sandbox 起動・WebSocket 疎通(HTTP 101)まで実機で確認し、`codex doctor` は全項目 ✓。未認証時に出ていた WebSocket 警告は**認証で消えた**(ネットワークではなく認証が原因だった)。sandbox は seccomp 修正が前提(§11)。導入は `post_create.sh` で恒久化済み | 認証キャッシュ `~/.codex/auth.json` はリビルドで消えるため、mounts の要否を #4 で判断する |
+| 5 | Codex CLI がこの devcontainer で動くか | ✅ **確定(2026-08-23)**。導入・認証(`chatgpt` モード)・sandbox 起動・WebSocket 疎通(HTTP 101)まで実機で確認し、`codex doctor` は全項目 ✓。未認証時に出ていた WebSocket 警告は**認証で消えた**(ネットワークではなく認証が原因だった)。sandbox は seccomp 修正が前提(§11)。導入は `post_create.sh` で恒久化済み | 認証キャッシュ `~/.codex/auth.json` はリビルドで消える。**#4 で「永続化しない」と決定した**(`mounts` を張らず `codex login` で入り直す。理由は §11) |
 | 6 | レート上限のリセット単位(5 時間枠 / 週次)と `resetAt` の取得可否 | ✅ **単位は確定**(5 時間枠 + 週次)。**`resetAt` は `codex exec --json` からは取れないと確定(2026-08-23 実機)**。成功した委託 1 回(114,919 B)のイベント型は `thread.started` / `turn.started` / `item.started` / `item.completed` / `turn.completed` の 5 種のみで、`turn.completed` が持つのは `usage` だけ。`resets_at` / `rate_limit` は 0 件。バイナリにある `AccountRateLimitsUpdated` は app-server プロトコル側の通知で exec には流れない | **これを採用**: 「待つ」判断を人間に委ねる(§12.6)。スクリプトの `resets_at` 抽出はそのまま残す(上限時のエラー出力に出れば埋まる。出なければ `null`) |
 | 7 | **`.codex/config.toml` にパス単位の読み取り除外があるか** | ✅ **存在しない**。sandbox は**書き込み**の制限であり、読み取りの deny-list は無い。`delegate-codex.sh` の機密事前チェックが**唯一の層**として確定した(段階2 で実装済み) | 無ければ `delegate-codex.sh` の事前チェック(§3.2)だけが防衛線になる。当てにせず 1 段目を必ず実装する |
 
