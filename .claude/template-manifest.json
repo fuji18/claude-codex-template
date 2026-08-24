@@ -17,7 +17,8 @@
     ".github/workflows/claude-code-review.yml",
     ".github/workflows/template-update-check.yml",
     ".github/pull_request_template.md",
-    "docs/ui-design-request-template.md"
+    "docs/ui-design-request-template.md",
+    ".codex/skills/"
   ],
   "merge": [
     "docs/ui-design-guidelines.md",
