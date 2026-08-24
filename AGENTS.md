@@ -125,6 +125,18 @@ touch .git/.probe 2>/dev/null && rm -f .git/.probe && echo GIT_WRITABLE || echo 
 - `design.md` に書かれていない設計判断が必要になったら、**推測で進めないでください**。モード A・B では停止して報告、モード C では `codex-log.md` に記録します
 - **同じエラーの修正に 2 回連続で失敗したら、同じアプローチを繰り返さないでください。** 原因の仮説を書き出してから別のアプローチを取ります
 
+### 委託禁止領域(パス)
+
+以下のパスに触れる変更は**委託の対象外**です。タスクがこれらの変更を求めている場合、**変更せずに停止して報告してください**(モード C では `codex-log.md` に記録して、その項目だけ飛ばします)。
+
+<!-- kickoff:delegation-forbidden-paths -->
+- `.claude/scripts/delegate-codex.sh` — 実行中のあなた自身の起動元。書き換えると親プロセスが構文エラーで死にます
+- `.claude/scripts/check-protected-branch.sh` / `.husky/pre-commit` / `.husky/prepare-commit-msg` — ガードレール本体
+- `.claude/codex-denylist.txt` — 委託先が自分の送信禁止リストを書き換えることはできません
+<!-- /kickoff:delegation-forbidden-paths -->
+
+> 上の項目はテンプレート由来の**汎用項目**で、どのプロジェクトでも残ります(`delegate-codex.sh` と `.husky/` はすべてのプロジェクトに配布されるため)。プロダクト側のプロジェクトでは `/kickoff` フェーズ4 が、その下に**そのプロジェクトの実際のモジュールパス**(認証・決済・データ移行など)を**追記**します。マーカーの行自体も消さないでください。
+
 ### `design.md` の完成マーカー
 
 `.steering/[dir]/design.md` の冒頭に印があります。

@@ -24,7 +24,15 @@
      追記先の例: MCP の使いどころ(/kickoff フェーズ1.5)、スポーク構成ルールへの参照(/setup-spoke-standards)、
      ハーネス層の検証コマンド(/harness-setup)、共通ルールの上書き・例外。 -->
 
-(まだありません)
+### Codex への委託禁止領域(パス)
+
+以下は Codex に委託しない(司令塔または `implement-ticket` の fork が直接書く)。振り分けの判断基準は `.claude/rules/lead/delegation-policy.md`。
+
+- `.claude/scripts/delegate-codex.sh` — 委託の実行中に自分自身が書き換わると、bash の逐次読み込みで親プロセスが死ぬ(2026-08-23 に実測。`docs/template-dev/codex-delegation-plan.md` §9)
+- `.claude/scripts/check-protected-branch.sh` / `.husky/pre-commit` / `.husky/prepare-commit-msg` — ベンダー中立ガードレールの本体
+- `.claude/codex-denylist.txt` — 委託先が自分の送信禁止リストを編集できてはならない
+
+**機密の送信禁止(`.claude/codex-denylist.txt`)とは別の層。** denylist は該当ファイルが存在するだけで委託を止めるフェイルクローズ検査、こちらは司令塔が「どのチケットを渡すか」を決める振り分け判断。
 
 ## ディレクトリ構造(要点)
 
