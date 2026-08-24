@@ -384,11 +384,13 @@ fi
 # ---------- ハーネスモード ----------
 #
 # 読む順序は固定する: プロンプト経由の上書き > .harness/mode > normal。
+# 判定の実体は harness-mode.sh に集約する(SessionStart hook と同じ結果になることが要件)。
 # AGENTS.md 側にも同じ順序を書いてある(モード C はこの経路を通らないため)。
+# スクリプトが消えていても委託自体は止めない(normal に倒す)。
 
-HMODE="${CODEX_HARNESS_MODE:-}"
-if [ -z "$HMODE" ] && [ -f .harness/mode ]; then
-  HMODE="$(tr -d '[:space:]' <.harness/mode)"
+HMODE=""
+if [ -f .claude/scripts/harness-mode.sh ]; then
+  HMODE="$(CODEX_HARNESS_MODE="${CODEX_HARNESS_MODE:-}" bash .claude/scripts/harness-mode.sh 2>/dev/null || true)"
 fi
 [ -n "$HMODE" ] || HMODE="normal"
 

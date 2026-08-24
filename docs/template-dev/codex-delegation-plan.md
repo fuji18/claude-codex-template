@@ -310,6 +310,8 @@ if [ -d "$RUNS" ] && command -v jq >/dev/null 2>&1; then
 fi
 ```
 
+> **実装は hook 直書きではなく `codex-run.sh pending` に集約した(段階4)。** `list` と判定(未検収・プロセス不在・別ブランチ)を共有するため。
+
 **ここが仕組みの要点**: 通常なら司令塔のコンテキストに載る Codex のサマリー 20 行が run record に着地し、次セッションには 5 行だけが注入される。これが「委託」と「`/clear`」を噛み合わせている。
 
 > **`status: running` は信用しすぎない。** スクリプトが終了時に書く値なので、プロセスが強制終了(レート上限・OOM・端末切断)すると `running` のまま残る。上の `kill -0` による生存確認が最低限の防波堤で、**最終的な真実は `tasklist.md` と `git diff`**(§12.6)。
@@ -682,6 +684,8 @@ AGENTS.md も `.codex/` も現在マニフェストに**未登録**で、`/sync-
 
 - **サブスク併用の限界**: ChatGPT Plus も Codex 側のレート制限を持つ。**両方枯れれば止まる**。モード C は数日しのぎであり、恒久解は「モード B で Claude 枠の実効寿命を延ばす」こと
 - **サンドボックスの穴**: Codex の内部コマンドは Claude の hooks / permissions を通らない。**防衛線は `delegate-codex.sh` が渡す `--sandbox` フラグ**であり、`.codex/config.toml` ではない(CLI フラグに負け、untrusted では読まれもしない。§7.2)。加えて **Codex にはパス単位の読み取り除外が存在しない**ため、機密の送信を止める層は `delegate-codex.sh` の入口検査だけになる(§3.2)
+- **`.git` は Codex の `workspace-write` sandbox で読み取り専用**: `git update-index` を含む index 操作は委託先では必ず失敗する。**`.git` を書き換えるタスクは委託対象外**とし、コミットを Codex に担わせるモード C の設計では段階5(#7)で成立条件を必ず検証する
+- **委託先が `delegate-codex.sh` 自身を編集すると、実行中の親プロセスが壊れる**(2026-08-23 に実機で発生): bash はスクリプトを**逐次読み込み**するため、実行中のファイルが書き換わると次に読むオフセットがずれ、無関係な行で構文エラーになって死ぬ。段階4 の委託(タスクにこのスクリプトの改修を含んでいた)が実際にこれで落ち、**Codex 側は全タスクを完遂していたのに run record は `running` のまま孤児化した**(status と summary を書くのは死んだ親プロセスの仕事だったため)。テンプレート自身の開発では委託対象にハーネス層が入るのが常態なので、**再発する**。回避策の候補は (a) 本体を関数で包んで最終行まで読ませてから実行する、(b) 起動時に自身を一時ディレクトリへコピーして `exec` する、のいずれか。**未対処**(段階6 までに判断する)
 - **コストの見え方が二系統になる**: Claude(サブスク/API)と OpenAI(ChatGPT サブスク)。監視は利用者責任(README 免責に追記)
 - **委託を挟んだ `/clear` は「してよい」**(初版から方針を反転): run record(§3.2)+ SessionStart 注入(§3.4)があれば、状態は会話ではなくファイルに載っているため復帰できる。むしろ**計画フェーズ直後はコンテキストが最も膨らんでいるので、そこで捨てるのが最大の節約**になる
   - ただし条件がある: **`design.md` に書けていない知見を context に抱えたまま clear しない。** 先に `design.md` へ書いてから clear する(「design.md は実装者が設計判断なしで進められる粒度まで」という既存要件は、`/clear` を安全にする条件でもある)
@@ -760,7 +764,7 @@ Codex が「並行実装」と「第二意見レビュー」を担うなら、�
 | **1. ベンダー中立ガードレール** ✅ **完了(2026-08-18)** | `.husky/pre-commit` に保護ブランチ検査を移植(§8)+ 自壊検知を SessionStart と **CI の両方**に置く(§8.1)+ 完成マーカーの規約を steering テンプレート/スキルに載せる(§2.5) | `.claude/scripts/check-protected-branch.sh` + `.husky/pre-commit` + `ci.yml` + steering テンプレート/スキル | **Codex にコミットを許す前提条件。ここだけは先に必須** |
 | **2. 最小ハーネス** ✅ **完了(2026-08-20)** | AGENTS.md・`.codex/config.toml`・`delegate-codex.sh`(`explore` / `review` のみ)+ マニフェスト登録(§8.2) | 3 ファイル + `template-manifest.json` / `.gitignore` / `.prettierignore` / `/sync-docs` 改訂 | 読み取り委託の品質。書き込みが無いので安全。**ただし Codex CLI 未導入のため検証できたのは「経路が正しく壊れること」まで**(下記) |
 | **3. 実装委託** ✅ **完了(2026-08-23)** | `delegate-codex.sh impl` + 終了コード契約(§3.2)+ run record + `/next-ticket` の分岐(§4.1) | スクリプト + コマンド改訂 | 検収の往復回数(§10.7 に記録)/ 中断からの回復(§12.6) |
-| **4. モード B** | `.harness/mode` + **未検収委託の SessionStart 注入(§3.4)** + モード B の司令塔作法 | hook 改訂 | **週枠の実効寿命がどれだけ延びたか** / 委託を挟んだ `/clear` が破綻しないか |
+| **4. モード B** ✅ **完了(2026-08-23)** | `.harness/mode` + **未検収委託の SessionStart 注入(§3.4)** + モード B の司令塔作法 | hook 改訂 | **週枠の実効寿命がどれだけ延びたか** / 委託を挟んだ `/clear` が破綻しないか |
 | **5. モード C** | `.codex/prompts/` or `docs/playbook/codex-standalone.md` + `codex-log.md` 運用 | プロンプト集 | Claude 不在で 1 チケット完走できるか |
 | **6. チケット統合** | `delegate:codex` ラベル + README 追記 | ラベル運用 | チケット丸ごと委託 |
 
@@ -779,6 +783,13 @@ Codex が「並行実装」と「第二意見レビュー」を担うなら、�
   **実機の impl 委託を 1 本完走させた(2026-08-23)**。対象は `.steering/20260823-issue5-codex-impl-smoke/`(成果物は本文書の §12.7)。tasklist 3/3 を**逐次更新**して `exit 0`、所要 2 分 14 秒、**生ログ 66,347 B に対し司令塔へ返ったのは約 60 B(0.09%)**。内容は 6 つの入口検査すべての終了コードと空振り条件がスクリプト実装と一致し、修正なしで採用した。`codexSessionId`(`thread_id`)は**実機で取得できた** — §13 #6 で「exec からは取れない」と確定していたのは `resets_at` の方であり、セッション ID は別。なお入口検査1 が `.claude/settings.local.json` を検出するため `CODEX_DELEGATE_ACK_SECRETS=1` が要る(denylist の粒度は段階4 以降の判断材料)。
 
   **検収の往復は 1 回**(§10.7 の記録は `.harness/decisions.jsonl`)。実装の fork は差し戻し 0 回で完走したが、`code-reviewer` が Critical 1 件・Major 4 件を出した。Critical は **`rec_field` の sed フォールバックが `pid` の末尾カンマを飲み込み、`kill -0 "82711,"` が常に失敗して再入防止が jq 不在環境で静かにフェイルオープンしていた**もの。**段階2 と同じ形の事故が再発している** — 「検査を書いたら空振りする条件を列挙する」だけでは足りず、**その条件を実際に再現するテストまで要る**(今回のスタブ検証は `accepted` が JSON の末尾フィールドでカンマが付かないため、この経路を通らなかった)
+- **段階4 完了(2026-08-23)**: モード読み取りを `harness-mode.sh` に集約し、Claude の SessionStart と Codex の `delegate-codex.sh` という 2 系統の読み手が同じ値を返す構造にした。未検収 run record は `codex-run.sh pending` が整形し、hook に判定を直書きしない。SessionStart 注入は `/clear` だけでなく **`startup` でも出す**。モード B の既定経路が「司令塔がセッションを閉じる → 人間が委託 → 新セッションを開く」であり、再開が `/clear` とは限らないため。
+
+  **draft PR の実機確認(2026-08-23)**: 本チケットの PR([#11](https://github.com/fuji18/claude-codex-template/pull/11))を**意図的に draft で開いて**確かめた。結果は `CI | pull_request | success` / `Claude Code Review | pull_request | skipped`。**§2.6 の主張どおり、draft では機械的検証だけが走りレビューは走らない。** 正確には `claude-code-review.yml` の**ワークフローは起動するがジョブが `if: draft == false` で skip される**ため、Claude の枠は消費されない。その後 `gh pr ready` で `ready_for_review` に切り替えたところ、`types: [opened, ready_for_review]` により**同じワークフローが今度は skip されずに `success` まで走った**(同一 PR で両方を実測)。**§2.6 の「枠が戻ったら ready_for_review に切り替えるだけでレビューが自動起動する」は実機で成立している。**
+
+  **既知の逸脱**: 週枠の実効寿命は 1 チケットでは実測できない縦断指標であるため、本チケットでは測定方法とベースラインを `.harness/decisions.jsonl` に記録した。段階6(#8)完了時点で econ 運用分と比較する。
+
+  **実機で判明した制約**: Codex の `workspace-write` sandbox では `.git` が読み取り専用であり、`git update-index` を含む index 操作は委託先で必ず失敗する。本チケットの 1 回目の委託が `exit 2` で停止した実因でもある。**`.git` を書き換えるタスクは委託対象外**とし、この制約が直接前提に効くモード C(Codex がコミットする設計)は段階5(#7)で必ず検証する。
 - 本ドキュメントは調査時点の Codex CLI 仕様に基づく。着手前に **§13 の未確認項目を一括で検証する**
 
 **段階2 で検証できたこと / できなかったこと(2026-08-20)**
