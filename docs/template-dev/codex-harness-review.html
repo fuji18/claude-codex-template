@@ -1,0 +1,369 @@
+<title>Codex ハーネス実装レビュー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+
+<style>
+  :root {
+    --ground: #eef0f4;
+    --surface: #ffffff;
+    --surface-2: #e7eaf0;
+    --ink: #0f1622;
+    --ink-2: #414c5c;
+    --ink-3: #6d7787;
+    --rule: #d5dae2;
+    --accent: #3a5ba0;
+    --accent-soft: #e2e8f5;
+    --ok: #2e7d5b;
+    --ok-soft: #dcefe4;
+    --warn: #a8621b;
+    --warn-soft: #f6e9da;
+    --bad: #b0422e;
+    --bad-soft: #f7e2dd;
+    --info: #1e6a8a;
+    --info-soft: #dcedf4;
+    --shadow: 0 1px 2px rgba(15, 22, 34, 0.06), 0 8px 24px -16px rgba(15, 22, 34, 0.28);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #10141b; --surface: #171c25; --surface-2: #1d232e;
+      --ink: #e6e9ee; --ink-2: #b3bac5; --ink-3: #838c9a; --rule: #29313d;
+      --accent: #93abe2; --accent-soft: #1e2740;
+      --ok: #5cbd93; --ok-soft: #14291f;
+      --warn: #dc9a58; --warn-soft: #2f2318;
+      --bad: #e08a76; --bad-soft: #331a14;
+      --info: #6db7d6; --info-soft: #12252e;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #10141b; --surface: #171c25; --surface-2: #1d232e;
+    --ink: #e6e9ee; --ink-2: #b3bac5; --ink-3: #838c9a; --rule: #29313d;
+    --accent: #93abe2; --accent-soft: #1e2740;
+    --ok: #5cbd93; --ok-soft: #14291f;
+    --warn: #dc9a58; --warn-soft: #2f2318;
+    --bad: #e08a76; --bad-soft: #331a14;
+    --info: #6db7d6; --info-soft: #12252e;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.6);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: "IBM Plex Sans", "Hiragino Sans", "Noto Sans JP", sans-serif;
+    line-height: 1.75; font-size: 15.5px;
+  }
+  main { max-width: 62rem; margin: 0 auto; padding: 2.5rem 1.25rem 5rem; }
+  header.doc {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 12px;
+    box-shadow: var(--shadow); padding: 1.75rem 2rem; margin-bottom: 2rem;
+  }
+  h1 { font-size: 1.7rem; margin: 0 0 .5rem; line-height: 1.3; }
+  h2 { font-size: 1.25rem; margin: 2.75rem 0 .9rem; padding-top: .4rem; border-top: 3px solid var(--accent); }
+  h2 .num { color: var(--accent); font-family: "IBM Plex Mono", monospace; margin-right: .5rem; font-size: .95rem; }
+  h3 { font-size: 1.02rem; margin: 1.6rem 0 .5rem; }
+  p { margin: .5rem 0 .9rem; }
+  code {
+    font-family: "IBM Plex Mono", monospace; font-size: .84em;
+    background: var(--surface-2); border-radius: 4px; padding: .08em .35em;
+  }
+  .meta { color: var(--ink-3); font-size: .85rem; display: flex; flex-wrap: wrap; gap: .4rem 1.5rem; margin-top: .75rem; }
+  .meta b { color: var(--ink-2); font-weight: 500; }
+  .badge {
+    display: inline-block; font-size: .74rem; font-weight: 600; letter-spacing: .02em;
+    border-radius: 99px; padding: .12em .7em; vertical-align: 1px; white-space: nowrap;
+  }
+  .b-ok { background: var(--ok-soft); color: var(--ok); }
+  .b-warn { background: var(--warn-soft); color: var(--warn); }
+  .b-bad { background: var(--bad-soft); color: var(--bad); }
+  .b-info { background: var(--info-soft); color: var(--info); }
+  .verdict {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    gap: .75rem; margin: 1.25rem 0 0;
+  }
+  .verdict .card {
+    background: var(--surface-2); border-radius: 8px; padding: .8rem 1rem;
+    border-left: 4px solid var(--accent);
+  }
+  .verdict .card.ok { border-left-color: var(--ok); }
+  .verdict .card.warn { border-left-color: var(--warn); }
+  .verdict .card b { display: block; font-size: .8rem; color: var(--ink-3); font-weight: 500; margin-bottom: .15rem; }
+  .tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; box-shadow: var(--shadow); margin: 1rem 0 1.5rem; }
+  table { border-collapse: collapse; width: 100%; font-size: .88rem; }
+  th, td { text-align: left; padding: .55rem .85rem; border-top: 1px solid var(--rule); vertical-align: top; }
+  thead th { border-top: none; background: var(--surface-2); font-size: .78rem; color: var(--ink-2); letter-spacing: .03em; white-space: nowrap; }
+  td:first-child { white-space: nowrap; }
+  .callout {
+    background: var(--surface); border: 1px solid var(--rule); border-left: 4px solid var(--accent);
+    border-radius: 8px; padding: .85rem 1.15rem; margin: 1rem 0; box-shadow: var(--shadow); font-size: .92rem;
+  }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.ok { border-left-color: var(--ok); }
+  .callout.bad { border-left-color: var(--bad); }
+  .callout b.tag { display: block; font-size: .78rem; letter-spacing: .04em; margin-bottom: .2rem; color: var(--ink-3); }
+  ul, ol { margin: .4rem 0 1rem; padding-left: 1.4rem; }
+  li { margin: .25rem 0; }
+  .finding { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; box-shadow: var(--shadow); padding: 1rem 1.3rem; margin: 1rem 0; }
+  .finding h3 { margin: 0 0 .35rem; display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+  .finding p:last-child { margin-bottom: .2rem; }
+  .finding .where { font-family: "IBM Plex Mono", monospace; font-size: .78rem; color: var(--ink-3); }
+  .toc {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem 1rem;
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 10px;
+    padding: .7rem 1.15rem; font-size: .85rem; box-shadow: var(--shadow);
+  }
+  .toc b { color: var(--ink-3); font-weight: 500; font-size: .78rem; letter-spacing: .04em; }
+  .toc a { color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; }
+  .toc a:hover { border-bottom-color: var(--accent); }
+  .evidence {
+    margin: .6rem 0 .2rem; padding: .5rem .8rem; background: var(--surface-2);
+    border-radius: 6px; font-size: .82rem; color: var(--ink-2);
+  }
+  .evidence b { font-size: .74rem; letter-spacing: .04em; color: var(--ink-3); font-weight: 500; display: block; margin-bottom: .15rem; }
+  .evidence code { background: transparent; padding: 0; }
+  .rev { font-size: .88rem; color: var(--ink-2); border-left: 3px solid var(--rule); padding-left: .9rem; margin-top: 1.2rem; }
+  .rev b { color: var(--ink); }
+  footer { color: var(--ink-3); font-size: .82rem; margin-top: 3rem; border-top: 1px solid var(--rule); padding-top: 1rem; }
+</style>
+
+<main>
+<header class="doc">
+  <h1>Codex 併用ハーネス — 実装レビュー</h1>
+  <p style="margin:0;color:var(--ink-2)">対象: <code>docs/template-dev/codex-harness.html</code> の記載内容がリポジトリに実装されているかの突き合わせ、およびセキュリティ・運用上の懸念の洗い出し。</p>
+  <div class="meta">
+    <span><b>初版</b> 2026-08-23</span>
+    <span><b>追記・訂正</b> 2026-08-24(§01 末尾に更新履歴)</span>
+    <span><b>ブランチ</b> feature/issue6-harness-mode-b</span>
+    <span><b>方法</b> ドキュメント全文と実ファイル・GitHub 設定(ruleset / visibility / secrets / workflow run のステップ単位)の全件照合</span>
+  </div>
+  <div class="verdict">
+    <div class="card ok"><b>実装状況</b><span class="badge b-ok">ドキュメント以上に進んでいる</span><br>段階 0〜4 まで実装済み。記載された全ファイル・全ゲートの実在を確認</div>
+    <div class="card ok"><b>委託経路のセキュリティ</b><span class="badge b-ok">Critical 0</span><br>設計どおり多層化。中程度の残余リスク 2 件(委託時の worktree 外読み取り / denylist の網羅性)</div>
+    <div class="card warn"><b>レビュー層</b><span class="badge b-bad">実質不在</span><br><code>CLAUDE_CODE_OAUTH_TOKEN</code> 未設定で Claude レビューは一度も実行されていない。ジョブは success で緑(S7・D6)</div>
+    <div class="card warn"><b>運用</b><span class="badge b-warn">要フォロー 10 件</span><br>ドキュメントの古い記述・未起票の既知バグ・seccomp 理由の未文書化など(§06 の 10 項目)</div>
+  </div>
+</header>
+
+<nav class="toc" aria-label="目次">
+  <b>目次</b>
+  <a href="#s01">01 結論</a>
+  <a href="#s02">02 実装状況の突き合わせ</a>
+  <a href="#s03">03 ドキュメントとの乖離</a>
+  <a href="#s04">04 セキュリティ懸念</a>
+  <a href="#s05">05 運用懸念</a>
+  <a href="#s06">06 推奨アクション</a>
+</nav>
+
+<h2 id="s01"><span class="num">01</span>結論(TL;DR)</h2>
+<p><strong>ドキュメントに書かれた実装はすべて実在し、しかも実装の方が先行している。</strong>ドキュメントのヘッダは「段階 2 / 6 完了」、本文 §10 は「段階 3 まで完了・段階 4 未着手」だが、現在のブランチでは<strong>段階 4(モード B)まで実装・検証済み</strong>である(<code>harness-mode.sh</code> / <code>.claude/rules/mode/econ.md・degraded.md</code> / SessionStart のモード注入と未検収委託注入 / <code>codex-run.sh pending</code> / コマンド 3 種の <code>--draft</code> 分岐)。</p>
+<p>さらに、ドキュメントが「§5(段階 3)のスコープに入れる」としていた<strong>発見 2(exit 0 がタスク成否を表さない問題)は既に <code>delegate-codex.sh</code> の「成果の実在確認」として実装済み</strong>で、最大の構造的穴だった「GitHub Free の private ではブランチ保護が張れない」も、<strong>リポジトリの public 化 + ruleset(bypass 空・必須チェック 3 ジョブ)+ secret scanning / push protection の有効化で解消済み</strong>だった。ドキュメント §12.2 の手順がそのまま実行されている。</p>
+<p><strong>ただし追記調査で 1 件、優先度の高い穴が見つかった。</strong><code>CLAUDE_CODE_OAUTH_TOKEN</code> がこのリポジトリに設定されていないため、<strong>Claude レビュー(<code>claude-code-review.yml</code> / <code>@claude</code> メンションの <code>claude.yml</code>)は一度も実行されていない</strong>。本体ステップが <code>if: env.CLAUDE_TOKEN != ''</code> で skip され、<strong>ジョブは success として緑を返す</strong>ため、PR 上は「レビュー通過」と見分けがつかない。委託経路(<code>delegate-codex.sh</code>)にはこの取り違えを潰す作り込みがあるのに、レビュー経路には無い(S7・D6)。</p>
+<p>それ以外に Critical / 即対応が必要な問題は見つからなかった。以下、確認の詳細と、残っている中・低程度の懸念を挙げる。</p>
+
+<div class="rev"><b>更新履歴</b><br>
+<b>2026-08-24(追記・訂正)</b>: Actions シークレットと workflow run の<strong>ステップ単位</strong>の実測を追加し、S7 / D6 / S8 / O6 を新規に起票。PR #11 が draft から ready に切り替わった後の状態を §2.1 と O5 に反映。推奨アクション #3 の宛先(<code>docs/development-guidelines.md</code>)がこのリポジトリには存在しないことを訂正。<br>
+<b>2026-08-23(初版)</b>: ドキュメント §08 の全 18 ファイルと GitHub 設定(ruleset / visibility / secret scanning)の照合。</div>
+
+<h2 id="s02"><span class="num">02</span>実装状況の突き合わせ</h2>
+
+<h3>2.1 段階別の実装状況(ドキュメント §10 との対比)</h3>
+<div class="tablewrap"><table>
+<thead><tr><th>段階</th><th>ドキュメントの記載</th><th>実機確認の結果</th><th>判定</th></tr></thead>
+<tbody>
+<tr><td>00 前提</td><td>完了(CLI v0.149.0・login・seccomp 修正)</td><td><code>devcontainer.json:25</code> に <code>seccomp=unconfined</code>、<code>post_create.sh</code> に CLI 導入 + <code>codex --version</code> 検証 + 再試行 + <code>--with-api-key</code> 禁止の注意書きあり</td><td><span class="badge b-ok">一致</span></td></tr>
+<tr><td>01 ガードレール</td><td>完了(4 層)</td><td><code>check-protected-branch.sh</code> / <code>.husky/pre-commit</code>(sh -e 対応・lint-staged 2 段起動)/ <code>.husky/prepare-commit-msg</code>(<code>MERGE_HEAD</code> 判別)/ <code>ci.yml</code> の <code>branch-policy</code> 独立ジョブ、すべて記載どおり</td><td><span class="badge b-ok">一致</span></td></tr>
+<tr><td>02 最小ハーネス</td><td>完了</td><td><code>AGENTS.md</code>(モード表・起動時 4 検査・verify-probe マーカー)/ <code>.codex/config.toml</code>(network_access=false・「このファイルは防衛線ではない」注記)/ denylist フェイルクローズ、すべて実在</td><td><span class="badge b-ok">一致</span></td></tr>
+<tr><td>03 実装委託</td><td>完了</td><td><code>delegate-codex.sh</code>(668 行): 終了コード契約 0〜5・入口検査 0〜5・再入防止・run record・レート上限の 2 段判定、すべて実装。<code>codex-run.sh</code>(list / pending / show / accept / set-status)も実在</td><td><span class="badge b-ok">一致</span></td></tr>
+<tr><td>04 モード B</td><td><strong>未着手</strong>と記載</td><td><strong>実装済み。</strong>tasklist 28 タスク + 司令塔タスク L1/L2/L4 完了(L3 のみ未了)。draft PR #11 で「CI=success / Claude Review=skipped」を実測済み。<strong>2026-08-24 時点で PR #11 は ready(非 draft)に切り替わり CI 3/3 pass</strong> — ただしレビュー本体は S7 のとおり未実行</td><td><span class="badge b-info">実装が先行</span></td></tr>
+<tr><td>05 モード C</td><td>未着手(Issue #7)</td><td>未着手。ただし <code>.claude/rules/mode/degraded.md</code>(復帰時の検収手順)は段階 4 で先行作成済み</td><td><span class="badge b-ok">一致</span></td></tr>
+<tr><td>06 チケット統合</td><td>未着手(Issue #8)</td><td>未着手(Issue #8 OPEN)</td><td><span class="badge b-ok">一致</span></td></tr>
+</tbody>
+</table></div>
+
+<h3>2.2 §08「今回の変更ファイル」の全件照合</h3>
+<p>18 ファイルすべての実在と記載内容の一致を確認した。特に検証した挙動:</p>
+<ul>
+<li><strong><code>.husky/prepare-commit-msg</code></strong>: <code>$2=merge</code> でも <code>.git/MERGE_HEAD</code> の有無で判別する実装(<code>revert -e</code> / <code>cherry-pick -e</code> のすり抜け対策)が記載どおり入っている</li>
+<li><strong><code>check-guard-integrity.sh</code></strong>: 「X の存在を前提に X を検査しない」原則が実装されている — フック消失・呼び出しのコメントアウト・<code>protectedBranches</code> の空洞化をすべて検知し、SessionStart と CI の両方から同一スクリプトが呼ばれる</li>
+<li><strong><code>ci.yml</code></strong>: <code>harness-integrity</code> が独立ジョブとして分離済み。git index 上の実行権限(<code>core.fileMode=false</code> 環境)まで検査</li>
+<li><strong>完成マーカー</strong>: steering テンプレートに <code>&lt;!-- status: draft --&gt;</code> が既定で埋まり、<code>implement-ticket</code> SKILL.md と <code>delegate-codex.sh</code>(exit 5)が同じ規則(draft=拒否 / ready=通す / 印なし=通す)で検査 — 交換可能性の要件どおり</li>
+<li><strong><code>check-implementation-phase.sh</code></strong>: 通過パスに <code>.husky/*</code> が追加済み</li>
+</ul>
+
+<h3>2.3 §12.2「public 化」の実行状況(GitHub 側の実測)</h3>
+<div class="tablewrap"><table>
+<thead><tr><th>手順</th><th>実測結果</th><th>判定</th></tr></thead>
+<tbody>
+<tr><td>public 化</td><td><code>visibility: PUBLIC</code></td><td><span class="badge b-ok">完了</span></td></tr>
+<tr><td>ruleset 作成</td><td>ruleset「protect」が active。対象 <code>~DEFAULT_BRANCH</code>、ルール: deletion / non_fast_forward / pull_request / required_status_checks</td><td><span class="badge b-ok">完了</span></td></tr>
+<tr><td>required checks</td><td><code>branch-policy</code> / <code>harness-integrity</code> / <code>quality</code> の 3 ジョブ — ドキュメントの指定と完全一致</td><td><span class="badge b-ok">完了</span></td></tr>
+<tr><td>bypass list を空に</td><td><code>bypass_actors: []</code></td><td><span class="badge b-ok">完了</span></td></tr>
+<tr><td>secret scanning + push protection</td><td>両方 enabled</td><td><span class="badge b-ok">完了</span></td></tr>
+</tbody>
+</table></div>
+<div class="callout ok"><b class="tag">意味すること</b>§07「残る穴」3 件のうち「リモートのブランチ保護」に集約されていた 2 件(<code>--no-verify</code> 迂回・main への直接 push)は、<strong>受け皿が実在する状態になった</strong>。「空手形」と自己申告していた前提はもう成り立っており、モード C(Codex にコミット権)の前提条件も権限面では決着している。</div>
+
+<h3>2.4 ドキュメントを超えて実装されていたもの</h3>
+<ul>
+<li><strong>exit 0 の穴(発見 2)の修正</strong>: ドキュメントは「#5 のスコープに入れる」止まりだが、<code>delegate-codex.sh</code> は作業ツリー・HEAD・tasklist の 3 点スナップショット比較で「exit 0 だが何も変わっていない」を exit 2 に落とす実装まで済んでいる</li>
+<li><strong>レート上限誤検知の修正</strong>: 「成功時は上限判定をしない」「緩い文言パターンはエラー行のみに当てる」— 自分自身をレビュー対象にすると exit 4 に化けた実測を受けた改良がコメント付きで入っている</li>
+<li><strong>jq 不在環境の JSON パース</strong>: sed フォールバックが末尾カンマを飲み込み再入防止が静かに無効化するバグの修正、<code>// empty</code> が false を捨てる問題の回避など、検収で見つけた欠陥の修正が両スクリプトに反映済み</li>
+</ul>
+
+<h2 id="s03"><span class="num">03</span>ドキュメントと実装の乖離(ドキュメント側の修正が必要)</h2>
+
+<div class="finding">
+<h3><span class="badge b-warn">D1</span>進捗表記が三重に食い違っている</h3>
+<p class="where">codex-harness.html ヘッダ / §02 / §10</p>
+<p>ヘッダは「段階 2 / 6 完了」、§02 の注記は「段階 3 まで実装済み・段階 4 が残スコープ」、実装は段階 4 完了。本ドキュメント自身が「正は <code>codex-delegation-plan.md</code>」と宣言しているので致命的ではないが、「いま動くのは Mode A の Sonnet fork 経路だけ」という §02 の記述は<strong>現状と明確に矛盾する</strong>(explore / review / impl の Codex 経路とモード B 運用は動く)。段階 4 のマージ時に更新するのがよい。</p>
+</div>
+
+<div class="finding">
+<h3><span class="badge b-warn">D2</span><code>fix-ci</code> はランブックに載っているが未実装</h3>
+<p class="where">codex-harness.html §06・§09 ↔ delegate-codex.sh:71</p>
+<p>§06 の 4 モード表と §09 の移管候補(効果 ★★★)に <code>fix-ci</code> があるが、スクリプトは「本テンプレートでは未実装です」と明示拒否する(exit 2)。<strong>落ち方は正しい</strong>(黙って壊れない)が、ドキュメント側に未実装の印が無く、§09 を読んだ利用者が存在しない経路に誘導される。同様に <code>--background</code> は「段階 4 で実装します」とスクリプトが案内するが、段階 4 のスコープには入らなかった — 案内文の段階番号がずれている。</p>
+</div>
+
+<div class="finding">
+<h3><span class="badge b-warn">D3</span>既知バグ「CMD_START のコードスパン誤検知」が未修正・未起票</h3>
+<p class="where">check-branch-policy.sh:28</p>
+<p>§08 が「独立したチケットとして起票することを推奨する」と書いたバッククォート誤検知(作業中に実際 2 回ブロックされたと記録)は、<code>CMD_START</code> に今もバッククォートが含まれ、<strong>Issue も立っていない</strong>(OPEN は #6/#7/#8 のみ)。このテンプレートは自身のワークフローを文書化するため遭遇頻度が高いと自己分析しており、放置すると再発する。</p>
+</div>
+
+<div class="finding">
+<h3><span class="badge b-warn">D4</span>seccomp 緩和の理由がリポジトリ内に文書化されていない</h3>
+<p class="where">.devcontainer/devcontainer.json:25</p>
+<p>§12.4 の「#4 に足すべき項目」は「設定だけ見ても理由が分からず、将来『セキュリティ上外すべき』と誤って消される」として README か開発ガイドラインへの記載を残件としていたが、<code>seccomp</code> への言及は <code>docs/template-dev/</code>(読み込み対象外・削除可のディレクトリ)にしかない。Issue #4 は既にクローズ済みで、<strong>この残件は宙に浮いている</strong>。devcontainer.json の隣(README の環境構築節など)に 3 行残すだけで消えるリスク。</p>
+<p><strong>宛先の訂正(2026-08-24)</strong>: <code>docs/development-guidelines.md</code> は<strong>このリポジトリにはまだ存在しない</strong>(<code>docs/</code> にあるのは <code>ui-design-*.md</code> と <code>ideas/</code> / <code>template-dev/</code> だけで、6 つの永続ドキュメントは配布先で <code>/setup-project</code> が生成する)。したがって置き場所は <strong><code>README.md</code> の環境構築節</strong>が唯一の実在する選択肢。<code>devcontainer.json</code> は JSONC を許容し、現在この設定を読む自前スクリプト・CI も無いので、<code>runArgs</code> の行に <code>//</code> コメントを添える手も併用できる。</p>
+</div>
+
+<div class="finding">
+<h3><span class="badge b-info">D5</span><code>blocked</code> ラベルの選定除外が未反映</h3>
+<p class="where">.claude/commands/next-ticket.md</p>
+<p>§12.4 の「<code>blocked</code> ラベルは誰も読んでいない」で提案された 1 行(選定条件への追加)は入っていない。ドキュメント自身が「#4 か #8 のついでに」としており、#8 が OPEN なので、そちらのスコープに明示的に入れておくとよい。</p>
+</div>
+
+<div class="finding">
+<h3><span class="badge b-ok">D6 · 対応済み</span>「<code>ready_for_review</code> でレビューが自動起動する」の実測記録が実態と食い違う</h3>
+<p class="where">codex-delegation-plan.md:788(commit 401267c)/ .github/workflows/claude-code-review.yml</p>
+<p>「同じワークフローが今度は skip されずに <code>success</code> まで走った」と記録されているが、skip されなかったのは<strong>ジョブレベルの <code>if: draft == false</code> まで</strong>で、その内側の「Run Claude Code Review」ステップは <code>CLAUDE_CODE_OAUTH_TOKEN</code> 未設定のため <strong>skipped</strong>(S7)。実証できたのは<strong>トリガ(<code>types: [opened, ready_for_review]</code>)が正しく発火すること</strong>までで、<strong>レビューが実行されることは実証されていない</strong>。§2.6 が依拠する「枠が戻ったら ready にするだけでレビューが自動起動する」は<strong>設計として正しいが実機では未検証</strong>という状態。記録をその粒度に訂正するのが正確。</p>
+<p><strong>対応(2026-08-24)</strong>: <code>codex-delegation-plan.md</code> を訂正済み — §11 の段階4 記録に「トリガの発火とジョブレベルの <code>draft</code> 判定までが実証範囲」と明記し、§2.6 に <strong><code>CLAUDE_CODE_OAUTH_TOKEN</code> の登録が運用の前提条件</strong>である旨と「ジョブの <code>success</code> はレビュー実施を意味しない」注意を追加、§12 のモード B 手順 6 にも同じ前提を添えた。<strong>残るのは S7 本体(シークレット登録、またはスキップの可視化)。</strong></p>
+<div class="evidence"><b>証跡</b><code>gh run view &lt;id&gt; --json jobs</code> → job=success / step「Run Claude Code Review」=skipped(直近 5 実行すべて)。<code>gh pr view 11 --json reviews,comments</code> → いずれも 0 件。</div>
+</div>
+
+<h2 id="s04"><span class="num">04</span>セキュリティ懸念</h2>
+
+<div class="callout ok"><b class="tag">前提: 良くできている点</b>委託経路はフェイルクローズ(denylist 不在・空・find/grep 不在で委託拒否)、ガードレールはフェイルオープン + 消失検知という非対称が一貫している。ruleset は bypass 空、push protection 有効、<code>claude.yml</code> は author_association で第三者起動を遮断、<code>claude-code-review.yml</code> の draft 条件も記載どおり。<strong>S1〜S6・S8 は残余リスクであり、設計の破綻ではない。</strong>ただし <strong>S7 は例外</strong>(設計ではなく<strong>設定の欠落</strong>で、レビュー層そのものが機能していない)なので、番号順ではなく先頭に置く。</div>
+
+<div class="finding">
+<h3><span class="badge b-bad">S7 · 高</span>Claude レビュー層はこのリポジトリで一度も動いていない — それでもジョブは緑</h3>
+<p class="where">.github/workflows/claude-code-review.yml:43 / claude.yml:44 / Actions secrets</p>
+<p>どちらのワークフローも本体ステップが <code>if: env.CLAUDE_TOKEN != ''</code> で守られているが、<strong>このリポジトリの Actions シークレットは 0 件</strong>で <code>CLAUDE_CODE_OAUTH_TOKEN</code> が無い。結果、ステップは <strong>skipped</strong> のまま<strong>ジョブは success</strong> を返す。<code>@claude</code> メンション経路(<code>claude.yml</code>)も同じシークレットに依存するので同様に不発。<strong>PR #10・#11 にレビュー投稿が 1 件も無いのは、レビューが「異常なし」だったからではなく、走っていないから</strong>である。</p>
+<p>影響は運用の根幹に及ぶ。<code>review-policy.md</code> の「PR 時の最終ゲート(自動 1 回)」も、モード B の「draft で積んで枠が戻ったらまとめてレビュー」も、<strong>受け皿が存在しない</strong>。緑のチェックが「レビュー済み」と読めてしまう点で、これは本ハーネスが <code>delegate-codex.sh</code> で自ら潰した<strong>「exit 0 がタスク成否を表さない」問題と同型</strong>だ — 委託経路には成果の実在確認を入れたのに、レビュー経路には同じ検査が無い。</p>
+<p><strong>緩和案</strong>: (1) シークレットを登録する(本丸)。(2) ガード自体はテンプレート配布先(シークレット未設定の新リポジトリ)のために正しいので、消すのではなく<strong>沈黙をやめる</strong> — スキップ時に <code>::notice</code> か <code>$GITHUB_STEP_SUMMARY</code> で「レビューは実行されていない」を PR 上に出す。(3) README のセットアップ手順にシークレット登録の項を立てる(現状どこにも無い)。</p>
+<div class="evidence"><b>証跡</b><code>gh api repos/&lt;owner&gt;/&lt;repo&gt;/actions/secrets --jq .total_count</code> → <code>0</code>。<code>claude-code-review.yml</code> の直近 5 実行はすべて本体ステップ skipped。</div>
+<p><strong>対応(2026-08-24)</strong>: 緩和案 (2)(スキップの可視化)を <a href="https://github.com/fuji18/claude-codex-template/issues/12">Issue #12</a> として起票した。<code>::warning</code> + job summary で「レビュー未実行 / この success はレビュー通過を意味しない」を run に残し、<strong>ガード自体は外さない</strong>(シークレット未設定の配布先を赤くしないため)。<code>claude.yml</code> の <code>@claude</code> 経路と README のシークレット登録手順も同スコープ。<strong>(1) のシークレット登録は人間の作業として残る。</strong></p>
+</div>
+
+<div class="finding">
+<h3><span class="badge b-warn">S1 · 中</span>Codex はワークツリーの外も読める — denylist の走査範囲外に資格情報がある</h3>
+<p class="where">delegate-codex.sh 入口検査1 / post_create.sh / ~/.config/gh/hosts.yml</p>
+<p>sandbox が制限するのは書き込みで、<strong>読み取りにはパス除外が無い</strong>(ドキュメント §13 #7 で確定済み)。一方 denylist の走査は <code>find .</code> — つまり<strong>リポジトリ内だけ</strong>で、このコンテナには <code>~/.config/gh/hosts.yml</code>(<code>gh auth login --with-token</code> が保存した GitHub トークン)と <code>~/.codex/auth.json</code>(OpenAI OAuth)が常在する。委託プロンプトは読むよう指示しないが、<strong>リポジトリ内のファイルに仕込まれた指示(プロンプトインジェクション)経由で読み出されれば、その内容はモデル API 経由で OpenAI 側に渡る</strong>。ネットワーク無効はコマンドによる直接送信を塞ぐだけで、この経路は塞がない。</p>
+<p><strong>緩和案</strong>: (1) 委託を「このテンプレート自身のコード」に限る現運用を続ける限り実害の入口は狭い(外部由来コンテンツを扱うプロジェクトに配られたときが本番のリスク)。(2) <code>delegate-codex.sh</code> の実行時に <code>GH_TOKEN</code> / <code>GITHUB_TOKEN</code> を unset するのは 1 行で入る。(3) ホーム配下の資格情報はスクリプトでは守れない、という限界を denylist のコメントか計画書 §10.2 に明記しておく(「denylist が唯一の層」という現記述は範囲がワークツリーに限られることを言っていない)。</p>
+</div>
+
+<div class="finding">
+<h3><span class="badge b-warn">S2 · 中</span>denylist のパターン網羅性 — ドキュメント自身が挙げた <code>.npmrc</code> が入っていない</h3>
+<p class="where">.claude/codex-denylist.txt</p>
+<p>§12.4「機密パターンの確定」は「トークン入り <code>.npmrc</code> は素通りする」と自己指摘していたが、確定版の denylist に <code>.npmrc</code> は無い。ほかに一般的な候補で漏れているもの: <code>.netrc</code>、<code>.git-credentials</code>、<code>*.tfstate</code>、<code>*service-account*.json</code>、<code>.aws/</code> 配下。<strong>このリポジトリ(OSS テンプレート・トラッキング対象は全て送信可の判断済み)では実害は無い</strong>が、denylist はテンプレート所有(owned)で全プロジェクトに配られる既定値であり、「唯一の層」を自認する以上、既定は厚くしておく価値がある。深さ制限の撤廃(<code>-maxdepth</code> 廃止 + prune)と <code>*.key</code> 追加は §12.4 の指摘どおり実装済みだった。</p>
+</div>
+
+<div class="finding">
+<h3><span class="badge b-info">S3 · 低〜中</span><code>seccomp=unconfined</code> のトレードオフ</h3>
+<p class="where">.devcontainer/devcontainer.json:25</p>
+<p>Docker 既定の seccomp プロファイルを外すことで、コンテナ内プロセスが使えるシステムコール面が広がる(カーネル脆弱性経由のコンテナエスケープの攻撃面が増える)。bwrap の user namespace のためという理由は妥当で、<code>--dangerously-bypass-approvals-and-sandbox</code> を採らずに済ませた判断は正しい。開発用コンテナとして許容範囲というドキュメントの評価に同意するが、<strong>D4(理由の未文書化)とセットで残すべきリスク</strong>。より狭い代替(既定プロファイルに <code>unshare</code>/<code>clone(CLONE_NEWUSER)</code> だけ許可するカスタム seccomp JSON)も存在するので、気になるなら #7 あたりで検討余地。</p>
+</div>
+
+<div class="finding">
+<h3><span class="badge b-info">S4 · 低</span><code>CODEX_DELEGATE_ACK_SECRETS=1</code> は包括承認</h3>
+<p class="where">delegate-codex.sh 入口検査1</p>
+<p>機密検出時の承認が「環境変数 1 個」なので、シェルの rc ファイルに export され続けると<strong>以後すべての検出が無言で素通しになる</strong>(検出メッセージ自体は出るが停止しない)。1 回の委託ごとに前置きで渡す想定なら問題ないが、その想定を usage かメッセージに明記しておくと堅い。</p>
+</div>
+
+<div class="finding">
+<h3><span class="badge b-info">S5 · 情報</span>verify-probe は AGENTS.md 由来の任意コマンド実行</h3>
+<p class="where">delegate-codex.sh 入口検査2・3</p>
+<p><code>&lt;!-- verify-probe: ... --&gt;</code> の中身を <code>bash -c</code> で実行する。リポジトリを編集できる者は hooks 経由で既に任意実行できるため<strong>権限の増分は実質ゼロ</strong>だが、AGENTS.md は merge(手動統合)対象で /sync-template の差分レビューをすり抜けやすい位置にある。sync 時の差分確認で verify-probe 行を意識する、という一言が sync-template スキル側にあると閉じる。</p>
+</div>
+
+<div class="finding">
+<h3><span class="badge b-info">S6 · 情報</span>secretlint は PR 契機のみ / dependabot security updates が無効</h3>
+<p class="where">ci.yml quality ジョブ</p>
+<p>モード C(PR を作らない)の成果物はコミット時点では secretlint を通らない — これはドキュメントが「一切検証されていない前提で扱う」と認めた割り切りと整合するので指摘のみ。また public 化に伴い <code>secret_scanning</code> は有効化されたが <code>dependabot_security_updates</code> は disabled のまま。dependabot が別途更新 PR を出す運用なら意図どおりだが、public 化チェックリストには載っていなかったので確認まで。</p>
+</div>
+
+<div class="finding">
+<h3><span class="badge b-info">S8 · 低〜中</span>Codex の自由記述 <code>summary</code> が無検査で司令塔の文脈に入る</h3>
+<p class="where">delegate-codex.sh:431 → codex-run.sh pending → session-start.sh:113</p>
+<p>run record の <code>summary</code> は Codex が書いた自由文で、未検収委託として <strong>SessionStart で次セッション冒頭に注入される</strong>。改行は <code>tr</code> で潰されるが内容の検査は無い(段階4 の検収で Major 指摘だった「改行で <code>pending</code> の出力構造が壊れる」は<strong>構造</strong>の修正であって、<strong>内容</strong>は素通しのまま)。委託先が自分の出力に指示文を混ぜれば、そのまま司令塔のコンテキストに載る。tasklist に「段階3 の設計の帰結・本チケット固有の新規リスクではない」として<strong>受容が記録済み</strong>であり、Codex を信頼境界の内側に置く前提なら妥当な割り切り。<strong>その判断を計画書 §10 に 1 行残しておくと、後任が同じ議論を再走しない。</strong></p>
+</div>
+
+<h2 id="s05"><span class="num">05</span>運用懸念</h2>
+
+<div class="finding">
+<h3><span class="badge b-warn">O1</span>委託中の <code>delegate-codex.sh</code> 自己編集で親シェルが死ぬ問題が未対処</h3>
+<p class="where">.steering/20260823-issue6-harness-mode-b/tasklist.md 申し送り</p>
+<p>段階 4 の実測で、Codex が委託スクリプト自身を編集した結果、<strong>実行中の bash が逐次読み込みのオフセットを崩して構文エラーで落ち、run record が running のまま孤児化</strong>した。成果物は無傷だったが、record の手当て(<code>set-status</code>)が毎回要る。§9 に記録済み・回避策候補も併記とのことだが未実装。ハーネス自体を開発対象にするこのリポジトリでは再発が確実な経路なので、対処(スクリプト冒頭で自分を <code>cp</code> して exec する、または関数化して全体を先読みさせる)は #7 より前に入れる価値がある(tasklist 自身は「段階6 までに」としているが、<strong>再発コストを払うのは段階5 の作業中</strong>なので前倒しが得)。</p>
+</div>
+
+<div class="finding">
+<h3><span class="badge b-info">O2</span>run record と <code>.harness/mode</code> はマシンローカル</h3>
+<p class="where">.gitignore:53-54</p>
+<p><code>.harness/mode</code> と <code>codex-runs/</code> は gitignore 対象(設計どおり)。帰結として、<strong>マシン A で委託した未検収がマシン B の SessionStart には出ない</strong>し、モード宣言もマシンごとに独立する。単独開発では問題にならないが、「単一ソース」という言葉から共有状態を連想しやすいので、複数環境(ローカル + Codespaces 等)を併用する場合の注意として README か計画書に 1 行あるとよい。</p>
+</div>
+
+<div class="finding">
+<h3><span class="badge b-info">O3</span>モード B の実測(週枠ベースライン)が未記録</h3>
+<p class="where">tasklist L3(唯一の未完了タスク)</p>
+<p>段階 4 の目的は「週枠の実効寿命がどれだけ延びたかを測る」ことであり、比較の起点となる <code>/usage</code> ベースラインが未記録のままだと効果測定が成立しない。振り返りフェーズで忘れずに(SessionStart が毎回このタスクを注入してくるので忘れにくい構造にはなっている)。</p>
+</div>
+
+<div class="finding">
+<h3><span class="badge b-ok">O4</span>モード戻し忘れへの耐性は確認できた</h3>
+<p class="where">.claude/rules/mode/econ.md・degraded.md</p>
+<p>懸念として検討したが、実装で手当て済みだった: econ / degraded 中は毎セッション冒頭にモードルールが注入され続けるため気づけるし、<code>degraded.md</code> は「戻し忘れ」ケースを明文で扱い、Claude 自身は <code>.harness/mode</code> を書き換えない原則も両ファイルに明記されている。normal 時は何も注入しない(節約対象を食わない)判断も適切。</p>
+</div>
+
+<div class="finding">
+<h3><span class="badge b-ok">O5</span>モード B の手順の実装は運用ルールと整合している</h3>
+<p class="where">add-feature.md / fix-issue.md / econ.md</p>
+<p>「検証スキップ → <code>--draft</code> → マージしない → <code>gh pr ready</code> で自動レビュー起動」の連鎖が、コマンド・ルール・GitHub Actions の 3 か所で同じ内容になっており、draft PR #11 の実測(CI=success / Review=skipped)まで記録されている。「CI が緑なら PR」の因果逆転への注意書きも econ.md に入っている。</p>
+<p><strong>ただし鎖の最後の輪だけ未検証</strong>(2026-08-24 追記): <code>gh pr ready</code> 後にワークフローが起動することは確認できたが、<strong>レビュー本体はシークレット未設定で skip されている</strong>(S7・D6)。運用ルールとコマンドの整合という本項の評価は変わらないが、「積んだ PR は後でまとめてレビューされる」という<strong>モード B の出口が、いまは開いていない</strong>点は S7 の解消まで前提にしないこと。</p>
+</div>
+
+<div class="finding">
+<h3><span class="badge b-info">O6 · 低</span><code>date -u -d</code> は GNU date 専用</h3>
+<p class="where">codex-run.sh:169</p>
+<p>未検収 run の「7 日以上前 = 古い記録」判定に GNU 拡張を使っている。非 GNU 環境(macOS 標準 / BusyBox)では <code>_start_epoch</code> が空になり、<strong>古さの表示が静かに消える</strong>(委託自体は動く)。検収時の Minor 指摘としてコメント明示に留めた判断が入っており、devcontainer 前提のテンプレートなので現状は妥当。ホスト直実行を想定に入れるなら、record 側に epoch を持たせるのが確実(<code>date</code> 実装への依存が消える)。</p>
+</div>
+
+<h2 id="s06"><span class="num">06</span>推奨アクション(優先順)</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>#</th><th>対応</th><th>関連</th><th>目安</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>CLAUDE_CODE_OAUTH_TOKEN</code> を登録する(人間の作業。<strong>未対応</strong>)/ スキップの可視化は <a href="https://github.com/fuji18/claude-codex-template/issues/12">#12</a> に起票済み</td><td>S7・D6</td><td><strong>最優先</strong></td></tr>
+<tr><td>2</td><td><s>計画書の <code>ready_for_review</code> 実測記録を「トリガのみ実証・レビュー実行は未実証」に訂正する</s> <span class="badge b-ok">2026-08-24 対応済み</span>(§2.6 に前提条件、§11 に訂正、§12 手順6 に注記)</td><td>D6</td><td>—</td></tr>
+<tr><td>3</td><td>委託中のスクリプト自己編集対策(コピー実行 or 全体先読み)を入れる</td><td>O1</td><td>#7 着手前</td></tr>
+<tr><td>4</td><td>denylist に <code>.npmrc</code> / <code>.netrc</code> / <code>.git-credentials</code> 等を追加し、走査範囲がワークツリー限定である旨をコメントに明記する</td><td>S1・S2</td><td>小・即可</td></tr>
+<tr><td>5</td><td>seccomp 緩和の理由を <code>README.md</code> の環境構築節に残す(<code>docs/development-guidelines.md</code> は未生成。#4 の宙に浮いた残件)</td><td>D4・S3</td><td>小・即可</td></tr>
+<tr><td>6</td><td>CMD_START のコードスパン誤検知を Issue として起票する</td><td>D3</td><td>起票のみ</td></tr>
+<tr><td>7</td><td>codex-harness.html の進捗表記(ヘッダ・§02・§10)を段階 4 完了に更新し、<code>fix-ci</code> 未実装の印を §06/§09 に付ける</td><td>D1・D2</td><td>段階 4 マージ時</td></tr>
+<tr><td>8</td><td><code>blocked</code> ラベル除外と <code>--background</code> の扱いを #8 のスコープに明記する</td><td>D5・D2</td><td>#8 で</td></tr>
+<tr><td>9</td><td><code>summary</code> 無検査注入を「受容した設計判断」として計画書 §10 に 1 行残す</td><td>S8</td><td>小・即可</td></tr>
+<tr><td>10</td><td>L3(<code>/usage</code> ベースライン)を振り返りで記録する</td><td>O3</td><td>今チケット内</td></tr>
+</tbody>
+</table></div>
+
+<footer>
+レビュー方法: <code>codex-harness.html</code>(183KB)の全文抽出 → 記載された全ファイル(スクリプト 8・hook 2・husky 2・workflow 3・スキル/テンプレート 4・設定 5)の読解 → GitHub API による ruleset / visibility / secret scanning の実測。2026-08-24 の追記では <code>gh api .../actions/secrets</code>・<code>gh run view --json jobs</code>(ステップ単位)・<code>gh pr view --json reviews,comments</code> を追加で実測した。本ページは構成確認用のスナップショットであり、正は <code>docs/template-dev/codex-delegation-plan.md</code> と各実装ファイル。
+</footer>
+</main>
