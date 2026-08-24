@@ -289,7 +289,8 @@ docs/                  永続ドキュメント(プロジェクトの北極星)
                        └ codex-runs/     … Codex 委託の run record と生ログ(gitignore 済み)
 AGENTS.md              Codex 向けの規約(Codex は CLAUDE.md も hooks も読まないため、写像はここだけ)
 .codex/
-└── config.toml        Codex CLI のプロジェクト設定(防衛線ではない。詳細はファイル冒頭のコメント)
+├── config.toml        Codex CLI のプロジェクト設定(防衛線ではない。詳細はファイル冒頭のコメント)
+└── skills/            Codex 用のワークフロー(モード C = 縮退運用でチケットを単独完走する手順)
 .claude/
 ├── agents/            サブエージェント定義(implementer / レビュー系は Sonnet、test-runner は Haiku)
 ├── skills/            スキル(implement-ticket, steering, harness-setup ほか)

@@ -622,7 +622,7 @@ npm ci</code>
         </div>
         <div class="rb-cell">
           <span class="chip codex">Codex</span>
-          <code class="rb-cmd">.codex/prompts の手順</code>
+          <code class="rb-cmd">degraded-mode-ticket スキル</code>
           <span class="rb-note">sandbox はネットワーク無効で <code>gh</code> も無い。<strong>Issue 操作はしない</strong>(ラベル・コメントは Claude 復帰時にまとめて)</span>
         </div>
 
@@ -639,7 +639,7 @@ npm ci</code>
         </div>
         <div class="rb-cell is-risk">
           <span class="chip codex">Codex</span>
-          <code class="rb-cmd">AGENTS.md + .codex/prompts</code>
+          <code class="rb-cmd">AGENTS.md + degraded-mode-ticket</code>
           <span class="rb-warn">Codex が自分で書き自分で ready を立てる(自己認証)= 入口ゲートが効かない。復帰時に design.md 自体をレビュー対象に含めて回収する</span>
         </div>
 
@@ -656,8 +656,8 @@ npm ci</code>
         </div>
         <div class="rb-cell is-key">
           <span class="chip codex">Codex</span>
-          <code class="rb-cmd">codex(直接起動)</code>
-          <span class="rb-note"><strong>delegate スクリプトを通らない唯一の経路。</strong>だから入口検査を <code>.codex/prompts</code> の冒頭にも複製する</span>
+          <code class="rb-cmd">codex -c '…writable_roots=[".git"]'</code>
+          <span class="rb-note"><strong>delegate スクリプトを通らない唯一の経路。</strong>だから入口検査 5 項目を <code>.codex/skills/degraded-mode-ticket/</code> の冒頭にも複製する。<strong><code>writable_roots</code> を渡さないと <code>.git</code> が読み取り専用でコミットできない</strong>(実機で確認)</span>
         </div>
 
         <div class="rb-phase">5 自己修復<small>変更ファイルのみ</small></div>
@@ -922,8 +922,8 @@ npm ci</code>
     <h3>モード C の出口設計</h3>
     <p>Codex はブランチ上にコミットを積むだけで PR を作らない。引き継ぎの単一ソースは <code>.steering/[dir]/codex-log.md</code>(変更・コミット範囲・自己チェック結果・<strong>設計判断</strong>・申し送り)。Claude の枠が回復したら、<strong>差分全文ではなくこのログを起点に</strong>検収 → PR へ合流する。</p>
 
-    <h3>モード C を始める前の 3 条件</h3>
-    <p>司令塔がいないので <strong>Codex 自身が守る</strong>(AGENTS.md に書く)。</p>
+    <h3>モード C を始める前の 4 条件</h3>
+    <p>司令塔がいないので <strong>Codex 自身が守る</strong>(AGENTS.md と <code>degraded-mode-ticket</code> スキルの入口検査に書く)。</p>
 
     <div class="scroller">
       <table>
@@ -932,6 +932,7 @@ npm ci</code>
           <tr class="is-changed"><td class="center num">1</td><td><strong>保護ブランチにいたら feature ブランチを切る</strong></td><td>§06 で追加した <code>.husky/pre-commit</code> が保護ブランチへのコミットを弾く。司令塔がいないため、Codex 自身が切らないと<strong>詰む</strong></td></tr>
           <tr><td class="center num">2</td><td><strong>コミットに <code>Codex-authored: true</code> トレーラーを付ける</strong></td><td>上限で殺されると <code>codex-log.md</code> を書けない。<strong>各コミットが自分で名乗る</strong>ので識別手段が中断に耐える。件名の接頭辞にすると Conventional Commits を壊すため<strong>トレーラーにする</strong></td></tr>
           <tr><td class="center num">3</td><td>Issue 操作(ラベル・コメント)はしない</td><td>sandbox はネットワーク無効で <code>gh</code> も無い。Claude 復帰時にまとめて行う</td></tr>
+          <tr class="is-changed"><td class="center num">4</td><td><strong><code>.git</code> に書けることを確かめる</strong>(2026-08-24 追加)</td><td><strong>sandbox の既定では <code>.git</code> が読み取り専用で <code>git add</code> から失敗する</strong>(実機で確認)。この状態ではモード C が 1 コミットも積めず、キューとして成立しない。人間が起動時に <code>-c 'sandbox_workspace_write.writable_roots=[".git"]'</code> を渡す。<strong>渡し忘れは入口検査で検出して停止する</strong></td></tr>
         </tbody>
       </table>
     </div>
@@ -973,7 +974,7 @@ npm ci</code>
       <div class="route-callers">
         <div class="node claude"><b>Claude 司令塔</b><span>Bash ツールから叩く(モード A・B)</span></div>
         <div class="node human"><b>人間</b><span>端末から直接叩く(モード B・C)</span></div>
-        <div class="node codex"><b>Codex 自身</b><span>.codex/prompts の手順に従う(モード C)</span></div>
+        <div class="node codex"><b>Codex 自身</b><span>degraded-mode-ticket スキルに従う(モード C)</span></div>
       </div>
       <div class="spine"></div>
       <div class="node hub"><b>.claude/scripts/delegate-codex.sh</b><span>入力 = .steering/ のパス &nbsp;/&nbsp; 出力 = サマリーのみ</span></div>
@@ -1193,7 +1194,7 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
           <tr><td>PostToolUse の prettier / lint 自動実行</td><td class="center yes">✓</td><td class="center no">✗</td><td>AGENTS.md で自己実行を義務化(<strong>変更ファイルのみ</strong>。全体フォーマットは司令塔の並行編集を書き潰す)</td></tr>
           <tr><td>危険コマンドのブロック</td><td class="center yes">✓</td><td class="center no">✗</td><td><code>.codex/config.toml</code> の sandbox で張り直す</td></tr>
           <tr class="is-changed"><td>保護ブランチへの直接コミット</td><td class="center yes">✓</td><td class="center yes">✓</td><td><strong><code>.husky/pre-commit</code> に移植(今回)</strong></td></tr>
-          <tr><td>現在地の自動注入(SessionStart)</td><td class="center yes">✓</td><td class="center no">✗</td><td><code>.codex/prompts/</code> or playbook(段階5)</td></tr>
+          <tr><td>現在地の自動注入(SessionStart)</td><td class="center yes">✓</td><td class="center no">✗</td><td class="is-changed"><strong><code>.codex/skills/degraded-mode-ticket/</code>(段階5 で実装済み)</strong></td></tr>
           <tr><td>実装フェーズの委譲強制</td><td class="center yes">✓</td><td class="center na">—</td><td>Codex は実装者側のため不要</td></tr>
           <tr><td>最新 steering の判定</td><td class="center yes">✓</td><td class="center yes">✓</td><td><code>latest-steering.sh</code> はシェルなので共有できる</td></tr>
         </tbody>
@@ -1215,7 +1216,7 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
         <tbody>
           <tr><td class="mono">AGENTS.md</td><td><span class="chip todo">merge</span></td><td>雛形はテンプレート、検証コマンドはスタック依存でプロジェクトが書き換える</td></tr>
           <tr><td class="mono">.codex/config.toml</td><td><span class="chip todo">merge</span></td><td>sandbox 既定はテンプレートの方針、model / effort はプロジェクト裁量</td></tr>
-          <tr><td class="mono">.codex/prompts/</td><td><span class="chip todo">owned</span></td><td>ワークフローの写像。<code>.claude/commands/</code> と同じ扱い</td></tr>
+          <tr class="is-changed"><td class="mono">.codex/skills/</td><td><span class="chip todo">owned</span></td><td>ワークフローの写像。<code>.claude/commands/</code> と同じ扱い。<strong>2026-08-24 に登録</strong>(旧称 <code>.codex/prompts/</code> は実在しないと確定し撤回済み)。<strong><code>.codex/</code> は Codex 自身が書き込めない</strong>ため保守は Claude / 人間が担う</td></tr>
           <tr><td class="mono">.harness/</td><td><span class="chip todo">never</span></td><td>ローカルの一時状態。ただし <strong>gitignore するのは <code>mode</code> と <code>codex-runs/</code> だけ</strong>(<code>decisions.jsonl</code> は永続ログなので追跡する)</td></tr>
         </tbody>
       </table>
@@ -1395,15 +1396,15 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
         <div class="stage-body"><b>実装委託</b><span><code>delegate-codex.sh impl</code> + 終了コード契約 + run record + <code>/add-feature</code> / <code>/next-ticket</code> / <code>/fix-issue</code> の分岐改訂・ <code>codex-run.sh</code> ・ <a href="https://github.com/fuji18/claude-codex-template/issues/5">Issue #5</a></span></div>
         <span class="chip ok">完了</span>
       </div>
-      <div class="stage">
+      <div class="stage is-done">
         <span class="stage-n">04</span>
-        <div class="stage-body"><b>モード B</b><span><code>.harness/mode</code> + SessionStart 注入。週枠の実効寿命がどれだけ延びたかを測る ・ <a href="https://github.com/fuji18/claude-codex-template/issues/6">Issue #6</a></span></div>
-        <span class="chip todo">未着手</span>
+        <div class="stage-body"><b>モード B</b><span><code>.harness/mode</code> + SessionStart 注入。週枠の実効寿命がどれだけ延びたかを測る<span class="note"> — 2026-08-23 完了</span> ・ <a href="https://github.com/fuji18/claude-codex-template/issues/6">Issue #6</a></span></div>
+        <span class="chip ok">完了</span>
       </div>
-      <div class="stage">
+      <div class="stage is-done">
         <span class="stage-n">05</span>
-        <div class="stage-body"><b>モード C</b><span><code>.codex/prompts/</code> + <code>codex-log.md</code> 運用。Claude 不在で 1 チケット完走できるか ・ <a href="https://github.com/fuji18/claude-codex-template/issues/7">Issue #7</a></span></div>
-        <span class="chip todo">未着手</span>
+        <div class="stage-body"><b>モード C</b><span><code>.codex/skills/degraded-mode-ticket/</code>(入口検査 5 項目)+ <code>codex-log.md</code> 運用 + 起動コマンドの確定。<strong>実機検証で <code>.codex/</code> と <code>.git</code> が書き込み不可と判明し、後者はモード C の成立条件そのものだった</strong><span class="note"> — 2026-08-24 完了</span> ・ <a href="https://github.com/fuji18/claude-codex-template/issues/7">Issue #7</a></span></div>
+        <span class="chip ok">完了</span>
       </div>
       <div class="stage">
         <span class="stage-n">06</span>
@@ -1450,15 +1451,16 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
 
     <details class="callout done">
       <summary class="callout-label">§13 #4・#6 の決着(2026-08-23 実機)</summary>
-      <p><strong>#4(<code>.codex/prompts/</code> の project スコープ対応)</strong>: <span class="chip gap">存在しない</span> v0.149.0 に <code>prompts</code> サブコマンドは無く、<code>~/.codex/</code> にも <code>prompts/</code> は無い。ネイティブバイナリの文字列走査でも <code>.codex/prompts</code> / <code>CODEX_HOME/prompts</code> は 0 件。<strong>カスタムプロンプトの仕組みは skills に置き換わっている</strong>(<code>CODEX_HOME/skills</code> と <code>/.codex/skills</code> の両方が出る)。project スコープのレイヤ自体は存在するが実機の動作確認は未実施 — 段階5(<a href="https://github.com/fuji18/claude-codex-template/issues/7">#7</a>)で確認し、動かなければ <code>docs/playbook/codex-standalone.md</code> に降格する。</p>
+      <p><strong>#4(<code>.codex/prompts/</code> の project スコープ対応)</strong>: <span class="chip gap">存在しない</span> v0.149.0 に <code>prompts</code> サブコマンドは無く、<code>~/.codex/</code> にも <code>prompts/</code> は無い。ネイティブバイナリの文字列走査でも <code>.codex/prompts</code> / <code>CODEX_HOME/prompts</code> は 0 件。<strong>カスタムプロンプトの仕組みは skills に置き換わっている</strong>(<code>CODEX_HOME/skills</code> と <code>/.codex/skills</code> の両方が出る)。<strong>2026-08-24(段階5)に <code>.codex/skills/</code> の project スコープを実機確認し、<span class="chip ok">発見・本文ロードとも動作</span></strong> — プローブスキルを置いて <code>codex exec</code> でスキル一覧に載ること、呼ぶと Codex 自身が <code>SKILL.md</code> を読んで内容を使うことを確認した。<strong><code>docs/playbook/codex-standalone.md</code> への降格は発生しなかった。</strong></p>
       <p><strong>#6(<code>resetAt</code> の取得可否)</strong>: <span class="chip ok">単位は確定</span> 5 時間枠 + 週次。<span class="chip gap">resetAt は未取得</span> <code>codex exec --json</code> からは取れないと確定した。成功した委託 1 回(114,919 B)のイベント型は <code>thread.started</code> / <code>turn.started</code> / <code>item.started</code> / <code>item.completed</code> / <code>turn.completed</code> の 5 種のみで、<code>turn.completed</code> が持つのは <code>usage</code> だけ。<code>resets_at</code> / <code>rate_limit</code> は 0 件。バイナリにある <code>AccountRateLimitsUpdated</code> は app-server プロトコル側の通知で <code>exec</code> には流れない。<strong>採用する代替: 「待つ」判断を人間に委ねる(§12.6)</strong>。スクリプトの <code>resets_at</code> 抽出はそのまま残す(上限時のエラー出力に出れば埋まる。出なければ <code>null</code>)。</p>
     </details>
 
     <ul>
       <li><s><strong>Codex CLI は現在この devcontainer に未インストール。</strong></s> <strong>2026-08-23 解消</strong> — v0.149.0 を導入して認証・sandbox 起動まで実機で確認し、<code>post_create.sh</code> に<strong>インストールを恒久化した</strong>(上の callout)。<strong>認証キャッシュ <code>~/.codex/auth.json</code> は永続化しない(決定・2026-08-23)</strong> — <code>mounts</code> を張らず、リビルド後は <code>codex login</code> で入り直す運用にする(理由は §12.4 の決定ログを参照)</li>
-      <li><s><strong><code>.codex/prompts/</code> の project スコープ対応が未確認。</strong></s> <strong>2026-08-23 決着</strong> — そもそも存在しない。カスタムプロンプトの仕組みは <code>.codex/skills/</code> に置き換わっている(project スコープの実機確認は段階5(<a href="https://github.com/fuji18/claude-codex-template/issues/7">#7</a>)へ)</li>
+      <li><s><strong><code>.codex/prompts/</code> の project スコープ対応が未確認。</strong></s> <strong>2026-08-24 完全決着</strong> — <code>.codex/prompts/</code> はそもそも存在せず、代替の <code>.codex/skills/</code> は project スコープで動作することを実機で確認した。<strong>これで §13 の未確認事項はすべて解消</strong></li>
       <li><s><strong><code>resetAt</code> の取得可否。</strong></s> <strong>2026-08-23 決着</strong> — リセット単位(5 時間枠 + 週次)は確定。<code>resetAt</code> は <code>codex exec --json</code> からは取得不可と確定。「待つ」判断は人間に委ねる(§12.6)</li>
       <li><strong>GitHub のブランチ保護が使えるプランか。</strong> 現状このリポジトリは Free の private で <code>403 Upgrade to GitHub Pro</code> が返る。残る穴 3 件のうち 2 件をブランチ保護に集約している設計なので、<strong>モード C(Codex にコミット権)へ進む前に決着が要る</strong>(§07)</li>
+      <li class="is-changed"><strong>【2026-08-24 に新規判明】<code>.codex/</code> と <code>.git</code> は Codex 自身が書き込めない。</strong> <code>--sandbox workspace-write</code> でも両方が保護される。<code>.codex/</code> の帰結は「skill の保守は Claude / 人間が担う」で済むが、<strong><code>.git</code> は重い</strong> — <code>git add</code> の時点で失敗するため、<strong>既定のままではモード C が 1 コミットも積めず、キューとして成立しない</strong>。起動時に <code>-c 'sandbox_workspace_write.writable_roots=[".git"]'</code> を渡すことで解決し、渡し忘れは入口検査5で検出する。<strong><code>.codex/config.toml</code> には書かない</strong>(モード A・B ではコミット禁止であり、<code>.git</code> が書けないこと自体が sandbox レベルの担保になっているため)</li>
       <li><strong>環境構築手順で <code>npm ci</code> を担保する必要がある。</strong> 今回の作業開始時点で husky は無効(<code>core.hooksPath</code> 未設定)であり、移植前の <code>lint-staged</code> すら動いていなかった</li>
     </ul>
   </section>
@@ -1662,13 +1664,14 @@ does not allow non-privileged user namespaces.</code></pre>
 
     <h3>12.5 モード運用中、恒常的に人間が担うもの</h3>
 
-    <p>モード C は「Codex + 人間」であって Codex 単独ではない。自動化されていないのは次の 4 点。</p>
+    <p>モード C は「Codex + 人間」であって Codex 単独ではない。自動化されていないのは次の 5 点。</p>
 
     <div class="scroller">
       <table>
         <thead><tr><th>操作</th><th>なぜ人間が要るか</th></tr></thead>
         <tbody>
           <tr><td><code>.harness/mode</code> の切替宣言</td><td>Claude は自動降格しない。上限に当たったことを人間が宣言する</td></tr>
+          <tr class="is-changed"><td><strong>起動時に <code>.git</code> の書き込みを許可する</strong><br><code>codex --sandbox workspace-write -c 'sandbox_workspace_write.writable_roots=[".git"]'</code></td><td><strong>これを渡さないと <code>git add</code> から失敗し、モード C が成立しない</strong>(2026-08-24 に実機で判明)。<code>.codex/config.toml</code> に書くと全モードに効いてしまい、コミット禁止のモード A・B の担保を壊すため、<strong>起動時に限定して渡す</strong>。渡し忘れは入口検査5が検出して停止する</td></tr>
           <tr><td>feature ブランチにいることの確認</td><td>保護ブランチ上では委託そのものを始めない</td></tr>
           <tr><td>draft PR を先に開く</td><td>開かないとモード C 中は CI が一度も走らない(§05)</td></tr>
           <tr><td>区切りごとの <code>git push</code></td><td>Codex はネットワーク無効かつ push 禁止のため、自分では送れない</td></tr>

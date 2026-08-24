@@ -43,7 +43,7 @@ Claude Code を主環境としつつ、**実装フェーズを Codex に移管�
 .claude/scripts/delegate-codex.sh <mode> <target>
    ├─ 通常時: Claude 司令塔が Bash ツールから叩く
    ├─ 上限時: 人間がターミナルから直接叩く
-   └─ 縮退時: Codex 自身が .codex/prompts の手順に従って叩く
+   └─ 縮退時: Codex 自身が .codex/skills/degraded-mode-ticket/ の手順に従って叩く
 ```
 
 入力(`.steering/` のパス)も出力(サマリー)も同一なので、**ハーネスの二重管理が起きない**。Cursor 案が抱えた恒久的負債の回避がここで効く。
@@ -56,7 +56,7 @@ Claude Code を主環境としつつ、**実装フェーズを Codex に移管�
 | --- | --- | --- | --- | --- | --- | --- |
 | **A 通常** | Claude 枠に余裕 | Claude Opus | **Codex** | Claude(code-reviewer + `/check`) | Claude | Claude |
 | **B 節約** | 残枠わずか | Claude Opus(`design.md` を書いて即終了) | **Codex** | Codex セルフ + CI | Claude | Claude |
-| **C 縮退** | Claude 上限到達 | **Codex**(AGENTS.md + `.codex/prompts`) | **Codex** | Codex セルフ + CI | **Codex** | **Claude 復帰後**(§2.3) |
+| **C 縮退** | Claude 上限到達 | **Codex**(AGENTS.md + `.codex/skills/degraded-mode-ticket/`) | **Codex** | Codex セルフ + CI | **Codex** | **Claude 復帰後**(§2.3) |
 
 ### 2.1 モード B が主力である理由
 
@@ -517,11 +517,11 @@ CLI フラグ / -c  >  project config(.codex/config.toml)  >  profile
 - `.codex/config.toml` の位置づけは「**人間が `codex` を直接叩くとき(モード C)の既定**」に下げる
 - なお project-local で無視されるキーは `openai_base_url` / `chatgpt_base_url` / `model_provider` / `model_providers` / `notify` / `profile` / `profiles` / `otel` 等。`sandbox_mode` と `[sandbox_workspace_write]` 自体は project でも設定できるが、**上のレイヤに負ける**という別の理由で当てにならない
 
-### 7.3 `.codex/prompts/`(モード C 用ワークフロー)
+### 7.3 `.codex/skills/`(モード C 用ワークフロー / 旧称 `.codex/prompts/`)
 
-> **読み替え注記(2026-08-23、§13 #4)**: `.codex/prompts/` は実機(v0.149.0)に**存在しないと確定した**。カスタムプロンプトの仕組みは `.codex/skills/` に置き換わっている(project スコープのレイヤ自体は存在するが実機の動作確認は未実施)。以下の記述は `.codex/prompts/` を `.codex/skills/` に読み替えて理解すること。実機確認は段階5([#7](https://github.com/fuji18/claude-codex-template/issues/7))で行う。
+> **読み替え注記(2026-08-24、段階5 / #7)**: `.codex/prompts/` は実機(v0.149.0)に存在せず、カスタムプロンプトの仕組みは `.codex/skills/` に置き換わっている(2026-08-23 に判明)。2026-08-24 に project スコープの `.codex/skills/` を実機確認し、**発見と本文ロードの両方が動作した**。実体は `.codex/skills/degraded-mode-ticket/SKILL.md` であり、`docs/playbook/codex-standalone.md` への降格は不要になった。
 
-`/next-ticket` 相当の手順を Codex 側に複製する。**project スコープのカスタムプロンプトに Codex CLI が対応しているかは着手時に要検証**(`~/.codex/prompts/` のユーザースコープは対応が確認できている)。対応していない場合は `docs/playbook/codex-standalone.md` に手順書を置き、人間が起動時に参照させる形へ降格する。
+`/next-ticket` 相当の手順を Codex 側に複製する。**project スコープが効くかは着手時に要検証**としていたが、上の注記のとおり段階5 で実機確認して成立した。したがって `docs/playbook/codex-standalone.md` への降格は**発生しなかった**(この分岐は決着済みで、以降は検討しなくてよい)。
 
 **冒頭に入口検査を必ず置く(重要)。** モード C は `delegate-codex.sh` を通らない**唯一の経路**であり、§3.2 の機械的な入口検査がここだけ効かない。人間向けランブック(§12.3 手順2〜3)にしか無い状態にすると、忘れたときに**ガード不在のまま Codex にコミットさせる**ことになる。プロンプト/手順書の先頭を次の順で固定する:
 
@@ -674,7 +674,8 @@ AGENTS.md も `.codex/` も現在マニフェストに**未登録**で、`/sync-
 | --- | --- | --- |
 | `AGENTS.md` | `merge` | テンプレートが雛形を持つが、検証コマンドはスタック依存でプロジェクトが書き換える(`.claude/settings.json` と同じ位置づけ) |
 | `.codex/config.toml` | `merge` | sandbox 既定はテンプレートの方針、model / reasoning_effort はプロジェクト裁量 |
-| ~~`.codex/prompts/`~~ | — | **登録を撤回(2026-08-23、§13 #4)**: `.codex/prompts/` は Codex CLI に存在しないと実機で確定したため、マニフェストから削除した。段階5([#7](https://github.com/fuji18/claude-codex-template/issues/7))で `.codex/skills/` を実機確認したうえで改めて区分を決める |
+| ~~`.codex/prompts/`~~ | — | **登録を撤回(2026-08-23、§13 #4)**: `.codex/prompts/` は Codex CLI に存在しないと実機で確定したため、マニフェストから削除した |
+| `.codex/skills/` | `owned` | **段階5(2026-08-24)で登録**: project スコープが効くことを実機確認したうえで区分を決めた。中身はテンプレート所有の運用手順で、プロジェクトが書き換える前提のものではない(`.codex/config.toml` が `merge` なのは sandbox 設定にプロジェクト裁量があるためで、性質が異なる)。**`.codex/` は Codex 自身が書き込めない**ため、保守は Claude か人間が担う(§9) |
 | `.harness/` | `never` | ハーネスのローカル状態。**gitignore するのは `mode` と `codex-runs/` だけ**(下記) |
 
 **`.harness/` を丸ごと gitignore してはいけない。** `.harness/decisions.jsonl`(横断的な判断ログ)は `harness-setup` スキルが「削除禁止・追記のみ」と定めた**永続ログ**であり、README のディレクトリ構造にも載っている。今回追加するのは一時状態だけなので、`.gitignore` に書くのは次の 2 行に限定する:
@@ -692,7 +693,8 @@ AGENTS.md も `.codex/` も現在マニフェストに**未登録**で、`/sync-
 
 - **サブスク併用の限界**: ChatGPT Plus も Codex 側のレート制限を持つ。**両方枯れれば止まる**。モード C は数日しのぎであり、恒久解は「モード B で Claude 枠の実効寿命を延ばす」こと
 - **サンドボックスの穴**: Codex の内部コマンドは Claude の hooks / permissions を通らない。**防衛線は `delegate-codex.sh` が渡す `--sandbox` フラグ**であり、`.codex/config.toml` ではない(CLI フラグに負け、untrusted では読まれもしない。§7.2)。加えて **Codex にはパス単位の読み取り除外が存在しない**ため、機密の送信を止める層は `delegate-codex.sh` の入口検査だけになる(§3.2)
-- **`.git` は Codex の `workspace-write` sandbox で読み取り専用**: `git update-index` を含む index 操作は委託先では必ず失敗する。**`.git` を書き換えるタスクは委託対象外**とし、コミットを Codex に担わせるモード C の設計では段階5(#7)で成立条件を必ず検証する
+- **`.codex/` は Codex 自身が書き込めない**: `--sandbox workspace-write` でも `.codex/` はエージェントの書き込みから保護される。テンプレート所有の `.codex/` 配下は Claude または人間が保守し、モード C の実行中に Codex 自身が skill を修正する運用にはしない
+- **`.git` は Codex の `workspace-write` sandbox で既定では読み取り専用**: 段階5(#7)の実機検証では、`--sandbox workspace-write` のみだと `git add` が失敗した。一方、モード C の起動時に `-c 'sandbox_workspace_write.writable_roots=[".git"]'` を追加するとコミットできることを確認済み。`.codex/config.toml` には設定せず、モード A・B では sandbox レベルでもコミット不能な状態を維持し、コミットが必要なモード C に限って人間が起動時に許可する。渡し忘れは `degraded-mode-ticket` skill の入口検査で検出し、起動し直す
 - **委託先が `delegate-codex.sh` 自身を編集すると、実行中の親プロセスが壊れる**(2026-08-23 に実機で発生): bash はスクリプトを**逐次読み込み**するため、実行中のファイルが書き換わると次に読むオフセットがずれ、無関係な行で構文エラーになって死ぬ。段階4 の委託(タスクにこのスクリプトの改修を含んでいた)が実際にこれで落ち、**Codex 側は全タスクを完遂していたのに run record は `running` のまま孤児化した**(status と summary を書くのは死んだ親プロセスの仕事だったため)。テンプレート自身の開発では委託対象にハーネス層が入るのが常態なので、**再発する**。回避策の候補は (a) 本体を関数で包んで最終行まで読ませてから実行する、(b) 起動時に自身を一時ディレクトリへコピーして `exec` する、のいずれか。**未対処**(段階6 までに判断する)
 - **コストの見え方が二系統になる**: Claude(サブスク/API)と OpenAI(ChatGPT サブスク)。監視は利用者責任(README 免責に追記)
 - **委託を挟んだ `/clear` は「してよい」**(初版から方針を反転): run record(§3.2)+ SessionStart 注入(§3.4)があれば、状態は会話ではなくファイルに載っているため復帰できる。むしろ**計画フェーズ直後はコンテキストが最も膨らんでいるので、そこで捨てるのが最大の節約**になる
@@ -773,7 +775,7 @@ Codex が「並行実装」と「第二意見レビュー」を担うなら、�
 | **2. 最小ハーネス** ✅ **完了(2026-08-20)** | AGENTS.md・`.codex/config.toml`・`delegate-codex.sh`(`explore` / `review` のみ)+ マニフェスト登録(§8.2) | 3 ファイル + `template-manifest.json` / `.gitignore` / `.prettierignore` / `/sync-docs` 改訂 | 読み取り委託の品質。書き込みが無いので安全。**ただし Codex CLI 未導入のため検証できたのは「経路が正しく壊れること」まで**(下記) |
 | **3. 実装委託** ✅ **完了(2026-08-23)** | `delegate-codex.sh impl` + 終了コード契約(§3.2)+ run record + `/next-ticket` の分岐(§4.1) | スクリプト + コマンド改訂 | 検収の往復回数(§10.7 に記録)/ 中断からの回復(§12.6) |
 | **4. モード B** ✅ **完了(2026-08-23)** | `.harness/mode` + **未検収委託の SessionStart 注入(§3.4)** + モード B の司令塔作法 | hook 改訂 | **週枠の実効寿命がどれだけ延びたか** / 委託を挟んだ `/clear` が破綻しないか |
-| **5. モード C** | `.codex/prompts/` or `docs/playbook/codex-standalone.md` + `codex-log.md` 運用 | プロンプト集 | Claude 不在で 1 チケット完走できるか |
+| **5. モード C** ✅ **完了(2026-08-24)** | `.codex/skills/degraded-mode-ticket/`(入口検査5項目)+ `codex-log.md` 運用 + モード C の起動コマンド確定(§12.3) | スキル | Claude 不在で 1 チケット完走できるか |
 | **6. チケット統合** | `delegate:codex` ラベル + README 追記 | ラベル運用 | チケット丸ごと委託 |
 
 - 各段階で価値が確認できなければ**そこで止めてよい**(段階 2 の読み取り用途だけでも第二意見としての価値は成立する)
@@ -857,7 +859,7 @@ Codex CLI が未インストール(段階0 が未達)のため、確かめられ
 2. **保護ブランチにいないことを確認する**(§2.3 の開始条件 1。いれば feature ブランチを切ってから始める)
 3. **依存がインストール済みで、`git config core.hooksPath` が設定済みであることを確認する**(§3.2 の入口検査。ネットワーク無効の sandbox では Codex 自身が復旧できない)
 4. (推奨)**人間が draft PR を先に開く** — これをしないとモード C 中は CI が一度も走らない(§9)
-5. Codex に `.codex/prompts`(or `docs/playbook/codex-standalone.md`)の手順で計画〜実装〜コミットまでさせる
+5. `codex --sandbox workspace-write -c 'sandbox_workspace_write.writable_roots=[".git"]'` で Codex を起動する。その後「`degraded-mode-ticket` スキルを使って作業して」と指示し、`.codex/skills/degraded-mode-ticket/SKILL.md` の手順で計画〜実装〜コミットまでさせる
 6. Codex は `codex-log.md` に作業ログ・**設計判断**・申し送りを追記し、コミットには `Codex-authored: true` トレーラーを付ける。**PR も Issue 操作もしない**
 7. **人間が区切りごとに push する** — Codex はネットワーク無効かつ push 禁止(§7.1)なので、これをしない限りコミットはローカルに留まり CI に届かない(§9)
 8. Claude の枠が回復したら §2.3 の手順(設計判断の回収を含む)で検収 → PR に合流する
@@ -925,12 +927,12 @@ Codex CLI が未インストール(段階0 が未達)のため、確かめられ
 | 1 | `codex exec` のオプション体系と sandbox の指定方法 | ✅ **確定 → 2026-08-23 に実機で再確認(v0.149.0)**。`-C/--cd` / `-s/--sandbox` / `--json` / `--color` / `-o/--output-last-message` すべて実在し、`delegate-codex.sh` の呼び出しは無修正で通る。`codex login status` は未認証で exit 1。`codex exec [--cd,-C] [--sandbox,-s read-only\|workspace-write\|danger-full-access] [--json] [--output-last-message,-o PATH] [--model,-m] [-c key=value] [--color] PROMPT`。再開は `codex exec resume [SESSION_ID] [--last]`。認証確認は `codex login status`(**ログイン済みなら exit 0** と公式が自動化向けに明記) | 実仕様に合わせて `delegate-codex.sh` を書き直す(§3.1) |
 | 2 | **レート上限に固有の終了コードを返すか** | ✅ **返さない**。ただし `--json` のイベントに `rate_limit_reached` / `usage_limit_reached` / `credits_depleted` という**識別子**が流れる。文言マッチより良い材料が使える(§3.2 に反映済み) | stderr のパターンマッチに降格(§3.2)。誤検知するので生エラーを run record に必ず残す |
 | 3 | サンドボックスのネットワーク無効が **CLI 自身の通信を妨げないか** | ✅ **妨げない**。sandbox はエージェントが実行する**コマンド**に掛かる層で、CLI 自身のモデル API 通信は外側 | 妨げるならネットワーク無効を諦め、防衛線を §8 に寄せる |
-| 4 | `.codex/prompts/` の project スコープ対応 | ❌ **そもそも存在しない(2026-08-23 実機)**。v0.149.0 に `prompts` サブコマンドは無く、`~/.codex/` にも `prompts/` は無い。ネイティブバイナリの文字列走査でも `.codex/prompts` / `CODEX_HOME/prompts` は 0 件。**カスタムプロンプトの仕組みは skills に置き換わっている**(`CODEX_HOME/skills` と `/.codex/skills` の両方が出る)。project スコープのレイヤ自体は存在するが**実機の動作確認は未実施** | 段階5(#7)で `.codex/skills/` を実機確認し、動かなければ `docs/playbook/codex-standalone.md` に降格(§7.3) |
+| 4 | `.codex/prompts/` の project スコープ対応(→ `.codex/skills/` で決着) | ❌ **そもそも存在しない(2026-08-23 実機)**。v0.149.0 に `prompts` サブコマンドは無く、`~/.codex/` にも `prompts/` は無い。ネイティブバイナリの文字列走査でも `.codex/prompts` / `CODEX_HOME/prompts` は 0 件。**カスタムプロンプトの仕組みは skills に置き換わっている**(`CODEX_HOME/skills` と `/.codex/skills` の両方が出る)。✅ **`.codex/skills/` の project スコープは 2026-08-24 に実機で確定**し、発見と本文ロードの両方が動作した | ~~段階5(#7)で実機確認し、動かなければ `docs/playbook/codex-standalone.md` に降格~~ → **降格は発生しなかった**(§7.3) |
 | 5 | Codex CLI がこの devcontainer で動くか | ✅ **確定(2026-08-23)**。導入・認証(`chatgpt` モード)・sandbox 起動・WebSocket 疎通(HTTP 101)まで実機で確認し、`codex doctor` は全項目 ✓。未認証時に出ていた WebSocket 警告は**認証で消えた**(ネットワークではなく認証が原因だった)。sandbox は seccomp 修正が前提(§11)。導入は `post_create.sh` で恒久化済み | 認証キャッシュ `~/.codex/auth.json` はリビルドで消える。**#4 で「永続化しない」と決定した**(`mounts` を張らず `codex login` で入り直す。理由は §11) |
 | 6 | レート上限のリセット単位(5 時間枠 / 週次)と `resetAt` の取得可否 | ✅ **単位は確定**(5 時間枠 + 週次)。**`resetAt` は `codex exec --json` からは取れないと確定(2026-08-23 実機)**。成功した委託 1 回(114,919 B)のイベント型は `thread.started` / `turn.started` / `item.started` / `item.completed` / `turn.completed` の 5 種のみで、`turn.completed` が持つのは `usage` だけ。`resets_at` / `rate_limit` は 0 件。バイナリにある `AccountRateLimitsUpdated` は app-server プロトコル側の通知で exec には流れない | **これを採用**: 「待つ」判断を人間に委ねる(§12.6)。スクリプトの `resets_at` 抽出はそのまま残す(上限時のエラー出力に出れば埋まる。出なければ `null`) |
 | 7 | **`.codex/config.toml` にパス単位の読み取り除外があるか** | ✅ **存在しない**。sandbox は**書き込み**の制限であり、読み取りの deny-list は無い。`delegate-codex.sh` の機密事前チェックが**唯一の層**として確定した(段階2 で実装済み) | 無ければ `delegate-codex.sh` の事前チェック(§3.2)だけが防衛線になる。当てにせず 1 段目を必ず実装する |
 
-**現状(2026-08-23 更新): #1〜#3・#5〜#7 が確定し、#4 は「対象が存在しない」という形で決着した。** 未確認として残るのは `.codex/skills/` の project スコープが実際に効くか(段階5 / [#7](https://github.com/fuji18/claude-codex-template/issues/7))だけである。
+**現状(2026-08-24 更新): #1〜#7 はすべて確定済みで、未確認事項はない。** #4 は `.codex/prompts/` が存在しないという形で決着し、代替となる `.codex/skills/` の project スコープも実機で発見・本文ロードの動作を確認した。
 
 > **公開仕様での確定は実機検証の代わりにならない点に注意する。** #1 は「ドキュメントに書かれたフラグ体系」が確定しただけで、`delegate-codex.sh` が実際に Codex を正しく駆動できるかは段階3 で初めて分かる。段階2 のスタブ検証は**自分が書いた契約を自分で満たしているか**しか見ていない。
 
