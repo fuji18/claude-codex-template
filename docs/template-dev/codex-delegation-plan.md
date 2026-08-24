@@ -178,6 +178,14 @@ Codex 側の中断は §12.6 で扱うが、**Claude が計画途中で上限に
 
 枠が戻ったときに `ready_for_review` に切り替えると、`types: [opened, ready_for_review]` により**自動でレビューが起動する**。「溜まった PR をまとめてレビュー」はこの機構にそのまま乗る運用であって、手動でレビューを呼び直す必要はない。
 
+**前提: リポジトリの Actions シークレットに `CLAUDE_CODE_OAUTH_TOKEN` が登録されていること。** 未登録だとワークフローは起動するものの `Run Claude Code Review` ステップが `if: env.CLAUDE_TOKEN != ''` で skip され、**ジョブは `success` を返すのにレビューは一度も行われない**(PR 上では緑のチェックと見分けがつかない)。`@claude` メンション経路(`claude.yml`)も同じシークレットに依存する。モード B は「積んだ draft を枠の回復後にまとめてレビューする」ことを出口に置く設計なので、**この登録は運用開始の前提条件**であり、未登録のまま積むと出口の無いキューになる。**ジョブの `success` はレビュー実施を意味しない** — §3 の「`exit 0` がタスクの成否を表さない」と同型の取り違えなので、緑を根拠にマージしない。
+
+**可視化を入れた(Issue #12 / 2026-08-24)。** 上の取り違えは運用の注意書きだけでは防げないため、
+`claude-code-review.yml` / `claude.yml` にシークレット未設定時だけ走る通知ステップを追加した。
+skip すると run の annotation(`::warning`)と job summary に「レビュー未実行 / 応答なし」が残る。
+**ガードも `success` という結論も変えていない** — 未設定の配布先で無関係な PR まで赤くしないため。
+変えたのは沈黙だけで、「緑 = レビュー済み」の誤読を run 上で否定できるようにした。
+
 急ぐ場合の例外は**ユーザーが明示的に判断する**(司令塔の裁量で既定にしない)。
 
 ---
@@ -785,7 +793,9 @@ Codex が「並行実装」と「第二意見レビュー」を担うなら、�
   **検収の往復は 1 回**(§10.7 の記録は `.harness/decisions.jsonl`)。実装の fork は差し戻し 0 回で完走したが、`code-reviewer` が Critical 1 件・Major 4 件を出した。Critical は **`rec_field` の sed フォールバックが `pid` の末尾カンマを飲み込み、`kill -0 "82711,"` が常に失敗して再入防止が jq 不在環境で静かにフェイルオープンしていた**もの。**段階2 と同じ形の事故が再発している** — 「検査を書いたら空振りする条件を列挙する」だけでは足りず、**その条件を実際に再現するテストまで要る**(今回のスタブ検証は `accepted` が JSON の末尾フィールドでカンマが付かないため、この経路を通らなかった)
 - **段階4 完了(2026-08-23)**: モード読み取りを `harness-mode.sh` に集約し、Claude の SessionStart と Codex の `delegate-codex.sh` という 2 系統の読み手が同じ値を返す構造にした。未検収 run record は `codex-run.sh pending` が整形し、hook に判定を直書きしない。SessionStart 注入は `/clear` だけでなく **`startup` でも出す**。モード B の既定経路が「司令塔がセッションを閉じる → 人間が委託 → 新セッションを開く」であり、再開が `/clear` とは限らないため。
 
-  **draft PR の実機確認(2026-08-23)**: 本チケットの PR([#11](https://github.com/fuji18/claude-codex-template/pull/11))を**意図的に draft で開いて**確かめた。結果は `CI | pull_request | success` / `Claude Code Review | pull_request | skipped`。**§2.6 の主張どおり、draft では機械的検証だけが走りレビューは走らない。** 正確には `claude-code-review.yml` の**ワークフローは起動するがジョブが `if: draft == false` で skip される**ため、Claude の枠は消費されない。その後 `gh pr ready` で `ready_for_review` に切り替えたところ、`types: [opened, ready_for_review]` により**同じワークフローが今度は skip されずに `success` まで走った**(同一 PR で両方を実測)。**§2.6 の「枠が戻ったら ready_for_review に切り替えるだけでレビューが自動起動する」は実機で成立している。**
+  **draft PR の実機確認(2026-08-23)**: 本チケットの PR([#11](https://github.com/fuji18/claude-codex-template/pull/11))を**意図的に draft で開いて**確かめた。結果は `CI | pull_request | success` / `Claude Code Review | pull_request | skipped`。**§2.6 の主張どおり、draft では機械的検証だけが走りレビューは走らない。** 正確には `claude-code-review.yml` の**ワークフローは起動するがジョブが `if: draft == false` で skip される**ため、Claude の枠は消費されない。その後 `gh pr ready` で `ready_for_review` に切り替えたところ、`types: [opened, ready_for_review]` により**同じワークフローが今度はジョブレベルの skip をせずに `success` を返した**(同一 PR で両方を実測)。
+
+  **訂正(2026-08-24)**: 当初ここに「レビューが実機で自動起動することを確認した」と記録していたが、**それは実証できていない**。ジョブは走ったが、その内側の `Run Claude Code Review` ステップは `if: env.CLAUDE_TOKEN != ''` を満たさず **skipped** だった — **本リポジトリには `CLAUDE_CODE_OAUTH_TOKEN` が未登録**(Actions シークレット 0 件。`claude-code-review.yml` の直近 5 実行はすべて本体ステップ skipped、PR #10・#11 ともレビュー投稿 0 件)。したがって実証できたのは **`types` によるトリガの発火とジョブレベルの `draft` 判定まで**であり、「レビューが自動起動する」はシークレットを登録するまで成立しない(§2.6 の前提を参照)。**ジョブの `success` を「レビュー済み」と読んだのがこの誤記録の原因**で、§3 の成果実在確認が潰した「`exit 0` = 成功」と同型の取り違えだった。
 
   **既知の逸脱**: 週枠の実効寿命は 1 チケットでは実測できない縦断指標であるため、本チケットでは測定方法とベースラインを `.harness/decisions.jsonl` に記録した。段階6(#8)完了時点で econ 運用分と比較する。
 
@@ -837,7 +847,7 @@ Codex CLI が未インストール(段階0 が未達)のため、確かめられ
 3. `delegate-codex.sh impl` を人間がターミナルから叩く
 4. 司令塔は最小コンテキストで `/commit` → **push** → **draft PR** を作る(**マージしない**。§2.6)
 5. **ここで初めて CI が走る**。緑を確認する。落ちていれば §12.5 へ
-6. Claude の枠が戻ったら、積んだ PR を `ready_for_review` に切り替える → レビューが自動起動する(§2.6)→ まとめてレビューしてからマージする
+6. Claude の枠が戻ったら、積んだ PR を `ready_for_review` に切り替える → レビューが自動起動する(§2.6。**`CLAUDE_CODE_OAUTH_TOKEN` の登録が前提** — 未登録ならジョブは緑でもレビューは走らない)→ まとめてレビューしてからマージする
 
 > **手順 4 と 5 の順序を逆にしない。** `ci.yml` のトリガは `push: [main, develop]` と `pull_request` だけで、**作業ブランチへの push だけでは CI は走らない**。「CI が緑なら PR を作る」は因果が逆で、PR を作るまで CI は一度も動かない。モード B は検収を CI に丸投げする設計なので、ここを取り違えると**検収が丸ごと空振りする**。
 
