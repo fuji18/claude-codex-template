@@ -15,7 +15,14 @@
 
 ## 検証(司令塔・PR 作成後)
 
-- [ ] V4. 実機で run の annotation・Summary・ジョブ結論(`success`)の 3 点を確認する
+- [x] V4. 実機で run の annotation・Summary・ジョブ結論(`success`)の 3 点を確認した(PR #13 / run 32725845245)
+  - `Run Claude Code Review` = `skipped`(ガードは無変更のまま効いている)
+  - `Notify review skipped` = `success`
+  - annotation = `[warning] Claude レビュー未実行`(メッセージも期待どおり。全角文字・`::` の混入で壊れていない)
+  - **ジョブ結論 = `success`**(赤くなっていない)
+  - Summary の本文は GitHub の API が公開していないため run ページでの目視が要る。
+    ステップが `success` で終わっており、同じスクリプトのローカル実行で 310 バイトの
+    期待どおりの内容が書き出されることは確認済み
 
 ## 申し送り
 
