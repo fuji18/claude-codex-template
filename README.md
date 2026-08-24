@@ -18,6 +18,8 @@
    - (テンプレート配布側の設定: Settings → General で **Template repository** を有効化しておく)
 2. 新リポジトリの Settings → Secrets and variables → Actions に **`CLAUDE_CODE_OAUTH_TOKEN`** を設定する
    - 未設定の間、PR 自動レビュー・`@claude` メンションの Actions はスキップされる(失敗はしない)
+   - **スキップしてもジョブは `success` を返す。** 緑のチェックはレビュー通過を意味しない
+     (未設定時は run の annotation と Summary に「未実行」が出る)
    - 機械的な品質ゲート(`ci.yml`: lint・型チェック・フォーマット・テスト・secretlint・npm audit)はシークレット不要で常に走る
 3. Settings → Code security で **Secret scanning + Push protection** を有効化する(公開リポジトリなら無料)
    - リポジトリ内の secretlint(pre-commit / CI)と合わせた二段構えになる

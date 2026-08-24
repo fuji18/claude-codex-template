@@ -57,3 +57,17 @@ jobs:
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
           # claude_args: '--allowed-tools Bash(gh pr:*)'
+
+      - name: Notify mention skipped
+        if: env.CLAUDE_TOKEN == ''
+        run: |
+          echo "::warning title=@claude 応答なし::CLAUDE_CODE_OAUTH_TOKEN が未設定のため @claude メンションに応答できません。このジョブの success は応答したことを意味しません。"
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## ⚠️ @claude メンションに応答していません
+
+          `CLAUDE_CODE_OAUTH_TOKEN` が Actions シークレットに未設定のため、`Run Claude Code` は skip されました。
+
+          **このジョブの `success` は応答したことを意味しません。** メンションは無言で捨てられています。
+
+          Settings → Secrets and variables → Actions で登録してください。
+          EOF

@@ -49,3 +49,19 @@ jobs:
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
+
+      - name: Notify review skipped
+        if: env.CLAUDE_TOKEN == ''
+        run: |
+          echo "::warning title=Claude レビュー未実行::CLAUDE_CODE_OAUTH_TOKEN が未設定のため Claude Code Review は実行されていません。このジョブの success はレビュー通過を意味しません。"
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## ⚠️ Claude レビューは実行されていません
+
+          `CLAUDE_CODE_OAUTH_TOKEN` が Actions シークレットに未設定のため、`Run Claude Code Review` は skip されました。
+
+          **このジョブの `success` はレビュー通過を意味しません。**
+
+          Settings → Secrets and variables → Actions で登録するまで、
+          モード B(節約)の「draft で積んで枠の回復後にまとめてレビューする」は出口がありません
+          (`docs/template-dev/codex-delegation-plan.md` §2.6)。
+          EOF
