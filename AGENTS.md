@@ -130,7 +130,7 @@ touch .git/.probe 2>/dev/null && rm -f .git/.probe && echo GIT_WRITABLE || echo 
 以下のパスに触れる変更は**委託の対象外**です。タスクがこれらの変更を求めている場合、**変更せずに停止して報告してください**(モード C では `codex-log.md` に記録して、その項目だけ飛ばします)。
 
 <!-- kickoff:delegation-forbidden-paths -->
-- `.claude/scripts/delegate-codex.sh` — 実行中のあなた自身の起動元。書き換えると親プロセスが構文エラーで死にます
+- `.claude/scripts/delegate-codex.sh` — 実行中のあなた自身の起動元。委託の唯一の入口であり、壊れたものがコミットされると以後すべての委託が不能になります(実行中のプロセス自体は自己コピーで保護済み)
 - `.claude/scripts/check-protected-branch.sh` / `.husky/pre-commit` / `.husky/prepare-commit-msg` — ガードレール本体
 - `.claude/codex-denylist.txt` — 委託先が自分の送信禁止リストを書き換えることはできません
 <!-- /kickoff:delegation-forbidden-paths -->

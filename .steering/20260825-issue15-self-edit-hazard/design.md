@@ -42,12 +42,18 @@
 # ここはフェイルオープンにする。機密送信やガードレールと違い、これは堅牢化の層であって
 # 安全検査ではない。コピーに失敗しただけで委託を丸ごと止めるのは、通したコストより
 # 止めたコストの方が大きい(入口検査群とは非対称の判断)。
-if [ -z "${CODEX_DELEGATE_SELF_COPY:-}" ] && [ "${CODEX_DELEGATE_NO_SELF_COPY:-}" != "1" ]; then
+if [ "${CODEX_DELEGATE_NO_SELF_COPY:-}" = "1" ]; then
+  # 保護を切ったことは必ずログに残す。コピー失敗時は警告が出るのに、明示的な無効化だけが
+  # 黙って通るのは非対称で危うい(シェルプロファイルや CI の環境変数に残っていても気づけない)。
+  echo "delegate-codex: 警告 — CODEX_DELEGATE_NO_SELF_COPY=1 のため自己コピー保護を無効にしています(再現テスト以外では設定しないでください)。" >&2
+elif [ -z "${CODEX_DELEGATE_SELF_COPY:-}" ]; then
   _self="${BASH_SOURCE[0]:-$0}"
   _copy_dir="$(mktemp -d 2>/dev/null || true)"
   if [ -n "$_copy_dir" ] && [ -d "$_copy_dir" ] &&
     cp "$_self" "$_copy_dir/delegate-codex.sh" 2>/dev/null; then
     export CODEX_DELEGATE_SELF_COPY="$_copy_dir"
+    # exec が失敗した場合、非対話シェルはその場で終了する(execfail 未設定。実測 exit 127)。
+    # したがってマーカーを export したまま下のブロックへ抜ける経路は存在しない。
     exec bash "$_copy_dir/delegate-codex.sh" "$@"
   fi
   [ -n "$_copy_dir" ] && rm -rf "$_copy_dir"
@@ -71,7 +77,8 @@ fi
 
 - `exec bash "$_copy_dir/delegate-codex.sh"` と**明示的に bash で起動する**。`cp` がモードを保つとは限らない環境があるため、実行ビットに依存しない
 - `_self` は相対パスでも構わない。このブロックは `cd "$ROOT"` より前にあるので、呼び出し時のカレントディレクトリで正しく解決される
-- `usage()` に `CODEX_DELEGATE_NO_SELF_COPY` を**足さない**。テスト用の逃げ道であり、利用者向けの機能ではない(usage に出すと「使ってよいもの」に見える)
+- `usage()` に `CODEX_DELEGATE_NO_SELF_COPY` を**足さない**。テスト用の逃げ道であり、利用者向けの機能ではない(usage に出すと「使ってよいもの」に見える)。ただし**設定されていたら必ず stderr に警告を出す** — 保護が黙って無効化されるのが最悪のケースなので、usage に出さないことと無警告で通すことは別
+- 冒頭の終了コード契約コメントに「割り込み時は 130 / 143。0〜5 の契約とは別枠」を追記する
 
 ## 3. 再現テスト
 
@@ -107,7 +114,7 @@ fi
 ### 3.3 安全策(実物を壊さない)
 
 - 開始時に `.claude/scripts/delegate-codex.sh` を作業用一時ディレクトリへ退避し、`trap ... EXIT` で**必ず書き戻す**
-- 書き戻しに失敗した場合の最後の砦として、trap の中で `git checkout -- .claude/scripts/delegate-codex.sh` も試みる
+- 書き戻しに失敗した場合の最後の砦として `git checkout -- .claude/scripts/delegate-codex.sh` も試みる。ただし**これは HEAD への巻き戻しであり、検証中の未コミットパッチを道連れにする**ので、黙って実行しない: 先に退避コピーを `tmp/delegate-codex.sh.rescue`(gitignore 済み・`WORK_DIR` の外)へ置き、何が失われうるかを stderr に明示してから実行する
 - 各シナリオの直後にも書き戻す(次のシナリオが壊れたスクリプトを実行しないため)
 - 生成した run record は steering フィールドがフィクスチャのものだけを削除する
 - 終了時に `tmp/repro-issue15/` を削除する
