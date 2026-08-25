@@ -1,13 +1,13 @@
 <!-- テンプレート所有ファイル: /sync-template で上書きされます。プロジェクト固有のルールは CLAUDE.md の「プロジェクト固有ルール」節に書いてください。 -->
 <!-- 司令塔専用: SessionStart hook がメインセッションにのみ注入します。サブエージェントには読み込まれません。 -->
 
-## モデル運用方針(設計 = Opus / 実装 = Sonnet の fork / 委譲 = Sonnet・Haiku)
+## モデル運用方針(設計 = Opus / 実装 = Codex 委託・Sonnet の fork / 委譲 = Sonnet・Haiku)
 
 判断の根拠と実測値は `docs/template-dev/cost-model.md` にある(読み込み対象外)。ここには判断だけを書く。
 
 - **司令塔(メインセッション)は Opus 固定**(`.claude/settings.json`)。計画・設計判断・統合・ユーザーへの報告を担う
-- **実装フェーズは `implement-ticket` スキルに委譲する。** `context: fork` + `model: sonnet` で Sonnet のサブエージェントとして走るため、**司令塔はモデルを切り替えない**。実装ループのログは fork の中で完結し、司令塔にはサマリーだけが返る
-  - `/next-ticket` / `/add-feature` / `/fix-issue` の実装ステップはすべてこの経路を通る
+- **実装フェーズは委託する。既定は Codex**(`delegate-codex.sh impl`)、`exit 3`(利用不可)なら **`implement-ticket` スキル**(`context: fork` + `model: sonnet`)にフォールバックする。どちらの経路でも**司令塔はモデルを切り替えない**。実装ループのログは委託先で完結し、司令塔にはサマリーだけが返る
+  - `/next-ticket` / `/add-feature` / `/fix-issue` の実装ステップはすべてこの経路を通る(分岐の手順は `/add-feature` ステップ5、**どの単位で委託するか**は `delegation-policy.md`)
   - **司令塔が自分で実装コードを書き始めてはいけない。** PreToolUse hook(`check-implementation-phase.sh`)が Edit/Write をブロックする
 - **委譲先の既定**: レビュー(`code-reviewer`)・スペック検証(`implementation-validator`)・ドキュメントレビュー(`doc-reviewer`)は Sonnet、品質チェック実行(`test-runner`)は Haiku、広範囲のコード探索は組み込みの Explore
 - **subagent への受け渡しは参照で**: spawn プロンプトにファイル内容や Issue 本文を貼らず、パス・Issue 番号だけ渡して subagent 自身に読ませる。返しはサマリーのみを要求する

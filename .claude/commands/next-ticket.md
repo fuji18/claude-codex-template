@@ -30,7 +30,8 @@ GitHub Issues のチケット(`ticket` ラベル付き Issue)を消化するた�
    - `in-progress` ラベルが付いていないこと
    - ボディの `depends: #N` で参照される Issue がすべて closed であること
    - 優先度ラベルが最も高いこと(P0 > P1 > P2。同順位ならフェーズ順・番号順)
-4. 選定結果(Issue 番号・タイトル・理由)を 1〜2 行でユーザーに提示してから着手する。
+4. 選定した Issue に **`delegate:codex` ラベルが付いているか**を確認する(ステップ1-1 で取得済みの `labels` を見る。追加の API 呼び出しは不要)。**ラベルの有無は選定順序に影響しない** — 変わるのはステップ3 の実装フェーズの流し方だけ。
+5. 選定結果(Issue 番号・タイトル・理由・`delegate:codex` の有無)を 1〜2 行でユーザーに提示してから着手する。
 
 ### ステップ2: ステータス更新(着手)
 
@@ -49,6 +50,17 @@ gh issue edit [番号] --add-label in-progress
 | Issue 選定・ブランチ作成・steering 計画(requirements / design / tasklist) | 司令塔(Opus) |
 | **実装(tasklist の消化)** | **委託(既定 = `delegate-codex.sh impl` / フォールバック = `Skill('implement-ticket')` の Sonnet fork)** |
 | 検収の判断・振り返り・コミット・PR | 司令塔(Opus) |
+
+**`delegate:codex` ラベルによる実装フェーズの流し方**(判定基準の全文は `.claude/rules/lead/delegation-policy.md`):
+
+| 状態 | 流し方 |
+| --- | --- |
+| **ラベルあり** | `design.md` を書き切ったら、**tasklist を分割せず 1 回の `delegate-codex.sh impl` で全体を委託する**(バッチに割らない)。検収は PR 単位で 1 回 |
+| ラベルなし | 機械的な項目が 3 つ以上連続する部分を 3 項目前後のバッチで委託し、**各バッチの検収を通してから**次を委託する。機械的な項目が 2 つ以下なら Codex に渡さず `Skill('implement-ticket')` に渡す |
+
+- **計画中(steering)に委託の前提が崩れたらラベルを外す**: 委託禁止領域(`CLAUDE.md`「プロジェクト固有ルール」)に触れる / 新規依存の追加が要る / `design.md` に書き切れない設計判断が残る、のいずれかに当たったら `gh issue edit [番号] --remove-label delegate:codex` を実行し、理由を 1 行でユーザーに伝えてから通常経路に落とす
+- **`exit 3`(Codex 利用不可)ではラベルを外さない。** 環境の欠落でありチケットの属性ではないため、Sonnet fork にフォールバックするだけでよい
+- ラベルが付いていないチケットを委託候補だと判断した場合は、`gh issue edit [番号] --add-label delegate:codex` を実行してから流す(判断の記録が Issue に残る)
 
 - **司令塔は実装コードを書かない。** モデルの手動切替も不要。分岐は `/add-feature` ステップ5 の**手順ごと**に従う(終了コード表だけでなく、**`exit 3` を一度受けたらそのセッションでは `delegate-codex.sh` を呼び直さない**という恒久フォールバックの手順も含む)
 - **`design.md` は、実装者が設計判断を一切せずに実装できる粒度まで書き切る。** fork は会話履歴も Issue 本文も持たず `design.md` / `tasklist.md` だけを読むため、ここの不足がそのまま往復コストになる

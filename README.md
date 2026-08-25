@@ -4,7 +4,7 @@
 
 - **スペック駆動開発**: 永続ドキュメント(`docs/`)で「何を作るか」を定義し、作業単位のステアリングファイル(`.steering/`)で「今回何をするか」を計画してから実装する
 - **ハーネスエンジニアリング**: hooks / permissions / subagents / Agent Teams で「必ず起こすべきこと」を仕組みで保証する
-- **モデル戦略**: 司令塔 = Opus、実装フェーズ = Sonnet の fork(手動切替なし)、最難関タスクのみ Fable 5 に一時切替
+- **モデル戦略**: 司令塔 = Opus、実装フェーズ = Codex への委託(既定)/ Sonnet の fork(フォールバック)、最難関タスクのみ Fable 5 に一時切替。いずれも手動切替なし
 
 ---
 
@@ -144,7 +144,7 @@ flowchart TD
     subgraph MAIN["司令塔(Opus)"]
         SELECT["Issue 選定: gh issue list --label ticket<br/>(依存クローズ済み・最優先を選ぶ)"] --> LABEL["in-progress ラベル付与<br/>+ feature ブランチ作成"]
         LABEL --> PLAN["steering 計画<br/>(.steering/: requirements / design / tasklist)"]
-        PLAN --> DELEGATE["Skill('implement-ticket') を呼ぶ<br/>(司令塔は実装しない)"]
+        PLAN --> DELEGATE["実装を委託する<br/>(既定: delegate-codex.sh impl / フォールバック: implement-ticket)<br/>(司令塔は実装しない)"]
         DELEGATE --> JUDGE{"fork の判定"}
         JUDGE -->|"判断待ち / 失敗"| DESIGN["design.md に判断を追記<br/>→ 再実行"]
         DESIGN --> DELEGATE
@@ -193,21 +193,62 @@ flowchart TD
 
 ---
 
+## Codex 併用の委託運用
+
+Claude の週枠を守るため、実装・調査・レビューの一部を **Codex CLI(ChatGPT Plus 枠)** に委託できる。委託の入口は `.claude/scripts/delegate-codex.sh` の 1 本だけで、司令塔は**終了コードだけを見て**分岐する(サマリーの文面から成否を推測しない)。
+
+### 3 つの運用モード(切替を宣言するのは人間)
+
+| モード  | `.harness/mode`   | 使いどころ        | Claude の役割                                                                                   |
+| ------- | ----------------- | ----------------- | ----------------------------------------------------------------------------------------------- |
+| A(通常) | 未設定 / `normal` | 週枠に余裕がある  | 計画・検収・統合をすべて行う                                                                    |
+| B(節約) | `econ`            | 週枠を温存したい  | `design.md` を書き切ったら閉じる。検収は CI に預け、PR は **draft** で積む                      |
+| C(縮退) | `degraded`        | Claude が使えない | 不在。Codex が `.codex/skills/degraded-mode-ticket/` に従って単独で走り、成果をキューとして積む |
+
+`.harness/mode` は **Claude が自分で書き換えない**。モードごとの司令塔の作法は `.claude/rules/mode/*.md` が SessionStart で注入する。
+
+### 委託の粒度と `delegate:codex` ラベル
+
+判定軸は「仕様が書き切れているか × 途中で設計判断が発生するか」で、モデルの賢さではなく**往復コスト**で決める。ルールの全文は `.claude/rules/lead/delegation-policy.md`(司令塔にのみ注入される)。
+
+| 粒度                                | 経路                                                                                              |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------- |
+| tasklist 1〜3 項目                  | `delegate-codex.sh impl`                                                                          |
+| **チケット 1 枚**(1 Issue = 1 PR)   | 同上 + Issue に **`delegate:codex`** ラベル。`/next-ticket` が tasklist を分割せず 1 回で委託する |
+| 行き詰まり調査 / 重要変更のレビュー | `delegate-codex.sh explore` / `review`(read-only)                                                 |
+| 委託しない                          | 委託禁止領域・新規依存の追加・`.git` を書き換えるタスク                                           |
+
+> **委託は「`design.md` を書き切るコスト」<「実装ループのコスト」のときだけ得になる。** 新規パターンの 1 例目は前者が大きいので委託しない(参照実装は司令塔が書く)。
+
+### 委託禁止領域
+
+認証・決済・データ移行・ガードレールなど、事故のコストが高い領域は**パスで**列挙して委託対象から外す。判断ルールは `CLAUDE.md`「プロジェクト固有ルール」、Codex 側への指示は `AGENTS.md` §4。`/kickoff` フェーズ4 が、アーキテクチャ確定後にプロジェクトの実パスへ書き換える。
+
+**`.claude/codex-denylist.txt`(機密の送信禁止)とは別の層。** denylist は該当ファイルが存在するだけで委託を止めるフェイルクローズ検査で、モジュールパスを入れると全委託が止まる。
+
+### Codex を使わない場合
+
+Codex CLI が無い・未認証の環境では `delegate-codex.sh` が `exit 3` を返し、**そのセッションは以降ずっと `implement-ticket`(Sonnet fork)にフォールバックする**。`delegate:codex` ラベルが付いていても同じで、テンプレートの全フローは Codex 無しでも成立する。
+
+---
+
 ## モデル運用方針
 
-| 役割                          | モデル                | 備考                                                                                                           |
-| ----------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------- |
-| 司令塔(メインセッション)      | **Opus**              | 計画・設計判断・統合・報告。プロジェクト設定で固定済み                                                         |
-| **実装フェーズ**              | **Sonnet**            | `implement-ticket` スキル(`context: fork`)が Sonnet の subagent として実行。**ユーザーもモデルも切り替えない** |
-| 委譲作業(subagent / teammate) | **Sonnet**            | レビュー(code-reviewer)・検証(implementation-validator)・調査(Explore)                                         |
-| 品質チェック実行              | **Haiku**             | test-runner。lint/テスト実行と機械的修正、サマリーのみ返す                                                     |
-| 最難関タスク                  | **Fable 5**(一時切替) | 難度の高い設計・原因不明の調査のみ。`/model fable` → 完了後 `/model opus`                                      |
+| 役割                          | モデル                | 備考                                                                                                                                                |
+| ----------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 司令塔(メインセッション)      | **Opus**              | 計画・設計判断・統合・報告。プロジェクト設定で固定済み                                                                                              |
+| **実装フェーズ**              | **Codex / Sonnet**    | 既定は Codex(`delegate-codex.sh impl`)。使えなければ `implement-ticket` スキル(`context: fork`)が Sonnet で実行。**ユーザーもモデルも切り替えない** |
+| 委譲作業(subagent / teammate) | **Sonnet**            | レビュー(code-reviewer)・検証(implementation-validator)・調査(Explore)                                                                              |
+| 品質チェック実行              | **Haiku**             | test-runner。lint/テスト実行と機械的修正、サマリーのみ返す                                                                                          |
+| 最難関タスク                  | **Fable 5**(一時切替) | 難度の高い設計・原因不明の調査のみ。`/model fable` → 完了後 `/model opus`                                                                           |
 
-### 実装フェーズが自動で Sonnet になる仕組み
+### 実装フェーズが司令塔から切り離される仕組み
 
 トークン消費が最も大きいのは「実装 → テスト → エラーを読む → 修正」のループで、ここを安いモデルで回すのが上限消費を減らす最大の手段になる。ただし手動で `/model` を切り替える運用は、**切替前の `/clear` を忘れると膨らんだコンテキスト全体がキャッシュミスとなり全額課金される**という失敗モードを持っていた。
 
-そこで実装フェーズを `implement-ticket` スキルに委譲している。
+そこで実装フェーズを司令塔から切り離している。**既定は Codex への委託**(`delegate-codex.sh impl`)で、Codex が使えない環境では `implement-ticket` スキル(Sonnet fork)にフォールバックする。**委託先が変わっても司令塔の分岐(完了 / 判断待ち / 失敗)は同じ**であることが設計要件。
+
+- **Codex 委託**: 実装ループは別プロセスで回り、司令塔には**終了コードとサマリーだけ**が返る(生ログは `.harness/codex-runs/`)。Claude の枠を消費しない
 
 - `context: fork` + `model: sonnet` により、**フォークされた subagent が Sonnet で実装を行う**。司令塔は Opus のまま
 - 実装ループの長いログは fork 側で完結し、司令塔には**サマリー 20 行だけ**が返る

@@ -19,6 +19,15 @@ description: initial-requirements.mdを起点にプロジェクト開始フロ�
 4. **Step 0 チェック**: README の Step 0 で案内している手動セットアップの実施状況をユーザーに確認する(フェーズ5で README を書き換えると案内が消えるため、ここで拾う):
    - Actions シークレット `CLAUDE_CODE_OAUTH_TOKEN` の設定(未設定の間、PR 自動レビューと `@claude` メンションはスキップされる)
    - Settings → Code security の Secret scanning + Push protection の有効化
+   - **ブランチ保護(ルールセット)が使えるプランか**を実際に叩いて確かめる:
+     ```bash
+     gh api "repos/$(gh repo view --json nameWithOwner --jq .nameWithOwner)/rulesets" --jq 'length'
+     ```
+     - **数値が返る**(200): 使える。返り値が `0` ならルールセットが未設定なので、`main` に対して「直接 push の禁止 / PR 必須 / force push・削除の禁止」+ required status checks(`branch-policy`・`harness-integrity`・`quality`)+ bypass list を空、の設定を促す
+     - **コマンドが失敗する**(非ゼロ終了。stderr に `gh: Forbidden (HTTP 403)`。`--jq` は適用されない): private + Free プランでブランチ保護もルールセットも使えない。**Codex にコミット権を渡すモード C の前提が崩れる**ため、以下の 3 択をユーザーに提示して選ばせる(選んだ結果をフェーズ6 の完了報告に記載する):
+       1. **リポジトリを public にする** — ルールセットが無料で使える。公開して困る資産が無いなら最も安い
+       2. **GitHub Pro / Team に上げる** — private のままブランチ保護 + required checks が使える(課金)
+       3. **ローカル hook が唯一の層だと認める** — 追加コストゼロだが、`git push` の直接実行を止める層が無く、CI を required check にできない(赤くなるだけでマージを止められない)。この場合は**モード C(Codex にコミットさせる運用)を使わない**ことを併せて合意する
    - 未実施の項目があっても中断はせず、フェーズ6の完了報告に**残課題として明記**する。
 5. **テンプレート追従の基準 SHA を記録する**(以降 `/sync-template` が差分の起点に使う。ここで刻まないと初回同期が全ファイル比較になる):
    - `.claude/template-manifest.json` の `syncedAt` が `null` の場合のみ実行する
@@ -80,6 +89,11 @@ description: initial-requirements.mdを起点にプロジェクト開始フロ�
 2. **Dependabot をプロダクト向けに再チューニングする**: テンプレート既定の `.github/dependabot.yml` は「テンプレートの鮮度維持」を目的に週次(weekly)更新をかける設定で、実プロダクトにそのまま引き継ぐと毎週の依存更新PRがレビュー・CIコストになる。`docs/template-dev/dependabot-product.example.yml` を参照し、プロダクト向けプロファイル(monthly + minor/patch グループ化 + major は個別PR)に置き換える提案をユーザーに提示して承認を得る。
    - セキュリティ更新は interval と無関係に即時PRが出るため、monthly に落としてもセキュリティ対応は遅れないことを補足する
    - フェーズ1で TS 以外のスタックに置換した場合は、`package-ecosystem` と `ignore` の依存名を実態に合わせて調整する(不要なエコシステム節は削除する)
+3. **委託禁止領域をパスで具体化する**(Codex 併用時。フェーズ2 で `docs/architecture.md` / `docs/repository-structure.md` が確定した後だからここで行う):
+   - 認証・決済・データ移行・ガードレールに相当するモジュールを**実際のパス**で洗い出す(例: `src/auth/**`・`src/billing/**`・`db/migrations/**`)
+   - `CLAUDE.md`「プロジェクト固有ルール」節に「Codex への委託禁止領域(パス)」として列挙する(判断ルールの正)
+   - `AGENTS.md` の `<!-- kickoff:delegation-forbidden-paths -->` 〜 `<!-- /kickoff:delegation-forbidden-paths -->` の中に**追記する**(実装者への指示)。**既存の汎用項目(`delegate-codex.sh`・`.husky/` 等)は消さない** — これらはテンプレートからすべてのプロジェクトに配布されるため、どのプロジェクトでも成立する。マーカーの行自体も消さない
+   - **`.claude/codex-denylist.txt` には書かない。** あちらは「該当ファイルが存在するだけで委託を止める」機密送信のフェイルクローズ検査で、そこにモジュールパスを入れると全委託が常に止まる
 
 ## フェーズ5: リポジトリのプロダクト化
 
@@ -113,7 +127,7 @@ description: initial-requirements.mdを起点にプロジェクト開始フロ�
 ## フェーズ6: 開始
 
 1. チケット Issue(`gh issue list --label ticket`)から最初に着手すべきもの(依存なし・最優先)を 1 つ提示する。
-2. フェーズ0の Step 0 チェックで未実施だった項目があれば、**残課題として再掲**する。
+2. フェーズ0の Step 0 チェックで未実施だった項目があれば、**残課題として再掲**する。ブランチ保護の 3 択は、解決済み(public 化 / プラン変更)の場合も**どれを選んだかを明記**する。
 3. `/next-ticket` で着手する方法を案内して終了する。
 
 ## 完了条件
@@ -121,5 +135,6 @@ description: initial-requirements.mdを起点にプロジェクト開始フロ�
 - フェーズ1の置換(必要な場合)が完了し、検証コマンドが実行可能
 - `docs/` に 6 つの永続ドキュメントが存在し、チケット Issue が発行されている(ハブ&スポーク構成の場合は `docs/playbook/spoke-development-standards.md` がチケット発行より前に作成されている)
 - ハーネス層(hooks / permissions / subagents)が設定済み。Dependabot がプロダクト向け(monthly)に再チューニング済み
+- ブランチ保護の可否が確認済み(不可の場合は 3 択の選択結果が記録されている)。Codex 併用時は委託禁止領域が `CLAUDE.md` と `AGENTS.md` にパスで書かれている
 - README・package.json・devcontainer 名・ライセンスがプロダクト用になっている
 - 次の一手(最初のチケット)と Step 0 の残課題(あれば)が提示されている
