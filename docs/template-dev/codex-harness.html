@@ -519,9 +519,9 @@
     <h1>Codex 併用ハーネス</h1>
     <p class="standfirst">実装フェーズを Codex に移し、Claude が週間上限に当たっても作業が止まらない構成。設計・検収は Claude に残す。</p>
     <div class="meta">
-      <span>改訂 <b>2026-08-23</b></span>
-      <span>段階 <b>2 / 6 完了</b></span>
-      <span>ブランチ <b>feature/codex-stage-issues</b></span>
+      <span>改訂 <b>2026-08-25</b></span>
+      <span>段階 <b>6 / 6 完了</b></span>
+      <span>ブランチ <b>main</b></span>
       <span>正 <b>docs/template-dev/codex-delegation-plan.md</b></span>
     </div>
     <div class="legend">
@@ -776,7 +776,7 @@ npm ci</code>
 
     <details class="callout warn">
       <summary class="callout-label">この表のうち、いま動くのは Mode A の Sonnet fork 経路だけ</summary>
-      <p>段階 2 まで実装済み(<code>AGENTS.md</code>・<code>.codex/config.toml</code>・<code>delegate-codex.sh</code> の <code>explore</code> / <code>review</code>)。<strong>2026-08-23: 段階0 が完了した</strong> — ChatGPT Plus 契約・Codex CLI(v0.149.0)導入・<code>codex login</code>(<code>chatgpt</code> モード)・seccomp 修正による sandbox 起動まで<strong>すべて実機で確認済み</strong>。したがって <code>explore</code> / <code>review</code> の読み取り委託は<strong>いま実際に動く</strong>。<strong>2026-08-23: 段階3 で <code>impl</code> モードも実装済み</strong>(終了コード契約 <code>0</code>〜<code>5</code> + run record + 3 コマンドの分岐改訂)。残っているのは <code>.harness/mode</code> の司令塔側運用(未検収委託の SessionStart 注入・モード B 作法)で、これは段階4 のスコープ。次の一手は <a href="#manual-ops">§12.4</a>、段階の内訳は §10 を参照。</p>
+      <p><strong>段階0〜6 まで実装済み(2026-08-24 時点)。</strong> 環境(ChatGPT Plus 契約・Codex CLI v0.149.0・<code>codex login</code> の <code>chatgpt</code> モード・seccomp 修正による sandbox 起動)はすべて実機で確認済み。委託経路は <code>delegate-codex.sh</code> の <code>explore</code> / <code>review</code> / <code>impl</code> の 3 モードで、終了コード契約 <code>0</code>〜<code>5</code> + run record(<code>codex-run.sh</code>)+ 3 コマンド(<code>/add-feature</code> ・ <code>/next-ticket</code> ・ <code>/fix-issue</code>)の分岐まで通っている。<code>.harness/mode</code> によるモード B(節約)・モード C(縮退)の運用と、チケット丸ごと委託の <code>delegate:codex</code> ラベルも稼働中。<strong>2026-08-25: 委託の唯一の入口が自分自身を書き換えられて壊れる問題(自己編集ハザード)を、起動直後の自己コピー + <code>exec</code> で塞いだ</strong>(<a href="https://github.com/fuji18/claude-codex-template/issues/15">Issue #15</a>)。未実装のまま残しているのは <code>fix-ci</code> モードと <code>--background</code>(前景で 1 本ずつ流す運用を選択)。段階の内訳は §10 を参照。</p>
     </details>
 
     <details class="callout done">
@@ -874,7 +874,7 @@ npm ci</code>
     <h3>この骨格を支えている規約</h3>
     <ul>
       <li><strong>広範囲のコード探索</strong>は組み込みの Explore サブエージェントに委譲し、司令塔は結論だけ受け取る</li>
-      <li><strong>実装フェーズの委譲は hook で強制される</strong> — 最新 <code>.steering/</code> の <code>tasklist.md</code> に未完了タスクがある状態で司令塔が実装コードを編集しようとすると <code>check-implementation-phase.sh</code> がブロックする。<code>.steering/</code> / <code>docs/</code> / <code>.claude/</code> は司令塔の仕事なので通る</li>
+      <li><strong>実装フェーズの委譲は hook で強制される</strong> — 最新 <code>.steering/</code> の <code>tasklist.md</code> に未完了タスクがある状態で司令塔が実装コードを編集しようとすると <code>check-implementation-phase.sh</code> がブロックする。<code>.steering/</code> / <code>docs/</code> / <code>.claude/</code> / <code>.github/</code> / <code>.husky/</code> は司令塔の仕事なので通る</li>
       <li>「最新の <code>.steering/</code>」の判定は <code>latest-steering.sh</code> に集約(hook・fork・SessionStart が同じディレクトリを指すことが前提。<strong>自前で <code>ls | sort</code> しない</strong>)</li>
       <li><strong>共通ルールは 2 層</strong> — <code>.claude/rules/*.md</code> は全サブエージェントに毎回ロードされる。司令塔専用は <code>.claude/rules/lead/*.md</code> に置き、SessionStart hook がメインセッションにのみ注入する</li>
       <li><strong>チケット完了ごとに <code>/clear</code></strong> — 作業状態は Issue・<code>.steering/</code>・git に永続化済みで、持ち越す必要がない(トークン消費の最大の削減ポイント)</li>
@@ -1141,7 +1141,7 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
   </section>
 
   <section>
-    <div class="sec-head"><span class="sec-num">07</span><h2>ガードレールを 4 層にする</h2></div>
+    <div class="sec-head"><span class="sec-num">07</span><h2>ガードレールを層で持つ(強制 3 層 + 情報提供 1 層)</h2></div>
 
     <p>ここが今回実装した部分。<strong>Codex は Claude の hook を一切通らない。</strong> モード C で Codex にコミットを許す以上、ベンダー非依存の防衛線がローカルに要る。</p>
 
@@ -1149,10 +1149,11 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
       <table>
         <thead><tr><th>層</th><th>実体</th><th class="center">Claude</th><th class="center">Codex</th><th class="center">手動 git</th><th>状態</th></tr></thead>
         <tbody>
-          <tr><td>1. 現在地の注入</td><td class="mono">.claude/hooks/session-start.sh</td><td class="center yes">✓</td><td class="center na">—</td><td class="center na">—</td><td><span class="chip todo">既存</span></td></tr>
-          <tr><td>2. コマンド前検査</td><td class="mono">.claude/scripts/check-branch-policy.sh</td><td class="center yes">✓</td><td class="center no">✗</td><td class="center no">✗</td><td><span class="chip ok">重複排除済</span></td></tr>
-          <tr class="is-changed"><td>3. コミット前検査</td><td class="mono">.husky/pre-commit</td><td class="center yes">✓</td><td class="center yes">✓</td><td class="center yes">✓</td><td><span class="chip ok">新規 · 今回</span></td></tr>
-          <tr><td>4. 最終ゲート</td><td class="mono">.github/workflows/ci.yml</td><td class="center yes">✓</td><td class="center yes">✓</td><td class="center yes">✓</td><td><span class="chip todo">既存</span></td></tr>
+          <tr><td><b>情報提供</b> 現在地の注入<br><span class="note">阻止はしない</span></td><td class="mono">.claude/hooks/session-start.sh</td><td class="center yes">✓</td><td class="center na">—</td><td class="center na">—</td><td><span class="chip todo">既存</span></td></tr>
+          <tr><td><b>強制1</b> コマンド前検査</td><td class="mono">.claude/scripts/check-branch-policy.sh</td><td class="center yes">✓</td><td class="center no">✗</td><td class="center no">✗</td><td><span class="chip ok">重複排除済</span></td></tr>
+          <tr class="is-changed"><td><b>強制2</b> コミット前検査<br><span class="note">git commit / --amend</span></td><td class="mono">.husky/pre-commit</td><td class="center yes">✓</td><td class="center yes">✓</td><td class="center yes">✓</td><td><span class="chip ok">新規 · 今回</span></td></tr>
+          <tr class="is-changed"><td><b>強制3</b> コミット作成時検査<br><span class="note">git revert / cherry-pick。--no-verify でも迂回できない</span></td><td class="mono">.husky/prepare-commit-msg</td><td class="center yes">✓</td><td class="center yes">✓</td><td class="center yes">✓</td><td><span class="chip ok">新規 · 今回</span></td></tr>
+          <tr><td><b>最終検証(別軸)</b> CI<br><span class="note">PR の base とブランチ名だけ。直接コミットは見ない</span></td><td class="mono">.github/workflows/ci.yml</td><td class="center yes">✓</td><td class="center yes">✓</td><td class="center yes">✓</td><td><span class="chip todo">既存</span></td></tr>
         </tbody>
       </table>
     </div>
@@ -1319,7 +1320,7 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
 
     <details class="callout warn">
       <summary class="callout-label">守っていたのは「コミットを作る操作」の一部だけだった(2026-08-19)</summary>
-      <p>保護ブランチ上での各 git 操作を実測したところ、<code>pre-commit</code> フックが発火するのは <code>git commit</code> と <code>git commit --amend</code> <strong>だけ</strong>で、<strong><code>git revert</code> と <code>git cherry-pick</code> では発火しない</strong>ことが分かった。Claude 側の <code>check-branch-policy.sh</code> も <code>git commit</code> にしかマッチせず、CI は PR の base とブランチ名しか見ない。つまり<strong>この 2 操作は 4 層すべてを素通りしていた</strong>。</p>
+      <p>保護ブランチ上での各 git 操作を実測したところ、<code>pre-commit</code> フックが発火するのは <code>git commit</code> と <code>git commit --amend</code> <strong>だけ</strong>で、<strong><code>git revert</code> と <code>git cherry-pick</code> では発火しない</strong>ことが分かった。Claude 側の <code>check-branch-policy.sh</code> も <code>git commit</code> にしかマッチせず、CI は PR の base とブランチ名しか見ない。つまり<strong>この 2 操作は当時の層をすべて素通りしていた</strong>(この穴を塞ぐために足したのが現在の強制3 = <code>.husky/prepare-commit-msg</code>)。</p>
       <p>「main の悪いコミットを revert して」は<strong>エージェントに最も自然に発生する指示</strong>であり、モード C では Codex がコミット権を持つ。層の名前(「保護ブランチへの直接コミットを止める」)と実際の守備範囲がずれていた。</p>
       <p><code>.husky/prepare-commit-msg</code> を追加して塞いだ。<code>.git/MERGE_HEAD</code> の有無で出所が分かるため、取り込み(= <code>git merge</code> / <code>git pull</code>)だけは通せる — ここを塞ぐと保護ブランチで pull すらできなくなる。<strong>第 2 引数では判別できない</strong>点に注意(<code>git revert -e</code> / <code>git cherry-pick -e</code> も <code>merge</code> を渡してくる)。<strong>副次効果として <code>git commit --no-verify</code> も塞がった</strong>: <code>--no-verify</code> が無効化するのは <code>pre-commit</code> と <code>commit-msg</code> だけで、このフックは迂回できない。</p>
       <p><strong>教訓</strong>: 「どの操作を守るか」を<strong>フック名ではなく実測で確かめる</strong>。<code>pre-commit</code> という名前は「コミット前」と読めるが、実際に守るのは <code>git commit</code> という<strong>コマンド</strong>であって、コミットという<strong>結果</strong>ではない。</p>
@@ -1406,10 +1407,10 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
         <div class="stage-body"><b>モード C</b><span><code>.codex/skills/degraded-mode-ticket/</code>(入口検査 5 項目)+ <code>codex-log.md</code> 運用 + 起動コマンドの確定。<strong>実機検証で <code>.codex/</code> と <code>.git</code> が書き込み不可と判明し、後者はモード C の成立条件そのものだった</strong><span class="note"> — 2026-08-24 完了</span> ・ <a href="https://github.com/fuji18/claude-codex-template/issues/7">Issue #7</a></span></div>
         <span class="chip ok">完了</span>
       </div>
-      <div class="stage">
+      <div class="stage is-done">
         <span class="stage-n">06</span>
-        <div class="stage-body"><b>チケット統合</b><span><code>delegate:codex</code> ラベル + README 追記 ・ <a href="https://github.com/fuji18/claude-codex-template/issues/8">Issue #8</a></span></div>
-        <span class="chip todo">未着手</span>
+        <div class="stage-body"><b>チケット統合</b><span><code>delegate:codex</code> ラベル + 委託の振り分けルール(<code>.claude/rules/lead/delegation-policy.md</code>)+ 委託禁止領域の導線 + README 追記。<strong>本チケット自身を丸ごと委託して tasklist 9/9 を差し戻し 0 回で完走</strong><span class="note"> — 2026-08-24 完了</span> ・ <a href="https://github.com/fuji18/claude-codex-template/issues/8">Issue #8</a>。<strong>切り出した宿題だった自己編集ハザード(§08)は 2026-08-25 に自己コピー + <code>exec</code> で解決</strong> ・ <a href="https://github.com/fuji18/claude-codex-template/issues/15">Issue #15</a></span></div>
+        <span class="chip ok">完了</span>
       </div>
     </div>
   </section>
@@ -1533,7 +1534,7 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
       <li><b>2. <s>委託を実機で 1 回通す</s> <span class="chip ok">経路は完走</span> <span class="chip gap">中身は空</span></b><span>認証 → モデル応答 → 指定フォーマットのサマリー → run record まで<strong>端から端まで動いた</strong>。しかし Codex が実行する読み取りコマンドが<strong>すべて sandbox の起動失敗で落ち</strong>、「調査不能」という正直な報告が返った。<strong>段階2 の価値判定は手順 3 の後に持ち越し</strong></span></li>
       <li><b>3. <s>Issue #4 の <code>blocked</code> ラベルを外す</s> <span class="chip ok">完了</span></b><span><code class="cmd">gh issue edit 4 --remove-label blocked</code><br>契約が前提条件だったので、ラベルの根拠が消えた(#4 は <code>ticket, P0</code> のみになった)</span></li>
       <li><b>4. <s>devcontainer の seccomp を緩めてリビルドする</s> <span class="chip ok">完了</span></b><span><code>.devcontainer/devcontainer.json</code> に <code class="cmd">"runArgs": ["--security-opt", "seccomp=unconfined"]</code> を追加してリビルド。<code class="cmd">unshare --user --map-root-user true</code> が通るようになり、<code class="cmd">codex sandbox echo hello</code> も exit 0。<strong>詳細と代替案は下の callout</strong>。<strong>リビルドで CLI と <code>~/.codex/auth.json</code> が消えるため、再インストールと再認証が必要になった</strong> — CLI 側は <code>post_create.sh</code> で恒久化済み、認証は未決</span></li>
-      <li><b>5. <s>手順 2 を再実行して段階2 の価値を判定する</s> <span class="chip ok">完了 · 続行判断</span></b><span><code class="cmd">bash .claude/scripts/delegate-codex.sh explore "このリポジトリで保護ブランチへのコミットを止めている層をすべて挙げよ"</code><br>計画 §11 は「段階2 に価値があったか」の判定を<strong>ここまで保留</strong>している。見るのは 2 点 — <strong>サマリーだけが返るか</strong>(ファイル全文が流れ込まないか)と <strong><code>path:line</code> の根拠が付くか</strong>。<strong>検算しやすい問いを選ぶこと</strong>(上の問いの正解は §07 の 4 層)</span></li>
+      <li><b>5. <s>手順 2 を再実行して段階2 の価値を判定する</s> <span class="chip ok">完了 · 続行判断</span></b><span><code class="cmd">bash .claude/scripts/delegate-codex.sh explore "このリポジトリで保護ブランチへのコミットを止めている層をすべて挙げよ"</code><br>計画 §11 は「段階2 に価値があったか」の判定を<strong>ここまで保留</strong>している。見るのは 2 点 — <strong>サマリーだけが返るか</strong>(ファイル全文が流れ込まないか)と <strong><code>path:line</code> の根拠が付くか</strong>。<strong>検算しやすい問いを選ぶこと</strong>(上の問いの正解は §07 の層の表)</span></li>
       <li class="is-loop"><b>6. <code>/next-ticket</code> で #4 を消化する<span class="note"> — 次の一手 / 通常フロー</span></b><span>手順 1〜5 で分かったことを<strong>リポジトリに固定する</strong>のが #4 の中身。下の「#4 に足すべき項目」を design.md に含める</span></li>
       <li><b>7. #4 が閉じたら #5(段階3 = 実装委託)へ</b><span>ここで初めて <strong>Claude の枠が実際に温存され始める</strong>。それまでの段階は準備であって節約ではない。<strong>ただし着手前に下の「終了コード契約の穴」を #5 のスコープへ入れること</strong></span></li>
     </ol>
@@ -1559,7 +1560,7 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
       <details class="callout warn">
         <summary class="callout-label">ただし本ドキュメントの記述の方が不正確だった点がある</summary>
         <p>Codex は <strong>SessionStart hook を強制層として挙げなかった</strong>。§07 と <code>.claude/rules/lead/branch-and-tickets.md</code> は「強制層は 4 段」と書き、その 1 段目に SessionStart hook を置いている。しかし SessionStart hook が<strong>やっているのは現在地とベースの注入だけ</strong>で、何も阻止しない。<strong>Codex の切り分けの方が精密</strong>である。</p>
-        <p>「4 段」という表現は<strong>強制層と情報提供層を混ぜている</strong>ので、次に §07 を触るときに「強制 3 層 + 情報提供 1 層」へ書き直すとよい。<strong>これは第二意見が実際に価値を出した例</strong>として記録しておく — 自分で書いたドキュメントの粗は自分では見つけにくい。</p>
+        <p>「4 段」という表現は<strong>強制層と情報提供層を混ぜている</strong>。<strong>2026-08-25 に反映済み</strong> — §07 の見出しと表、<code>.claude/rules/lead/branch-and-tickets.md</code>、<code>README.md</code>、<code>development-guidelines</code> スキルを「強制 3 層 + 情報提供 1 層」に書き直した(CI は PR の base とブランチ名だけを見る別軸として分離)。<strong>これは第二意見が実際に価値を出した例</strong>として記録しておく — 自分で書いたドキュメントの粗は自分では見つけにくい。</p>
       </details>
 
       <p class="note"><strong>なお今回は <code>exit 0</code> の中身も伴っていた</strong>が、発見2(<code>exit 0</code> はタスク成否を表さない)は解消していない。<code>explore</code> はサマリーを人間が読むので気づけるだけで、<strong>契約の穴そのものは残っている</strong>。</p>

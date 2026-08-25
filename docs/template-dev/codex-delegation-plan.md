@@ -195,15 +195,18 @@ skip すると run の annotation(`::warning`)と job summary に「レビュー
 ### 3.1 インターフェース
 
 ```bash
-.claude/scripts/delegate-codex.sh <mode> <target> [--background]
+.claude/scripts/delegate-codex.sh <mode> <target>
 ```
 
-| mode | target | sandbox | 用途 |
-| --- | --- | --- | --- |
-| `impl` | `.steering/[dir]` | `workspace-write` | tasklist の消化(実装フェーズ本体) |
-| `explore` | 調査指示の文字列 or ファイル | `read-only` | 広域コード探索。サマリーのみ返す |
-| `review` | `<base-ref>` | `read-only` | 敵対的レビュー。指摘リストを返す |
-| `fix-ci` | CI ログのパス | `workspace-write` | CI 失敗の機械的修正 |
+| mode | target | sandbox | 用途 | 実装状況 |
+| --- | --- | --- | --- | --- |
+| `impl` | `.steering/[dir]` | `workspace-write` | tasklist の消化(実装フェーズ本体) | **実装済み**(段階3) |
+| `explore` | 調査指示の文字列 or ファイル | `read-only` | 広域コード探索。サマリーのみ返す | **実装済み**(段階2) |
+| `review` | `<base-ref>` | `read-only` | 敵対的レビュー。指摘リストを返す | **実装済み**(段階2) |
+| `fix-ci` | CI ログのパス | `workspace-write` | CI 失敗の機械的修正 | **未実装**(段階外。スクリプトは「未実装です」と返して exit 2) |
+
+**`--background` は実装していない。** 委託は前景で 1 本ずつ流す(§6)。スクリプトは `--background` を
+受け取ると黙って無視せずエラーで落とす(「指定したのに効いていない」に気づけないのが一番まずいため)。
 
 ### 3.2 満たすべき要件
 
@@ -552,6 +555,16 @@ CLI フラグ / -c  >  project config(.codex/config.toml)  >  profile
 
 `.husky/pre-commit` への移植は**段階1 として実装済み**。保護ブランチ判定の実体を `.claude/scripts/check-protected-branch.sh` に一本化し、`.husky/pre-commit`(ベンダー非依存)と `check-branch-policy.sh`(Claude 専用)の両方から呼ぶ構成にした。ルールが 1 ファイルに集約されているため、二層の判定がずれない。
 
+**層の呼び分け(2026-08-25 に整理。§11 の第二意見の指摘を反映)**: 保護ブランチへの直接コミットを**実際に阻止するのは 3 層**であり、SessionStart hook と CI をそこに数えない。
+
+| 役割 | 実体 | 効く経路 |
+| --- | --- | --- |
+| 情報提供(阻止しない) | `.claude/hooks/session-start.sh` | Claude のみ |
+| 強制1 | `.claude/scripts/check-branch-policy.sh`(PreToolUse) | Claude のみ |
+| 強制2 | `.husky/pre-commit`(`git commit` / `--amend`) | ベンダー非依存 |
+| 強制3 | `.husky/prepare-commit-msg`(`git revert` / `cherry-pick`。`--no-verify` でも迂回不可) | ベンダー非依存 |
+| 最終検証(別軸) | CI の `branch-policy` ジョブ | クライアント非依存。ただし **PR の base とブランチ名だけ**を見る |
+
 > **`.husky/pre-commit` を書き換えるときの必読事項(2026-08-19 に踏んだ)。** husky はこのファイルを **`sh -e`** で実行する(`.husky/_/h`)。`set -e` 下では非ゼロを返したコマンドの直後にシェルごと終了するため、
 >
 > ```sh
@@ -845,7 +858,7 @@ Codex CLI が未インストール(段階0 が未達)のため、確かめられ
 
 **判定: 価値あり。段階3(#5)へ進む。**
 
-> **本ドキュメント側の記述の方が不正確だった点がある。** Codex は **SessionStart hook を強制層として挙げなかった**。§8 と `.claude/rules/lead/branch-and-tickets.md` は「強制層は 4 段」と書き、1 段目に SessionStart hook を置いているが、**SessionStart hook がやっているのは現在地とベースの注入だけ**で何も阻止しない。**Codex の切り分けの方が精密**である。「4 段」は強制層と情報提供層を混ぜているので、次に §8 を触るときに「**強制 3 層 + 情報提供 1 層**」へ書き直す。**第二意見が実際に価値を出した例**として記録しておく。
+> **本ドキュメント側の記述の方が不正確だった点がある。** Codex は **SessionStart hook を強制層として挙げなかった**。§8 と `.claude/rules/lead/branch-and-tickets.md` は「強制層は 4 段」と書き、1 段目に SessionStart hook を置いているが、**SessionStart hook がやっているのは現在地とベースの注入だけ**で何も阻止しない。**Codex の切り分けの方が精密**である。「4 段」は強制層と情報提供層を混ぜている。**2026-08-25 に書き直し済み**(§8 の下記・`.claude/rules/lead/branch-and-tickets.md`・`README.md`・`development-guidelines` スキル・解説 HTML §07)。**第二意見が実際に価値を出した例**として記録しておく。
 >
 > なお今回は `exit 0` の中身も伴っていたが、**発見2(`exit 0` はタスク成否を表さない)は解消していない**。`explore` はサマリーを人間が読むので気づけるだけで、契約の穴そのものは残っている。
 
