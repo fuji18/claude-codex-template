@@ -1,0 +1,352 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<title>Codex 併用ハーネス レビュー</title><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}</style></head><body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&family=Shippori+Mincho+B1:wght@700&display=swap">
+<style>
+  :root {
+    --bg: #F7F8FA;
+    --surface: #FFFFFF;
+    --ink: #1B2129;
+    --muted: #5A6472;
+    --line: #E2E6EC;
+    --accent: #16617A;
+    --accent-soft: #E3EEF3;
+    --crit: #B3362C;
+    --crit-soft: #F9ECEA;
+    --warn: #9A6A00;
+    --warn-soft: #F8F1DF;
+    --low: #5A6472;
+    --low-soft: #EDF0F3;
+    --good: #1F7A46;
+    --good-soft: #E7F3EC;
+    --code-bg: #EEF1F4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14181D;
+      --surface: #1C2229;
+      --ink: #E8EBEF;
+      --muted: #98A2AE;
+      --line: #2A323C;
+      --accent: #6FB8D6;
+      --accent-soft: #1D3540;
+      --crit: #E07B6F;
+      --crit-soft: #3A2320;
+      --warn: #D9A93F;
+      --warn-soft: #362D17;
+      --low: #98A2AE;
+      --low-soft: #262D35;
+      --good: #63B586;
+      --good-soft: #1C3226;
+      --code-bg: #232A32;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14181D;
+    --surface: #1C2229;
+    --ink: #E8EBEF;
+    --muted: #98A2AE;
+    --line: #2A323C;
+    --accent: #6FB8D6;
+    --accent-soft: #1D3540;
+    --crit: #E07B6F;
+    --crit-soft: #3A2320;
+    --warn: #D9A93F;
+    --warn-soft: #362D17;
+    --low: #98A2AE;
+    --low-soft: #262D35;
+    --good: #63B586;
+    --good-soft: #1C3226;
+    --code-bg: #232A32;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans JP", "Hiragino Sans", "Noto Sans JP", sans-serif;
+    font-size: 15.5px;
+    line-height: 1.85;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 56px 24px 96px; }
+
+  header { border-bottom: 2px solid var(--ink); padding-bottom: 28px; margin-bottom: 40px; }
+  .kicker {
+    font-size: 12px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 10px;
+  }
+  h1 {
+    font-family: "Shippori Mincho B1", "Hiragino Mincho ProN", serif;
+    font-size: clamp(26px, 4.5vw, 38px); font-weight: 700; line-height: 1.35;
+    margin: 0 0 18px; text-wrap: balance;
+  }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 13px; color: var(--muted); }
+  .meta code { font-size: 12.5px; }
+
+  h2 {
+    font-family: "Shippori Mincho B1", "Hiragino Mincho ProN", serif;
+    font-size: 23px; font-weight: 700; line-height: 1.4;
+    margin: 56px 0 8px; padding-top: 8px; text-wrap: balance;
+  }
+  .h2sub { color: var(--muted); font-size: 13.5px; margin: 0 0 22px; }
+  h2 .no {
+    color: var(--accent); font-family: "IBM Plex Mono", monospace; font-size: 15px;
+    vertical-align: 2px; margin-right: 10px;
+  }
+
+  p { margin: 0 0 1em; }
+  code, .path {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .88em; background: var(--code-bg);
+    padding: 1px 5px; border-radius: 4px; word-break: break-all;
+  }
+
+  /* 総評 */
+  .verdict {
+    background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent);
+    padding: 22px 26px; margin-bottom: 8px;
+  }
+  .verdict p:last-child { margin-bottom: 0; }
+  .scorebar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 24px 0 0; }
+  .score {
+    background: var(--surface); border: 1px solid var(--line); padding: 14px 16px 12px;
+  }
+  .score .lbl { font-size: 12px; letter-spacing: .08em; color: var(--muted); margin-bottom: 4px; }
+  .score .val { font-size: 15px; font-weight: 700; }
+  .score .val.good { color: var(--good); }
+  .score .val.warn { color: var(--warn); }
+  .score .val.crit { color: var(--crit); }
+  @media (max-width: 640px) { .scorebar { grid-template-columns: 1fr; } }
+
+  /* 指摘カード */
+  .finding {
+    background: var(--surface); border: 1px solid var(--line);
+    border-left: 4px solid var(--low);
+    padding: 20px 24px 18px; margin: 0 0 16px;
+  }
+  .finding.sev-high { border-left-color: var(--crit); }
+  .finding.sev-mid  { border-left-color: var(--warn); }
+  .finding.sev-good { border-left-color: var(--good); }
+  .fhead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  .chip {
+    display: inline-block; font-size: 11.5px; font-weight: 700; letter-spacing: .06em;
+    padding: 2px 9px; border-radius: 3px; white-space: nowrap;
+  }
+  .chip.high { background: var(--crit-soft); color: var(--crit); }
+  .chip.mid  { background: var(--warn-soft); color: var(--warn); }
+  .chip.low  { background: var(--low-soft); color: var(--low); }
+  .chip.good { background: var(--good-soft); color: var(--good); }
+  .ftitle { font-weight: 700; font-size: 16.5px; line-height: 1.5; }
+  .finding p { font-size: 14.5px; }
+  .fix {
+    margin-top: 10px; padding: 10px 14px; background: var(--accent-soft);
+    border-radius: 4px; font-size: 14px;
+  }
+  .fix strong { color: var(--accent); }
+  .fix p { margin: 0; font-size: 14px; }
+
+  ul { padding-left: 1.3em; margin: 0 0 1em; }
+  li { margin-bottom: .45em; font-size: 14.5px; }
+  li::marker { color: var(--accent); }
+
+  /* 良い点 */
+  .goodlist { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0; margin: 0 0 1em; list-style: none; }
+  .goodlist li {
+    background: var(--surface); border: 1px solid var(--line);
+    padding: 12px 16px; margin: 0; font-size: 13.5px; line-height: 1.7;
+  }
+  .goodlist li strong { display: block; font-size: 14px; color: var(--good); }
+  @media (max-width: 640px) { .goodlist { grid-template-columns: 1fr; } }
+
+  /* アクション表 */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 14px; }
+  th {
+    text-align: left; font-size: 12px; letter-spacing: .08em; color: var(--muted);
+    padding: 12px 16px; border-bottom: 2px solid var(--line); white-space: nowrap;
+  }
+  td { padding: 12px 16px; border-bottom: 1px solid var(--line); vertical-align: top; line-height: 1.7; }
+  tr:last-child td { border-bottom: none; }
+  td.pri { font-family: "IBM Plex Mono", monospace; font-weight: 700; white-space: nowrap; }
+  td.pri.p0 { color: var(--crit); }
+  td.pri.p1 { color: var(--warn); }
+  td.pri.p2 { color: var(--muted); }
+
+  footer { margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+</style>
+
+<div class="wrap">
+<header>
+  <div class="kicker">Implementation Review</div>
+  <h1>Codex 併用ハーネス実装レビュー<br>— セキュリティ・コスト・構成の監査</h1>
+  <div class="meta">
+    <span>対象: <code>codex-delegation-plan.md</code> に基づく実装一式</span>
+    <span>基準コミット: <code>ebcaeb6</code>(fix/docs-impl-drift)</span>
+    <span>実施日: 2026-08-25</span>
+  </div>
+</header>
+
+<div class="verdict">
+  <p><strong>総評:</strong> 設計思想の水準は高い。フェイルオープン/フェイルクローズの使い分けに明文化された根拠があり、判定ロジックの単一ソース化(<code>check-protected-branch.sh</code> / <code>harness-mode.sh</code> / <code>latest-steering.sh</code>)、終了コード契約、run record による会話非依存の状態管理、実測(<code>decisions.jsonl</code>)に基づく閾値運用は、この規模のハーネスとして例外的に堅牢。</p>
+  <p style="margin-bottom:0"><strong>最大の穴は 1 類型に集約される:</strong> workspace-write で動く委託先(Codex)が、<em>後でサンドボックスの外(ホスト・CI)で実行されるファイル</em>を書き換えられるのに、委託完了後の機械的な検査が存在しないこと。禁止領域は AGENTS.md の散文でしか守られておらず、防御は「Codex が指示に従うこと」と「検収レビューが気づくこと」に依存している。ここに約 15 行の後置検査を足せば、この類型は丸ごと塞がる。</p>
+  <div class="scorebar">
+    <div class="score"><div class="lbl">セキュリティ</div><div class="val warn">高 2 件・中 2 件・低 2 件</div></div>
+    <div class="score"><div class="lbl">コストパフォーマンス</div><div class="val good">概ね最適化済み(中 1 件)</div></div>
+    <div class="score"><div class="lbl">構成の適正化</div><div class="val good">軽微な改善 3 件</div></div>
+  </div>
+</div>
+
+<h2><span class="no">1</span>セキュリティ懸念</h2>
+<p class="h2sub">脅威モデル: 委託先(Codex)がプロンプトインジェクション等で悪性化した場合、および機密がワークツリー経由で送信される経路。</p>
+
+<div class="finding sev-high">
+  <div class="fhead"><span class="chip high">高</span><span class="ftitle">サンドボックス脱出の連鎖: 委託先が「ホストで実行されるファイル」を書けるのに、委託後の機械検査がない</span></div>
+  <p>impl 委託(workspace-write)中の Codex は <code>AGENTS.md</code>・<code>.husky/*</code>・<code>.claude/scripts/*</code> を書き換えられる。このうち <code>AGENTS.md</code> の <code>&lt;!-- verify-probe: ... --&gt;</code> は、次回の委託時に <code>delegate-codex.sh</code> が<strong>ホスト上で <code>bash -c</code> によりサンドボックス外で実行する</strong>(入口検査2・3)。つまり「サンドボックス内で 1 行書く → 次回起動時にサンドボックス外で任意コマンド実行」という脱出経路が成立する。<code>.husky/*</code> や <code>.claude/scripts/*</code> も同様にホスト・Claude セッションで実行される。</p>
+  <p>現状の防御は AGENTS.md §4 の散文(「触れずに停止せよ」)と検収レビューのみ。指示に従わない・従えない委託先に対する機械的な層が無い。</p>
+  <div class="fix"><p><strong>対策:</strong> <code>delegate-codex.sh</code> の impl 完了後に <code>git diff --name-only</code>(+ untracked)を禁止パスリストと突き合わせ、該当があれば <code>status=failed</code> で exit 2 にする後置検査を追加する。検査対象は現行の禁止領域 3 項目に加えて <code>AGENTS.md</code> と <code>.github/workflows/</code>(下記参照)。入口検査群と対で「出口検査」として置くと設計の対称性も良い。</p></div>
+</div>
+
+<div class="finding sev-high">
+  <div class="fhead"><span class="chip high">高</span><span class="ftitle">denylist はワークツリーしか見ておらず、環境変数とホームディレクトリの資格情報が素通しになる</span></div>
+  <p>計画 §13 #7 で「Codex sandbox に読み取りの除外機能は無い」と自ら確定させている通り、read-only / workspace-write のどちらでも<strong>読み取りはワークツリーの外に及ぶ</strong>。<code>codex exec</code> は親プロセスの環境変数をそのまま継承し、devcontainer のホームには <code>~/.config/gh/hosts.yml</code>(gh CLI の OAuth トークン)や <code>~/.claude/</code> の資格情報が置かれている。入口検査1(denylist)は <code>find .</code> でリポジトリ内しか走査しないため、これらは検査対象にすらならない。</p>
+  <div class="fix"><p><strong>対策:</strong> (1) <code>codex exec</code> の起動を <code>env -i PATH=... HOME=...</code> 相当の許可リスト方式に変える(Codex CLI が必要とする変数だけ通す)。(2) ホーム配下の資格情報は sandbox 設定では守れないことを denylist ファイルの冒頭コメントと計画 §10.2 に明記し、「唯一の層」という記述を「ワークツリー内の唯一の層」に修正する。</p></div>
+</div>
+
+<div class="finding sev-mid">
+  <div class="fhead"><span class="chip mid">中</span><span class="ftitle">denylist のパターン網羅が Node スタックの実態に対して不足している</span></div>
+  <p>現行は <code>.env*</code>・鍵類・<code>credentials*</code>・<code>settings.local.json</code> のみ。テンプレート既定が npm スタックであるにもかかわらず、認証トークンの定番置き場である <code>.npmrc</code>(<code>_authToken</code>)が入っていない。ほかに <code>.netrc</code> / <code>.git-credentials</code> / <code>*.tfstate</code> / <code>*-service-account*.json</code> / <code>.pypirc</code> / <code>*.sqlite</code>・<code>dump*.sql</code>(実データ入り DB ダンプ)も一般的な漏洩源。</p>
+  <div class="fix"><p><strong>対策:</strong> 上記を <code>.claude/codex-denylist.txt</code> に追加する。フェイルクローズ機構自体は正しく動いているので、パターン追加だけで済む。</p></div>
+</div>
+
+<div class="finding sev-mid">
+  <div class="fhead"><span class="chip mid">中</span><span class="ftitle">禁止領域リストに AGENTS.md と .github/workflows/ が入っていない</span></div>
+  <p><code>AGENTS.md</code> は委託先自身の「憲法」であり、かつ verify-probe というホスト実行経路を持つ(指摘 1)。<code>.github/workflows/</code> は、非 fork PR では <code>CLAUDE_CODE_OAUTH_TOKEN</code> にアクセスできるワークフローの定義そのものであり、Codex 由来のコミットにワークフロー改変が混ざると、CI 実行時にシークレットを持ち出す経路になる。どちらも「委託先が自分を縛る層を書き換えてはならない」という <code>codex-denylist.txt</code> と同じ論理が成立するのに、リスト外に置かれている。</p>
+  <div class="fix"><p><strong>対策:</strong> CLAUDE.md「委託禁止領域」と AGENTS.md §4 の両方に <code>AGENTS.md</code>(検査マーカー行を含む)と <code>.github/workflows/</code> を追記し、指摘 1 の出口検査の対象に含める。</p></div>
+</div>
+
+<div class="finding">
+  <div class="fhead"><span class="chip low">低</span><span class="ftitle">CODEX_DELEGATE_ACK_SECRETS=1 は全件一括承認で、司令塔が自力で付けて再実行できる</span></div>
+  <p>機密検出時の承認は環境変数 1 個の全件一括承認であり、ファイル単位の判断ができない。また「入口の人間確認が唯一の層」とコメントされているが、実際には Claude(司令塔)が Bash から <code>CODEX_DELEGATE_ACK_SECRETS=1</code> を付けて再実行できてしまい、人間確認になる保証は permission prompt 頼みになる。</p>
+  <div class="fix"><p><strong>対策:</strong> 少なくともコメントの「人間確認」を「承認付き再実行」に改める。強化するなら、検出ファイル一覧のハッシュを承認値に要求する(<code>ACK=当該一覧のハッシュ</code>)と「前回と違う機密が増えたのに古い承認で通る」事故も防げる。</p></div>
+</div>
+
+<div class="finding">
+  <div class="fhead"><span class="chip low">低</span><span class="ftitle">run record と .harness/mode は委託先が書き換え可能</span></div>
+  <p><code>.harness/</code> は workspace-write の書き込み範囲内。Codex が <code>codex-runs/*.json</code> の <code>accepted</code> を立てる・<code>.harness/mode</code> を <code>degraded</code> に書き換える、という改竄は機械的には可能。モードは委託開始時に読み込み済みのため当該セッション内の影響は無いが、次回セッションの SessionStart 注入と検収判断はこれらを信頼する。</p>
+  <div class="fix"><p><strong>対策:</strong> 優先度は低い(検収レビューが前提のため)。指摘 1 の出口検査に <code>.harness/mode</code> の変更検知を含めれば実質カバーできる。</p></div>
+</div>
+
+<h2><span class="no">2</span>コストパフォーマンス</h2>
+<p class="h2sub">実測に基づく最適化が既に効いている領域。指摘は 1 件のみで、残りは維持すべき良い点。</p>
+
+<div class="finding sev-mid">
+  <div class="fhead"><span class="chip mid">中</span><span class="ftitle">explore / review の run record が永久に「未検収」のまま、毎セッション注入され続ける</span></div>
+  <p><code>write_record</code> は全モードで <code>accepted: false</code> のレコードを作るが、「検収して accept する」という概念は impl にしか無い。explore / review の完了レコードは誰も accept しないため、<code>codex-run.sh pending</code> が SessionStart のたびに注入し続け、7 日後に「古い記録」へ降格しても消えはしない。読み取り専用の委託を重ねるほど、毎セッションの固定コンテキストコストが単調増加する — コンテキストを削るための委託が、コンテキストを太らせる形。</p>
+  <div class="fix"><p><strong>対策:</strong> read-only モード(explore / review)は <code>completed</code> 時に <code>accepted: true</code> で書く(サマリーは標準出力で司令塔に渡り、成果物の検収対象が存在しないため)。または <code>cmd_pending</code> で <code>mode != impl</code> を除外する。前者の方が「record = 検収キュー」という意味論が保てる。</p></div>
+</div>
+
+<div class="finding sev-good">
+  <div class="fhead"><span class="chip good">良</span><span class="ftitle">維持すべき最適化(実測で裏付けあり)</span></div>
+  <ul>
+    <li><strong>サマリー返し</strong>: 生ログ 66〜92KB に対し司令塔へ返るのは約 50〜60B(実測 0.09%)。参照渡し原則と合わせ、委託の主目的であるコンテキスト削減が数字で成立している</li>
+    <li><strong>事前フェイル</strong>: <code>codex login status</code>・依存プローブ・draft 検査を実行前に落とすため、失敗する委託が枠を消費しない</li>
+    <li><strong>レビューの発火制御</strong>: main 向け PR の opened / ready_for_review のみ + draft 除外 + concurrency キャンセル。モード B の「draft で積む」と正しく噛み合っている</li>
+    <li><strong>lead ルールの SessionStart 注入</strong>: サブエージェント spawn ごとの課金を避ける設計が cost-model.md の実測と紐付いている</li>
+  </ul>
+  <p style="margin-bottom:0">補足: lead ルール注入は毎セッション約 10KB 強。現状は妥当だが、今後 <code>lead/</code> が肥大するなら「常時注入(モデル運用・ブランチ)」と「必要時ロード(レビュー方針等)」の二層化が次の削減余地になる。</p>
+</div>
+
+<h2><span class="no">3</span>構成の適正化</h2>
+<p class="h2sub">正しさに直結する軽微な穴と、構造として妥当な判断の確認。</p>
+
+<div class="finding">
+  <div class="fhead"><span class="chip low">低</span><span class="ftitle">impl の target が .steering/ 配下に限定されていない</span></div>
+  <p>入口検査 5-1 は「<code>design.md</code> と <code>tasklist.md</code> を持つディレクトリ」しか見ないため、<code>.steering/</code> 外の任意ディレクトリ(例えば細工されたフィクスチャ)でも通る。run record の <code>steering</code> フィールドや SessionStart の現在地判定は <code>.steering/</code> 前提なので、通ってしまうと状態管理が静かにずれる。</p>
+  <div class="fix"><p><strong>対策:</strong> 5-1 に <code>case "$STEERING" in .steering/*) ;; *) exit "$EX_FAIL" ;; esac</code> を 1 行足す。</p></div>
+</div>
+
+<div class="finding">
+  <div class="fhead"><span class="chip low">低</span><span class="ftitle">再入防止が「同一ステアリング」しか見ておらず、運用ルール「並行 1 本」を機械化していない</span></div>
+  <p><code>delegation-policy.md</code> は「並行数は 1 本まで(同一ワーキングツリーを共有するため)」と定めるが、入口検査 5-5 は同じ steering への二重起動しか止めない。別 steering への並行 impl 委託は素通りし、ツリー競合(片方の lint が他方の編集を巻き込む等)は防がれない。</p>
+  <div class="fix"><p><strong>対策:</strong> 5-5 のループで「steering を問わず <code>mode=impl</code> かつ <code>status=running</code>(プロセス実在)」を検出したら止める。判定部品は既に揃っており、条件を 1 つ外すだけで済む。</p></div>
+</div>
+
+<div class="finding">
+  <div class="fhead"><span class="chip low">低</span><span class="ftitle">rec_field / write_field の 2 箇所コピーは現状妥当だが、増殖の閾値を決めておく</span></div>
+  <p><code>delegate-codex.sh</code> と <code>codex-run.sh</code> の重複は「2 箇所・十数行のため共有ファイルは作らない」と明文化されており、現時点では正しい判断。ただし既に一度、片方だけ修正されて挙動が食い違う事故(sed フォールバックの末尾カンマ)を検収で踏んでいる。3 箇所目が生まれた時点、またはもう一度片側だけの修正が起きた時点で <code>.claude/scripts/lib/</code> への共通化に切り替えるのが安全。</p>
+</div>
+
+<div class="finding sev-good">
+  <div class="fhead"><span class="chip good">良</span><span class="ftitle">構造として妥当と確認した判断</span></div>
+  <ul style="margin-bottom:0">
+    <li><strong>フェイルオープン/クローズの非対称</strong>: 保護ブランチ検査(止めるとコミット不能)はオープン、委託入口検査(止めても fork で継続可)はクローズ。各所のコメントで根拠が言語化されており一貫している</li>
+    <li><strong>自己コピー exec</strong>(#15): 逐次読み込みハザードの対策として正攻法。exec 失敗経路・シグナル時の後始末・環境変数の子プロセス漏洩まで詰めてある</li>
+    <li><strong>sandbox をフラグで明示</strong>: untrusted プロジェクトで <code>.codex/config.toml</code> が読まれない仕様を踏まえ、設定ファイルを防衛線にしない判断が正しい</li>
+    <li><strong>ガードレールの多層 + 自壊検知</strong>: <code>protectedBranches</code> 空洞化・フック呼び出しのコメントアウト・実行権限落ちまで、SessionStart / CI の両系統で検知される。<code>MERGE_HEAD</code> による revert -e / cherry-pick -e のすり抜け対策も実測ベース</li>
+    <li><strong>claude.yml の起動条件</strong>: @claude メンション + author_association(OWNER/MEMBER/COLLABORATOR)の二重ゲートで、公開リポジトリでの枠消費とインジェクションを絞れている</li>
+  </ul>
+</div>
+
+<h2><span class="no">4</span>推奨アクション</h2>
+<p class="h2sub">優先度順。P0 の 2 件はどちらも小さな差分で、脅威モデル上の最大の穴を塞ぐ。</p>
+
+<div class="tablewrap">
+<table>
+  <thead>
+    <tr><th>優先度</th><th>アクション</th><th>対象</th><th>規模</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="pri p0">P0</td>
+      <td>impl 委託後の「出口検査」を追加 — 差分を禁止パス(+ AGENTS.md / .github/workflows / .harness/mode)と突き合わせ、該当があれば failed 化</td>
+      <td><code>delegate-codex.sh</code></td>
+      <td>約 15 行</td>
+    </tr>
+    <tr>
+      <td class="pri p0">P0</td>
+      <td>denylist に <code>.npmrc</code> / <code>.netrc</code> / <code>.git-credentials</code> / <code>*.tfstate</code> / <code>*-service-account*.json</code> / DB ダンプ類を追加</td>
+      <td><code>codex-denylist.txt</code></td>
+      <td>数行</td>
+    </tr>
+    <tr>
+      <td class="pri p1">P1</td>
+      <td>禁止領域リストに <code>AGENTS.md</code> と <code>.github/workflows/</code> を追記(散文側も出口検査と同期)</td>
+      <td>CLAUDE.md / AGENTS.md</td>
+      <td>数行</td>
+    </tr>
+    <tr>
+      <td class="pri p1">P1</td>
+      <td>explore / review の完了レコードを auto-accept し、SessionStart 注入の単調増加を止める</td>
+      <td><code>delegate-codex.sh</code></td>
+      <td>1〜2 行</td>
+    </tr>
+    <tr>
+      <td class="pri p2">P2</td>
+      <td><code>codex exec</code> の環境変数を許可リスト方式でサニタイズ。denylist の「唯一の層」記述をワークツリー限定と明記</td>
+      <td><code>delegate-codex.sh</code> / 計画 §10.2</td>
+      <td>小</td>
+    </tr>
+    <tr>
+      <td class="pri p2">P2</td>
+      <td>impl target の <code>.steering/</code> prefix 検査を追加</td>
+      <td><code>delegate-codex.sh</code> 5-1</td>
+      <td>1 行</td>
+    </tr>
+    <tr>
+      <td class="pri p2">P2</td>
+      <td>再入防止を「impl の running 全件」に拡張し、並行 1 本ルールを機械化</td>
+      <td><code>delegate-codex.sh</code> 5-5</td>
+      <td>数行</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<footer>
+  レビュー範囲: <code>delegate-codex.sh</code> / <code>codex-run.sh</code> / <code>harness-mode.sh</code> / <code>check-*.sh</code> / <code>block-dangerous-cmds.sh</code> / <code>session-start.sh</code> / <code>.husky/*</code> / <code>AGENTS.md</code> / <code>.codex/</code> / <code>.claude/settings.json</code> / <code>.github/workflows/*</code> / <code>codex-delegation-plan.md</code> / <code>decisions.jsonl</code> — 静的レビューのみ(委託の実機実行は含まない)。
+</footer>
+</div>
+
+</body></html>
