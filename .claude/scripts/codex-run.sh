@@ -2,6 +2,7 @@
 # .harness/codex-runs/*.json(run record)の一覧・検収・状態更新。
 #
 #   .claude/scripts/codex-run.sh list [--all]
+#   .claude/scripts/codex-run.sh pending
 #   .claude/scripts/codex-run.sh show <id>
 #   .claude/scripts/codex-run.sh accept <id>
 #   .claude/scripts/codex-run.sh set-status <id> <status>

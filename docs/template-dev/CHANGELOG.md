@@ -13,6 +13,40 @@
 
 ---
 
+## 2026-08-25
+
+Codex 併用ハーネスの**モード C(縮退運用)** と**チケット丸ごとの委託**、および委託経路自身の堅牢化。これで段階0〜6 がすべて揃った。**Codex を使わないプロジェクトには影響しません**(ラベルを付けなければ従来どおり Sonnet fork で実装フェーズが回る)。
+
+- **[manual]** **`.codex/skills/degraded-mode-ticket/` を新設**(新規 / `owned` 区分)。**モード C = Claude の枠が尽きている期間**に、Codex が `delegate-codex.sh` を経由せず単独でチケット 1 件を計画〜コミットまで完走する手順書。入口検査 5 項目(モード確認 / 保護ブランチ / `core.hooksPath` / 依存プローブ / **`.git` に書けるか**)を Codex 自身に実行させる。**取り込む側の作業**: `.claude/template-manifest.json`(`merge` 区分)の `owned` から **`.codex/prompts/` を削除**し、代わりに **`.codex/skills/` を追加**する。`.codex/prompts/` は Codex CLI に存在しないことが実機で確定したため登録を撤回した(2026-08-20 の項の記述はこの時点のもの)
+- **[manual]** ⚠️ **モード C は `.git` が書けないと成立しない**。Codex の `workspace-write` sandbox は既定で `.git` を読み取り専用にするため、`git add` の時点で失敗する(実機確認済み)。モード C で起動するときだけ `codex --sandbox workspace-write -c 'sandbox_workspace_write.writable_roots=[".git"]'` を使う。**`.codex/config.toml` には書かないこと**(モード A・B はコミット禁止の運用で、`.git` が書けないこと自体が防衛線)。**取り込む側の作業**: 縮退運用を使う場合のみ、この起動コマンドを人間の手順として控えておく
+- **[manual]** **`AGENTS.md` に「1-5. `.git` に書き込めるか」と「委託禁止領域(パス)」の節を追加**(`merge` 区分)。後者は `<!-- kickoff:delegation-forbidden-paths -->` 〜 `<!-- /kickoff:delegation-forbidden-paths -->` のマーカーで囲ってあり、**中の汎用項目(`delegate-codex.sh` / `.husky/*` / `codex-denylist.txt`)は消さずにプロジェクト固有のパスを追記する**(消すとプロダクト側でガードレール保護が最初から欠落する)。**取り込む側の作業**: テンプレート側の該当節を自分の `AGENTS.md` に手で足す
+- **[manual]** **`delegate:codex` ラベルを導入**。付いている Issue は「tasklist を分割せず 1 回の委託で全体を流す」、無ければ「3 項目前後のバッチに割り、各バッチの検収を通してから次を委託する」。判定基準の全文は `.claude/rules/lead/delegation-policy.md`(新規 / `owned`。**司令塔にのみ注入**され、サブエージェントには載らない)。`/setup-tickets` が発行時に、`/next-ticket` が着手時に判定する。**取り込む側の作業**: 既にチケット運用中のプロジェクトは `gh label create delegate:codex --color 6F42C1 --description "Codex にチケット丸ごと委託する"` を 1 回実行する(`/setup-tickets` を再実行する場合は不要)
+- **[manual]** `CLAUDE.md`(`never` 区分)に「Codex への委託禁止領域(パス)」節を追加した。**取り込む側の作業**: 自分の `CLAUDE.md`「プロジェクト固有ルール」節に、委託しないパス(ガードレール本体・`delegate-codex.sh`・`codex-denylist.txt` + 自プロジェクトの認証/決済/データ移行のモジュール)を列挙する
+- **[auto]** ⚠️ **`delegate-codex.sh` の自己編集ハザードを塞いだ**。bash はスクリプトを逐次読み込みするため、実行中に自分自身のファイルが書き換わると**無関係な行で構文エラーになって死ぬ**。委託先がハーネス層を触るのはテンプレート開発では常態なので、起動直後に自身を一時ディレクトリへコピーして `exec` する形にした(`exec` は PID もカレントディレクトリも変えないため `$$` を使う run record はそのまま成立する)。コピーに失敗しても委託は止めない(堅牢化の層であって安全検査ではないため、ここだけフェイルオープン)。`CODEX_DELEGATE_NO_SELF_COPY=1` は**再現テスト専用の逃げ道**で、設定すると警告を出したうえで旧挙動に戻る
+- **[auto]** `/kickoff` フェーズ0 に**ブランチ保護が使えるプランかの確認**を追加(`gh api repos/{owner}/{repo}/rulesets` が 403 なら 3 択を提示)。ローカルのガードレールはセキュリティ境界ではなく、権限境界は GitHub 側のルールセットで張る必要があるため
+
+## 2026-08-24
+
+**実装委託(段階3)とモード B(段階4)**。ここから Claude の枠が実際に温存され始める。
+
+- **[auto]** **`delegate-codex.sh` に `impl` モードを追加**(`--sandbox workspace-write`)。終了コード契約は `0` 完了 / `1` 判断待ち / `2` 失敗 / `3` Codex 利用不可 / `4` レート上限 / **`5` 計画が未完成**(`design.md` が `<!-- status: ready -->` でない)。割り込みは 130 / 143 で、これは契約とは別枠(「委託の結果」ではなく「委託が中断された」)
+- **[auto]** ⚠️ **`codex exec` の `exit 0` は「タスクが成功した」を意味しない**(実測。sandbox が起動せず何一つ達成できなかった委託が `exit 0` を返した)。`impl` では事前スナップショット(作業ツリー・HEAD・`tasklist.md` の `[x]` 数)と突き合わせ、**どれも変化していなければ `exit 2` に落とす**。サマリーの文面から成否を推測しないこと
+- **[auto]** **`.claude/scripts/codex-run.sh` を新設**。run record(`.harness/codex-runs/*.json`)の `list` / `pending` / `show` / `accept` / `set-status`。**検収が通ったら `accept` する**運用(立て忘れると未検収の記録が残り続ける)
+- **[auto]** **`.claude/scripts/harness-mode.sh` を新設**。ハーネスモード(`normal` / `econ` / `degraded`)の唯一の読み取り経路。読む順序は `CODEX_HARNESS_MODE` > `.harness/mode` > `normal` に固定。読み手が Claude 側と Codex 側の 2 系統あるため、判定の実体をここに集約する
+- **[auto]** **`.claude/rules/mode/econ.md` / `degraded.md` を新設**。SessionStart hook が**モードが `normal` 以外のときだけ**注入する(既定モードで毎回数十行を注入すると、モード B が節約しようとしているコンテキストそのものを食う)
+- **[auto]** SessionStart hook に **未検収の Codex 委託の注入**を追加。`/clear` や resume だけでなく通常の `startup` でも出す(モード B の既定経路は「司令塔がセッションを閉じる → 人間が委託 → 新セッションを開く」であり、再開が `/clear` とは限らないため)
+- **[auto]** `/add-feature` ・ `/next-ticket` ・ `/fix-issue` の実装ステップを**委託経路**に改訂。**既定は Codex、`exit 3` を一度受けたらそのセッションは以降ずっと `implement-ticket`(Sonnet fork)**(恒久フォールバック。同じ環境欠落を毎回試さない)
+- **[manual]** **モード B(節約)の運用を追加**。`design.md` を書き切ったらセッションを閉じ、検収は CI に預け、**PR は `--draft` で積んでマージしない**。draft は作法ではなく節約の実体で、`claude-code-review.yml` は `draft == false` のときだけ走る一方 `ci.yml` は draft でも走る(同一 PR で実測)。**取り込む側の作業**: `.harness/mode` は gitignore 済みなので、使うときは人間が `echo econ > .harness/mode` する。**Claude には書き換えさせない**(切替の宣言は人間の担当)
+- **[auto]** `claude-code-review.yml` / `claude.yml` に**スキップの可視化**を追加。`CLAUDE_CODE_OAUTH_TOKEN` 未設定のときは run の annotation と Summary に「未実行」を出す。**ジョブの `success` はレビュー通過を意味しない** — この取り違えは実際にドキュメントの誤記録を生んでいる
+
+## 2026-08-23
+
+Codex 併用ハーネスの**前提環境(段階0)**。Codex を使わないプロジェクトには影響しません。
+
+- **[manual]** **`.claude/codex-denylist.txt` を新設**(新規 / `merge` 区分)。委託前の機密ファイル検査のパターンを、スクリプトから**プロジェクト側に外出し**した。**このファイルが無いと `delegate-codex.sh` は `exit 3` で止まる**(検査が成立しないなら委託しない = フェイルクローズ)。**取り込む側の作業**: テンプレート側をコピーし、自分のプロジェクトの機密ファイル名を足す。**モジュールパス(委託禁止領域)をここに書かないこと** — 該当ファイルが存在するだけで全委託が止まる、性質の違う層
+- **[manual]** ⚠️ **`.devcontainer/devcontainer.json` に `"runArgs": ["--security-opt", "seccomp=unconfined"]` を追加**。Docker 既定の seccomp プロファイルが非特権 user namespace を禁じるため、**Codex の sandbox(bubblewrap)が起動せずファイルを 1 つも読めない**(委託は完走するのに中身が空、という最も気づきにくい壊れ方をする)。**取り込む側の作業**: `.devcontainer/` は `never` 区分なので手で足し、リビルド後に `codex sandbox echo hello` が exit 0 になることを確認する
+- **[manual]** **`.devcontainer/post_create.sh` に Codex CLI の導入を追加**。単純な `npm install -g @openai/codex` では不足で、プラットフォーム別バイナリが optional dependency のため**取得失敗が握り潰され実行時に落ちる**。成否は npm の終了コードではなく `codex --version` で判定し、失敗したら 1 回再試行する。**取り込む側の作業**: `never` 区分なので手でコピーする。認証(`codex login`)は**初回とリビルドのたびに人間が実行**する(`~/.codex` は永続化しない方針)
+
 ## 2026-08-20
 
 Codex 併用ハーネスの**最小構成(読み取り委託)**。実装委託(書き込み)はまだ入っていないので、取り込んでも既存の運用は変わりません。**Codex を使わないプロジェクトは、取り込んでも何も起きません**(`delegate-codex.sh` は `codex` コマンドが無ければ exit 3 で止まるだけ)。

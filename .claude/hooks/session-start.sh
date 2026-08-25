@@ -6,6 +6,8 @@
 #      web リモートでは毎セッションが startup のため、startup でも注入する
 #   3) startup 時にコード規模を検知し、serena MCP 再導入の目安超過を通知する
 #   4) 司令塔専用ルール(.claude/rules/lead/*.md)を注入する
+#   5) ハーネスモード(.harness/mode)が normal 以外なら .claude/rules/mode/*.md を注入する
+#   6) 未検収の Codex 委託(.harness/codex-runs/)を注入する
 set -uo pipefail
 
 INPUT="$(cat 2>/dev/null || true)"

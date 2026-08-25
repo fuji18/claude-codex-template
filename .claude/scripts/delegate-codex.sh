@@ -7,7 +7,8 @@
 #   explore <調査指示 | ファイルパス>  … 広域コード探索。サマリーのみ返す(read-only)
 #   review  <base-ref>                … 敵対的レビュー。指摘リストを返す(read-only)
 #   impl    <.steering/[dir]>         … 実装フェーズの委託(workspace-write)
-# fix-ci と --background は未実装(fix-ci は段階外、--background は段階4)。
+# fix-ci と --background は未実装。前者は本テンプレートの段階外、後者は「前景で 1 本ずつ」を
+# 運用として選んだため(根拠: docs/template-dev/codex-delegation-plan.md §6)。
 #
 # 終了コード契約(司令塔はこの値だけを見て分岐する。推測しない):
 #   0 完了                             → 検収へ
@@ -138,7 +139,7 @@ fi
 if [ $# -gt 0 ]; then
   case "$1" in
     --background)
-      echo "delegate-codex: --background は段階4で実装します(未検収委託が SessionStart に出るようになるまで非同期にしない)" >&2
+      echo "delegate-codex: --background は未実装です(委託は前景で 1 本ずつ。根拠: docs/template-dev/codex-delegation-plan.md §6)" >&2
       ;;
     *)
       echo "delegate-codex: 未知のオプション: $1" >&2

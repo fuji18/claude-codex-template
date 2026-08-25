@@ -174,7 +174,7 @@ flowchart TD
 - **`/sync-docs`** も乖離検出フェーズを読み取り専用サブエージェント(Sonnet)に委譲し、更新判断は司令塔が行う
 - **Edit/Write 直後に prettier が自動実行**され、lint・型チェックも非同期で走る(PostToolUse hooks)。フォーマット起因のチェック失敗は原則発生せず、型エラーも早期に検知される
 - **危険コマンドは二段構えでブロック**する(`permissions.deny` + PreToolUse の `block-dangerous-cmds.sh` パターン検査)
-- **実装フェーズの委譲は hook で強制される**: 実装フェーズ進行中(最新 `.steering/` の `tasklist.md` に未完了タスクがある状態)にメインセッションが実装コードを編集しようとすると、PreToolUse の `check-implementation-phase.sh` がブロックする。フックはサブエージェント内でも発火するが、入力に `agent_id` が載るかどうかで司令塔と実装 subagent を区別している。`.steering/` / `docs/` / `.claude/` への編集は司令塔の仕事なので通る
+- **実装フェーズの委譲は hook で強制される**: 実装フェーズ進行中(最新 `.steering/` の `tasklist.md` に未完了タスクがある状態)にメインセッションが実装コードを編集しようとすると、PreToolUse の `check-implementation-phase.sh` がブロックする。フックはサブエージェント内でも発火するが、入力に `agent_id` が載るかどうかで司令塔と実装 subagent を区別している。`.steering/` / `docs/` / `.claude/` / `.github/` / `.husky/`(計画・ドキュメント・ハーネス)への編集は司令塔の仕事なので通る
   - 検査対象は **Edit / Write ツール**。`sed -i` やリダイレクトによる Bash 経由の書き込みまでは見ていない(逸脱を止めるガードレールであって、サンドボックスではない)
   - 「最新の `.steering/`」の判定は `.claude/scripts/latest-steering.sh` に集約している(日付プレフィックス降順 → 同日は mtime 降順)。hook・fork・SessionStart が同じディレクトリを指すことが前提のため、**自前で `ls | sort` しないこと**
   - テンプレート自体の改修など司令塔が実装すべき作業では、`tasklist.md` に `<!-- main-edit-ok -->` を書いて解除する。**このマーカー付きの `.steering/` をプロダクト側に残さないこと**(`/kickoff` フェーズ5 が削除する)
@@ -183,11 +183,11 @@ flowchart TD
 - **Claude Code on the web** から開いた場合は SessionStart hook が `npm install` を自動実行する(devcontainer 不要で `/check` が通る)。web のリモート環境には `gh` CLI がないため、GitHub 操作は MCP ツールで代替される(CLAUDE.md に明記済み)
 - **MCP は最小構成**: 既定は Context7(最新ライブラリドキュメント参照。`.mcp.json` に登録済み、初回セッションで承認が必要)のみ。プロジェクト特性に応じた追加は `/kickoff` フェーズ1.5 が提案する(判断基準: `.claude/docs/mcp-introduction-guide.md`)
 - **`/clear`・resume 後は SessionStart hook が現在地を自動注入**する(ブランチ・**ポリシー上のベースブランチと乖離警告**・未コミット変更・in-progress Issue・最新 `.steering/` の未完了タスク)。web リモートは毎回新セッションで始まるため、セッション開始時にも注入される
-- **ブランチ戦略は `.claude/branch-policy.json` が単一ソース**。アプリ/web のリモートセッションはプラットフォームが `claude/*` ブランチを既定ブランチ起点で先に作るため、規約から乖離しやすい。対策は 4 段構え:
+- **ブランチ戦略は `.claude/branch-policy.json` が単一ソース**。アプリ/web のリモートセッションはプラットフォームが `claude/*` ブランチを既定ブランチ起点で先に作るため、規約から乖離しやすい。対策は 4 段構え(**実際に阻止するのは 2 の PreToolUse hook と 3 の git hook 2 ファイルだけ**。1 は追認、4 は別軸の最終検証):
   1. `claude/*` を `feature/*` と同格の正規ブランチとして**追認**する(リネームするとセッションとの紐付けが壊れるため禁止)
-  2. SessionStart hook がベースブランチを事実として注入し、PreToolUse hook が保護ブランチへの直接コミットと `gh pr create --base` の誤りをブロックする(**Claude 経由のみ**)
+  2. SessionStart hook がベースブランチを事実として注入する(**情報提供であり、それ自体は何も阻止しない**)。実際に止めるのは PreToolUse hook で、保護ブランチへの直接コミットと `gh pr create --base` の誤りをブロックする(**Claude 経由のみ**)
   3. `.husky/` の git hook が保護ブランチへの直接コミットをブロックする(**ベンダー非依存**なので、手動 `git` や Claude 以外の AI ツールにも効く)。`pre-commit` が `git commit` / `--amend` を、`prepare-commit-msg` が `git revert` / `git cherry-pick` を止め(後者は `pre-commit` が発火しない)、`git merge` / `git pull` の取り込みだけを通す(`.git/MERGE_HEAD` の有無で判別する。フックの第 2 引数だけで判断すると `git revert -e` / `git cherry-pick -e` がすり抜ける)。判定の実体は 2 と共有(`.claude/scripts/check-protected-branch.sh`)なので経路によらず同じ結果になる
-  4. CI の `branch-policy` ジョブがクライアント(CLI / アプリ / GitHub UI)によらずマージ前に最終検証する
+  4. CI の `branch-policy` ジョブがクライアント(CLI / アプリ / GitHub UI)によらずマージ前に最終検証する。ただし見るのは **PR の base とブランチ名だけ**で、直接コミットされたかは見ない(そこは 2・3 が担う)
   - **アプリからセッションを作るときは、セッションのベースブランチにポリシーの `baseBranch` を選ぶ**と 1 段目から乖離しない(テンプレート既定は `main` の GitHub Flow。`develop` 統合ブランチを採るプロジェクトは `/kickoff` でポリシーファイルを更新する)
 - **チケット完了(PR 作成)ごとに `/clear`** してから次の `/next-ticket` を始める。作業状態は Issue・`.steering/`・git に永続化済みなので、コンテキストを持ち越す必要がない(トークン消費の最大の削減ポイント)
 
