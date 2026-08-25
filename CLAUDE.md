@@ -31,8 +31,13 @@
 - `.claude/scripts/delegate-codex.sh` — 委託の唯一の入口。壊れたものがコミットされると以後すべての委託が不能になり、その委託自身は自分の変更を検証できない(実行中プロセスの保護は #15 の自己コピー exec で別途実装済み。`docs/template-dev/codex-delegation-plan.md` §9)
 - `.claude/scripts/check-protected-branch.sh` / `.husky/pre-commit` / `.husky/prepare-commit-msg` — ベンダー中立ガードレールの本体
 - `.claude/codex-denylist.txt` — 委託先が自分の送信禁止リストを編集できてはならない
+- `AGENTS.md` — 委託先の憲法。入口検査3 の `<!-- verify-probe: ... -->` は次回委託時にホスト上の `bash -c` へそのまま渡されるため、書き換えを許すとサンドボックス外でのコマンド実行経路になる
+- `.github/workflows/` — 非 fork PR で `CLAUDE_CODE_OAUTH_TOKEN` にアクセスできるワークフロー定義そのもの
+- `.harness/mode` / `.harness/codex-runs/` — ハーネスモードと run record。委託先が自分の結果を `accepted` に書き換えたりモードを詐称したりできてはならない
 
 **機密の送信禁止(`.claude/codex-denylist.txt`)とは別の層。** denylist は該当ファイルが存在するだけで委託を止めるフェイルクローズ検査、こちらは司令塔が「どのチケットを渡すか」を決める振り分け判断。
+
+**このリストは `delegate-codex.sh` の出口検査(`FORBIDDEN_PATHS`)が単一ソース。** impl 委託の実行後に前後の内容ハッシュを突き合わせ、差分があれば `status=failed` / `exit 2` で止める。ここの記述はその説明であり、内容を変えるときはスクリプト側の配列と `AGENTS.md` §4 を同時に直す。
 
 ## ディレクトリ構造(要点)
 

@@ -130,14 +130,19 @@ touch .git/.probe 2>/dev/null && rm -f .git/.probe && echo GIT_WRITABLE || echo 
 ### 委託禁止領域(パス)
 
 以下のパスに触れる変更は**委託の対象外**です。タスクがこれらの変更を求めている場合、**変更せずに停止して報告してください**(モード C では `codex-log.md` に記録して、その項目だけ飛ばします)。
+これは機械的にも検査されます。委託の終了時に以下のパスの内容ハッシュが照合され、差分があると委託全体が `failed` として扱われます(あなたの報告内容にかかわらず)。他の作業が正しくても巻き添えで無効になるため、触らないでください。
 
 <!-- kickoff:delegation-forbidden-paths -->
 - `.claude/scripts/delegate-codex.sh` — 実行中のあなた自身の起動元。委託の唯一の入口であり、壊れたものがコミットされると以後すべての委託が不能になります(実行中のプロセス自体は自己コピーで保護済み)
 - `.claude/scripts/check-protected-branch.sh` / `.husky/pre-commit` / `.husky/prepare-commit-msg` — ガードレール本体
 - `.claude/codex-denylist.txt` — 委託先が自分の送信禁止リストを書き換えることはできません
+- `AGENTS.md` — このファイル自身。冒頭の `<!-- verify-probe: ... -->` は次回の委託時にホスト側で実行されるため、あなたが書き換えるとサンドボックスの外へ影響が出ます
+- `.github/workflows/` — CI 定義そのもの。ここを書き換えると認証済みトークンに触れられます
+- `.harness/mode` / `.harness/codex-runs/` — ハーネスモードと委託の実行記録。自分の結果を承認済みにすることはできません
 <!-- /kickoff:delegation-forbidden-paths -->
 
 > 上の項目はテンプレート由来の**汎用項目**で、どのプロジェクトでも残ります(`delegate-codex.sh` と `.husky/` はすべてのプロジェクトに配布されるため)。プロダクト側のプロジェクトでは `/kickoff` フェーズ4 が、その下に**そのプロジェクトの実際のモジュールパス**(認証・決済・データ移行など)を**追記**します。マーカーの行自体も消さないでください。
+> なお、機械的な検査(`delegate-codex.sh` の `FORBIDDEN_PATHS`)が見るのはテンプレート由来の汎用項目だけです。`/kickoff` が追記したプロジェクト固有パスは散文の指示として守ってください。
 
 ### `design.md` の完成マーカー
 
