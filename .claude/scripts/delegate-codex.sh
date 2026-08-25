@@ -17,6 +17,9 @@
 #   4 Codex 側のレート上限             → 一時フォールバック(待つ or Sonnet fork)
 #   5 計画が未完成(impl の design.md が draft のまま)
 #
+# 割り込み(SIGINT / SIGTERM)では 130 / 143 を返す。これは 0〜5 の契約とは別枠で、
+# 「委託の結果」ではなく「委託が中断された」ことを表す(run record は running のまま残る)。
+#
 # 3 と 4 を混ぜないこと。前者は環境の欠落(恒久)、後者は枠切れ(一時)で
 # 回復手段が違う。
 #
@@ -29,6 +32,54 @@
 #
 # 参照: docs/template-dev/codex-delegation-plan.md §3
 set -uo pipefail
+
+# ---------- 自己編集ハザード対策: 自身をコピーして exec ----------
+#
+# bash はスクリプトを逐次読み込みする。実行中に自分自身のファイルが書き換わると
+# 次に読むオフセットがずれ、無関係な行で構文エラーになって死ぬ。委託先がハーネス層を
+# 触るのはテンプレート開発では常態なので、起動直後に自身を一時ディレクトリへコピーし、
+# そちらを exec して走る。以降どれだけ元ファイルが書き換わっても、読んでいるのは
+# コピーなので影響がない(根拠: docs/template-dev/codex-delegation-plan.md §9)。
+#
+# exec は PID もカレントディレクトリも変えないため、$$ を使う RUN_ID / run record の
+# pid、および git rev-parse --show-toplevel 以下の相対パス参照は従来どおり成立する。
+#
+# 環境変数:
+#   CODEX_DELEGATE_SELF_COPY    内部用。コピー先ディレクトリ(= 再入マーカー)。外から設定しない
+#   CODEX_DELEGATE_NO_SELF_COPY =1 でコピーを行わない(再現テストが旧挙動を再現するための逃げ道)
+#
+# ここはフェイルオープンにする。機密送信やガードレールと違い、これは堅牢化の層であって
+# 安全検査ではない。コピーに失敗しただけで委託を丸ごと止めるのは、通したコストより
+# 止めたコストの方が大きい(入口検査群とは非対称の判断)。
+if [ "${CODEX_DELEGATE_NO_SELF_COPY:-}" = "1" ]; then
+  # 保護を切ったことは必ずログに残す。コピー失敗時は警告が出るのに、明示的な無効化だけが
+  # 黙って通るのは非対称で危うい(シェルプロファイルや CI の環境変数に残っていても気づけない)。
+  echo "delegate-codex: 警告 — CODEX_DELEGATE_NO_SELF_COPY=1 のため自己コピー保護を無効にしています(再現テスト以外では設定しないでください)。" >&2
+elif [ -z "${CODEX_DELEGATE_SELF_COPY:-}" ]; then
+  _self="${BASH_SOURCE[0]:-$0}"
+  _copy_dir="$(mktemp -d 2>/dev/null || true)"
+  if [ -n "$_copy_dir" ] && [ -d "$_copy_dir" ] &&
+    cp "$_self" "$_copy_dir/delegate-codex.sh" 2>/dev/null; then
+    export CODEX_DELEGATE_SELF_COPY="$_copy_dir"
+    # exec が失敗した場合、非対話シェルはその場で終了する(execfail 未設定。実測 exit 127)。
+    # したがってマーカーを export したまま下のブロックへ抜ける経路は存在しない。
+    exec bash "$_copy_dir/delegate-codex.sh" "$@"
+  fi
+  [ -n "$_copy_dir" ] && rm -rf "$_copy_dir"
+  echo "delegate-codex: 警告 — 自身の一時コピーを作れませんでした。委託中にこのスクリプトが書き換わると異常終了します。" >&2
+fi
+
+if [ -n "${CODEX_DELEGATE_SELF_COPY:-}" ]; then
+  SELF_COPY_DIR="$CODEX_DELEGATE_SELF_COPY"
+  # 子プロセス(codex exec とその sandbox)の環境に漏らさない。
+  unset CODEX_DELEGATE_SELF_COPY
+  cleanup_self_copy() { [ -n "${SELF_COPY_DIR:-}" ] && rm -rf "$SELF_COPY_DIR"; }
+  trap cleanup_self_copy EXIT
+  # 既定では SIGINT / SIGTERM で EXIT トラップを通らずに死ぬ = 一時ディレクトリが残る。
+  # exit を明示して EXIT トラップへ落とす(終了コードはシグナル既定の 128+n に揃える)。
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+fi
 
 EX_FAIL=2
 EX_UNAVAIL=3

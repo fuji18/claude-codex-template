@@ -28,7 +28,7 @@
 
 以下は Codex に委託しない(司令塔または `implement-ticket` の fork が直接書く)。振り分けの判断基準は `.claude/rules/lead/delegation-policy.md`。
 
-- `.claude/scripts/delegate-codex.sh` — 委託の実行中に自分自身が書き換わると、bash の逐次読み込みで親プロセスが死ぬ(2026-08-23 に実測。`docs/template-dev/codex-delegation-plan.md` §9)
+- `.claude/scripts/delegate-codex.sh` — 委託の唯一の入口。壊れたものがコミットされると以後すべての委託が不能になり、その委託自身は自分の変更を検証できない(実行中プロセスの保護は #15 の自己コピー exec で別途実装済み。`docs/template-dev/codex-delegation-plan.md` §9)
 - `.claude/scripts/check-protected-branch.sh` / `.husky/pre-commit` / `.husky/prepare-commit-msg` — ベンダー中立ガードレールの本体
 - `.claude/codex-denylist.txt` — 委託先が自分の送信禁止リストを編集できてはならない
 
