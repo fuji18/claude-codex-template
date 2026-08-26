@@ -749,6 +749,12 @@ Codex 委託はコードを OpenAI 側に送ることを意味する。顧客コ
 
 **このリポジトリの判断(2026-08-23)**: テンプレート本体は OSS で顧客コード・個人情報・本番シークレットを含まないため、**Codex 委託を使う**。送信してよいのはトラッキング対象ファイルすべて。送信禁止の一覧は **`.claude/codex-denylist.txt`** を単一ソースとし、`delegate-codex.sh` の入口検査1 がそれを読む(ファイルが無い / 有効パターンが 0 件なら委託を止める = フェイルクローズ)。`.harness/` 配下(過去の委託ログ)は検出対象ではなく走査除外で扱う。
 
+**保護範囲の追記(2026-08-26 / Issue #23)**:
+
+- **保護範囲はワークツリー内に限られる。** `delegate-codex.sh` の入口検査1 は `find .` でリポジトリルート配下だけを走査する。ホーム配下の資格情報(`~/.config/gh/hosts.yml` / `~/.claude/` など)は検査対象外であり、sandbox にも読み取り除外が無いため守れない
+- **環境変数**は別枠で塞いだ。`codex exec` は `env -i` + 許可リストで起動し、`LOCAL_GH_TOKEN` / `CLAUDE_CODE_MESSAGING_TOKEN` 等は子プロセスへ渡らない(実測: 委託先に `env` を出力させて確認。verification.md 参照)
+- 残る限界は「ホーム配下にファイルとして置かれた資格情報」。物理的な隔離が必要なら別チケット
+
 ### 10.3 委託禁止領域をパスで具体化する(アーキテクチャ確定後)
 
 「認証・決済・データ移行」という抽象定義を、**実際のモジュールパス**(例: `src/auth/**`・`src/billing/**`)で CLAUDE.md と AGENTS.md に書き直す。パス指定の方が振り分けが機械的になり、誤委託が減る。
@@ -960,7 +966,7 @@ Codex CLI が未インストール(段階0 が未達)のため、確かめられ
 | 4 | `.codex/prompts/` の project スコープ対応(→ `.codex/skills/` で決着) | ❌ **そもそも存在しない(2026-08-23 実機)**。v0.149.0 に `prompts` サブコマンドは無く、`~/.codex/` にも `prompts/` は無い。ネイティブバイナリの文字列走査でも `.codex/prompts` / `CODEX_HOME/prompts` は 0 件。**カスタムプロンプトの仕組みは skills に置き換わっている**(`CODEX_HOME/skills` と `/.codex/skills` の両方が出る)。✅ **`.codex/skills/` の project スコープは 2026-08-24 に実機で確定**し、発見と本文ロードの両方が動作した | ~~段階5(#7)で実機確認し、動かなければ `docs/playbook/codex-standalone.md` に降格~~ → **降格は発生しなかった**(§7.3) |
 | 5 | Codex CLI がこの devcontainer で動くか | ✅ **確定(2026-08-23)**。導入・認証(`chatgpt` モード)・sandbox 起動・WebSocket 疎通(HTTP 101)まで実機で確認し、`codex doctor` は全項目 ✓。未認証時に出ていた WebSocket 警告は**認証で消えた**(ネットワークではなく認証が原因だった)。sandbox は seccomp 修正が前提(§11)。導入は `post_create.sh` で恒久化済み | 認証キャッシュ `~/.codex/auth.json` はリビルドで消える。**#4 で「永続化しない」と決定した**(`mounts` を張らず `codex login` で入り直す。理由は §11) |
 | 6 | レート上限のリセット単位(5 時間枠 / 週次)と `resetAt` の取得可否 | ✅ **単位は確定**(5 時間枠 + 週次)。**`resetAt` は `codex exec --json` からは取れないと確定(2026-08-23 実機)**。成功した委託 1 回(114,919 B)のイベント型は `thread.started` / `turn.started` / `item.started` / `item.completed` / `turn.completed` の 5 種のみで、`turn.completed` が持つのは `usage` だけ。`resets_at` / `rate_limit` は 0 件。バイナリにある `AccountRateLimitsUpdated` は app-server プロトコル側の通知で exec には流れない | **これを採用**: 「待つ」判断を人間に委ねる(§12.6)。スクリプトの `resets_at` 抽出はそのまま残す(上限時のエラー出力に出れば埋まる。出なければ `null`) |
-| 7 | **`.codex/config.toml` にパス単位の読み取り除外があるか** | ✅ **存在しない**。sandbox は**書き込み**の制限であり、読み取りの deny-list は無い。`delegate-codex.sh` の機密事前チェックが**唯一の層**として確定した(段階2 で実装済み) | 無ければ `delegate-codex.sh` の事前チェック(§3.2)だけが防衛線になる。当てにせず 1 段目を必ず実装する |
+| 7 | **`.codex/config.toml` にパス単位の読み取り除外があるか** | ✅ **存在しない**。sandbox は**書き込み**の制限であり、読み取りの deny-list は無い。`delegate-codex.sh` の機密事前チェックが**ワークツリー内の唯一の層**として確定した(段階2 で実装済み) | 無ければ `delegate-codex.sh` の事前チェック(§3.2)だけが防衛線になる。当てにせず 1 段目を必ず実装する |
 
 **現状(2026-08-24 更新): #1〜#7 はすべて確定済みで、未確認事項はない。** #4 は `.codex/prompts/` が存在しないという形で決着し、代替となる `.codex/skills/` の project スコープも実機で発見・本文ロードの動作を確認した。
 
