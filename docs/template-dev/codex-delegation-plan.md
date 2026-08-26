@@ -253,7 +253,7 @@ skip すると run の annotation(`::warning`)と job summary に「レビュー
   }
   ```
 
-  `accepted` は検収の通過を表し、司令塔が検収後に `true` にする。`.harness/codex-runs/` は一時状態なので **`.gitignore` に追加する**(`.harness/decisions.jsonl` はコミットする、という既存の使い分けに合わせる)
+  `accepted` は検収の通過を表し、司令塔が検収後に `true` にする。`.harness/codex-runs/` は一時状態なので **`.gitignore` に追加する**(`.harness/decisions.jsonl` はコミットする、という既存の使い分けに合わせる)。read-only の委託(explore / review)は検収対象の成果物を残さないため、`completed` の時点で `accepted: true` を書く(Issue #22)。
 
 - **現在のモードをプロンプトに注入する**: AGENTS.md は静的ファイルなので、それだけでは Codex は**自分がどのモードにいるか判別できない**。モード別の許可(コミットの可否など §7.1)が機能するには、モードが必ず伝わる経路が要る。委託経路は 1 本なので、ここで `.harness/mode` を読んでプロンプトに載せる
   - **ただしこの経路だけでは足りない。** モード C は `delegate-codex.sh` を通らない(Codex を直接起動する)ため、スクリプト注入は届かない。そのため **AGENTS.md 側にも「起動時に `.harness/mode` を読む」を書く**(§7.1)。スクリプトからの注入はその上書きにすぎない
