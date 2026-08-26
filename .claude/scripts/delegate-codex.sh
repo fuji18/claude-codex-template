@@ -541,6 +541,17 @@ fi
 # explore / review は入口検査5 を通らず並行できるのでこの経路が残る。
 RUN_ID="$(date +%Y%m%d-%H%M%S)-$$"
 mkdir -p "$RUN_DIR" || exit "$EX_FAIL"
+
+# run record は自動削除しない(§12.8)。溜まるほど出口検査の forbidden_snapshot() が
+# .harness/codex-runs/ 配下を前後 2 回ハッシュするコストが線形に増えるため、閾値を
+# 超えたら警告だけ出す。削除の判断は人間が行う(未検収の record は検収キューであり、
+# 勝手に消えると検収漏れが静かに発生する)。
+RUN_WARN_THRESHOLD=50
+REC_COUNT="$(find "$RUN_DIR" -maxdepth 1 -type f -name '*.json' 2>/dev/null | wc -l | tr -d ' ')"
+if [ "${REC_COUNT:-0}" -gt "$RUN_WARN_THRESHOLD" ]; then
+  echo "delegate-codex: run record が ${REC_COUNT} 件あります(閾値 ${RUN_WARN_THRESHOLD})。\`bash .claude/scripts/codex-run.sh prune --dry-run\` で整理を検討してください(委託は続行します)。" >&2
+fi
+
 LOG="$RUN_DIR/$RUN_ID.log"
 REC="$RUN_DIR/$RUN_ID.json"
 LAST="$RUN_DIR/$RUN_ID.last.txt"
@@ -735,9 +746,9 @@ forbidden_files() {
 #     その状態で改ざんが残っていると、次回委託の BEFORE スナップショットが改ざん後の内容を
 #     基準に取るため以後検出できない。run record が status=running のまま残ることが唯一の
 #     手掛かりになる(回復手順は codex-delegation-plan.md §12.6)
-#   - .harness/codex-runs/ はローテーションされないため、run record が溜まるほど前後 2 回の
-#     ハッシュ計算コストが線形に増える。委託 1 本の所要時間に対しては十分小さいので、
-#     ローテーションの整備は別チケットに送っている
+#   - .harness/codex-runs/ が溜まるほど前後 2 回のハッシュ計算コストが線形に増える。委託 1 本の
+#     所要時間に対しては十分小さいため検査対象は絞り込まず、元を断つ側(手動の
+#     `codex-run.sh prune`)で抑える。自動削除はしない(Issue #29 / §12.8)
 forbidden_snapshot() {
   local _f _h
   # sort -u なのは重複を畳むため(汎用項目とマーカー内の項目は重なる。ディレクトリ指定と
