@@ -258,7 +258,7 @@ skip すると run の annotation(`::warning`)と job summary に「レビュー
 - **現在のモードをプロンプトに注入する**: AGENTS.md は静的ファイルなので、それだけでは Codex は**自分がどのモードにいるか判別できない**。モード別の許可(コミットの可否など §7.1)が機能するには、モードが必ず伝わる経路が要る。委託経路は 1 本なので、ここで `.harness/mode` を読んでプロンプトに載せる
   - **ただしこの経路だけでは足りない。** モード C は `delegate-codex.sh` を通らない(Codex を直接起動する)ため、スクリプト注入は届かない。そのため **AGENTS.md 側にも「起動時に `.harness/mode` を読む」を書く**(§7.1)。スクリプトからの注入はその上書きにすぎない
   - 優先順位は **プロンプトで渡された値 > `.harness/mode` > `normal`(モード A)**。読み手が 2 系統でも結論が 1 つになるよう順序を固定する
-- **再入可能にする**: 同じ steering に対して再実行されたら run record を見て「実行中」「完了済み」を判定し、二重起動しない
+- **再入可能にする**: run record を見て「実行中」「完了済み」を判定し、二重起動しない。判定軸は steering ではなく **mode=impl** — 同一ステアリングへの二重起動だけでなく、**別ステアリングへの並行 impl 委託も止める**(ワーキングツリーを共有するため。`delegation-policy.md` の「並行数は 1 本まで」を機械化した層。実装は §12 の 5-5)。read-only の `explore` / `review` はこの検査を通らず並行できる
 - **委託前に機密をチェックする**: `.env` / `*.pem` / `id_rsa*` / `credentials*` 等がワークツリーにあれば警告して確認を求める。**`.gitignore` されていてもディスク上にあれば sandbox は読める**ため、委託はそれを OpenAI 側へ送りうる。存在しないのが正常なので普段は無言で通る
 - **入力は参照渡し**: プロンプトに Issue 本文やファイル内容を貼らない。パスだけ渡して Codex 自身に読ませる
 - **ネットワーク無効が既定**: sandbox のネットワークを切る(§7.2 / §8)。帰結として**新規依存の追加を伴うタスクは委託対象外**。必要な依存は委託前に司令塔がインストールしておく
@@ -943,12 +943,12 @@ Codex CLI が未インストール(段階0 が未達)のため、確かめられ
 | --- | --- | --- | --- | --- |
 | 入口検査1(機密ファイル) | `2` / `3` | denylist に一致するファイルを検出した(`2`)、または denylist が無い・有効なパターンが無い(`3`) | 検出時は内容を確認し、問題がなければ `CODEX_DELEGATE_ACK_SECRETS=1` を付けて再実行する。denylist 不備は `.claude/codex-denylist.txt` を整備する | denylist はプロジェクト固有であり、パターンに無い機密は検出しない。`node_modules` / `.git` / `.harness` 配下と `.example` / `.sample` / `.template` は走査対象外である |
 | 入口検査2・3(AGENTS.md / 検証プローブ) | `3` | `AGENTS.md` が無い、またはそこから得た検証プローブが失敗しており、規約か依存の導通を確認できない | `AGENTS.md` を配置する。プローブ失敗時は依存を先にインストールして再実行する | `AGENTS.md` に `<!-- verify-probe: ... -->` が無い既存プロジェクトでは警告だけ出して依存確認をスキップする |
-| 入口検査5-1(target がステアリングディレクトリでない) | `2` | `impl` の target がディレクトリでない、または `design.md` と `tasklist.md` の一方を欠いている | 両ファイルを持つ `.steering/[dir]` を target に指定して再実行する | `impl` 専用検査であるため、`explore` / `review` では検査しない |
+| 入口検査5-1(target がステアリングディレクトリでない) | `2` | `impl` の target がディレクトリでない、`.steering/` 配下でない、または `design.md` と `tasklist.md` の一方を欠いている | 両ファイルを持つ `.steering/[dir]` を target に指定して再実行する | `impl` 専用検査であるため、`explore` / `review` では検査しない |
 | 入口検査5-2(`design.md` の完成マーカーが `draft`) | `5` | 設計が未完成のため実装へ渡せない | 司令塔が `design.md` を書き切り、マーカーを `<!-- status: ready -->` に変えて再実行する | 完成マーカーが無い `design.md` は書きかけでも検査対象外として通す |
 | 入口検査5-3(`core.hooksPath` が未設定または実在しない) | `3` | `.husky/` があるのに git hook が無効で、保護ブランチへのコミットを止める層が存在しない | `npm ci` または `npx husky` で hooks を有効化してから再実行する。当面は Sonnet fork にフォールバックする | `.husky/` を持たないプロジェクトでは git hook 層の有無を判定できないため何も見ない |
 | 入口検査5-4(保護ブランチ上) | `2` | 保護ブランチ上で `workspace-write` の実装を委託しようとしている | 許可された接頭辞の作業ブランチを切ってから再実行する | `check-protected-branch.sh` は `jq` またはポリシーファイルが無いとフェイルオープンするため、保護ブランチでも通る |
 
-再入防止(5-5)では、同じステアリングへの委託が **実行中**なら `exit 2` で止まる。`status=running` なのにプロセスが居ない record は強制終了の疑いとして警告を出して通すため、サマリーではなく `tasklist.md` と `git diff` を根拠に §12.6 の手順で回復する。record は `bash .claude/scripts/codex-run.sh set-status <id> <status>` で実態に合う状態へ更新する。
+再入防止(5-5)では、**mode=impl の委託が実行中なら steering を問わず** `exit 2` で止まる(`delegation-policy.md` の「並行数は 1 本まで」を機械化した層)。同じステアリングへの二重起動と別ステアリングへの並行委託でメッセージを出し分ける。`status=running` なのにプロセスが居ない record は強制終了の疑いとして警告を出して通すため、サマリーではなく `tasklist.md` と `git diff` を根拠に §12.6 の手順で回復する。record は `bash .claude/scripts/codex-run.sh set-status <id> <status>` で実態に合う状態へ更新する。read-only の `explore` / `review` は入口検査5 を通らないため、従来どおり並行できる。
 
 ---
 

@@ -397,6 +397,25 @@ if [ "$MODE" = "impl" ]; then
   # ---- 5-1: target がステアリングディレクトリであること ----
   STEERING="${TARGET#./}"
   STEERING="${STEERING%/}/"
+
+  # target は `.steering/` 配下に限定する。run record の steering フィールドと
+  # SessionStart の現在地判定(latest-steering.sh)が `.steering/` 前提のため、
+  # 外のディレクトリを通すと状態管理が静かにずれる。
+  #
+  # `..` を先に弾くのは prefix 検査を素通りさせないため — `.steering/../foo/` は
+  # 文字列として `.steering/*/` に一致してしまう。
+  case "$STEERING" in
+    *..*)
+      echo "delegate-codex: impl の target に .. を含めることはできません: $STEERING" >&2
+      exit "$EX_FAIL"
+      ;;
+    .steering/*/) ;;
+    *)
+      echo "delegate-codex: impl の target は .steering/ 配下のディレクトリである必要があります: $STEERING" >&2
+      exit "$EX_FAIL"
+      ;;
+  esac
+
   DESIGN="${STEERING}design.md"
   TASKLIST="${STEERING}tasklist.md"
 
@@ -458,15 +477,27 @@ MSG
     exit "$EX_FAIL"
   fi
 
-  # ---- 5-5: 再入防止(同じ steering への二重起動)----
+  # ---- 5-5: 再入防止(impl の並行実行を 1 本に制限)----
+  # delegation-policy.md の「並行数は 1 本まで(同一ワーキングツリーを共有するため)」を
+  # 機械化する層。同じステアリングへの二重起動だけでなく、別ステアリングへの並行 impl も
+  # 止める(ツリーを共有するため、片方の lint/format が他方の編集を巻き込む)。
+  # 判定軸を steering 一致にしていたときはこの経路が素通りしていた。
+  #
+  # 空振り条件: explore / review は read-only でこの検査区画そのものを通らないため、
+  # 従来どおり並行できる(意図した挙動)。
+  # 誤検知の条件: 生存判定は pid のみを見るため、status=running のまま残った record の
+  # pid を OS が別プロセスに再利用していると「実行中」と誤認して止める。判定軸が全
+  # ステアリングに広がったぶん露出は増えた。止まったときは §12.6 の手順で record を
+  # 実態に合わせる(`codex-run.sh set-status <id> <status>`)。
   if [ -d "$RUN_DIR" ]; then
     for _f in "$RUN_DIR"/*.json; do
       [ -f "$_f" ] || continue
-      [ "$(rec_field "$_f" steering)" = "$STEERING" ] || continue
+      [ "$(rec_field "$_f" mode)" = "impl" ] || continue
       _st="$(rec_field "$_f" status)"
       [ "$_st" = "running" ] || continue
       _pid="$(rec_field "$_f" pid)"
       _rid="$(rec_field "$_f" id)"
+      _rsteer="$(rec_field "$_f" steering)"
       # pid は数字でなければ「取れなかった」として扱う。kill -0 に非数字を渡すと
       # 引数エラーで必ず失敗し、実行中の委託を「プロセス不在」と誤認して素通しする。
       # rec_field 側でも直したが、この層でも明示的に落とす(検査が空振りする条件を減らす)。
@@ -474,7 +505,11 @@ MSG
         '' | *[!0-9]*) _pid="" ;;
       esac
       if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
-        echo "delegate-codex: 同じステアリングへの委託が実行中です(id=$_rid pid=$_pid)。二重起動しません。" >&2
+        if [ "$_rsteer" = "$STEERING" ]; then
+          echo "delegate-codex: 同じステアリングへの委託が実行中です(id=$_rid pid=$_pid)。二重起動しません。" >&2
+        else
+          echo "delegate-codex: 別のステアリングへの委託が実行中です(id=$_rid pid=$_pid steering=$_rsteer)。impl の並行数は 1 本までです。" >&2
+        fi
         exit "$EX_FAIL"
       fi
       # プロセスが居ない running = 強制終了の疑い。止めはしないが必ず知らせる。
@@ -501,9 +536,9 @@ fi
 #
 # §3.2: これが状態の正。会話に依存しないので、委託を挟んで /clear できる。
 
-# pid を足すのは衝突回避。秒までしか持たない ID だと、別ステアリングへの
-# 委託を同じ秒に始めたとき log と record が無条件に上書きされる。再入防止は
-# 同一ステアリングしか見ないのでこの経路は塞げない。
+# pid を足すのは衝突回避。秒までしか持たない ID だと、同じ秒に始まった 2 本の
+# 委託で log と record が無条件に上書きされる。impl は 5-5 が 1 本に制限するが、
+# explore / review は入口検査5 を通らず並行できるのでこの経路が残る。
 RUN_ID="$(date +%Y%m%d-%H%M%S)-$$"
 mkdir -p "$RUN_DIR" || exit "$EX_FAIL"
 LOG="$RUN_DIR/$RUN_ID.log"
