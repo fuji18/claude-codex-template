@@ -16,20 +16,47 @@
 # node_modules / .git / .harness は走査自体をしない。
 #
 # このファイルが無い、または有効パターンが 0 件のときは委託を止める(フェイルクローズ)。
+#
+# 誤検出は許容する層。中身を見ずにファイル名だけで止めるため、機密を含まない
+# .npmrc(レジストリ設定のみ)や Thumbs.db でも止まる。内容を確認したうえで
+# CODEX_DELEGATE_ACK_SECRETS=1 を付けて再実行すれば通せる。通したコスト(機密の送信)が
+# 止めたコスト(Sonnet fork への切替)より大きいので、迷ったら止める側に倒す。
+#
 # 根拠: docs/template-dev/codex-delegation-plan.md §10.2
 
 # --- 実行時シークレット ---
 .env
 .env.*
 
-# --- 鍵・資格情報 ---
+# --- 鍵・証明書 ---
 *.pem
 *.key
 id_rsa*
 id_ed25519*
-credentials*
 *.p12
 *.pfx
+
+# --- 資格情報ファイル ---
+credentials*
+.git-credentials
+.netrc
+*-service-account*.json
+
+# --- パッケージレジストリの認証 ---
+.npmrc
+.pypirc
+
+# --- インフラ状態(リソースの実値を平文で含む) ---
+*.tfstate
+*.tfstate.backup
+
+# --- 実データ(資格情報ではないが、送られると個人情報・本番データが漏れる) ---
+# *.db は Thumbs.db 等の OS 生成ファイルにも当たる。誤検出したときは
+# 内容を確認して CODEX_DELEGATE_ACK_SECRETS=1 で通す。
+*.sqlite
+*.sqlite3
+*.db
+dump*.sql
 
 # --- ローカル固有設定(トークンが入りうる) ---
 .claude/settings.local.json
