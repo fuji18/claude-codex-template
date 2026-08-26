@@ -92,7 +92,7 @@ description: initial-requirements.mdを起点にプロジェクト開始フロ�
 3. **委託禁止領域をパスで具体化する**(Codex 併用時。フェーズ2 で `docs/architecture.md` / `docs/repository-structure.md` が確定した後だからここで行う):
    - 認証・決済・データ移行・ガードレールに相当するモジュールを**実際のパス**で洗い出す(例: `src/auth/**`・`src/billing/**`・`db/migrations/**`)
    - `CLAUDE.md`「プロジェクト固有ルール」節に「Codex への委託禁止領域(パス)」として列挙する(判断ルールの正)
-   - `AGENTS.md` の `<!-- kickoff:delegation-forbidden-paths -->` 〜 `<!-- /kickoff:delegation-forbidden-paths -->` の中に**追記する**(実装者への指示)。**既存の汎用項目(`delegate-codex.sh`・`.husky/` 等)は消さない** — これらはテンプレートからすべてのプロジェクトに配布されるため、どのプロジェクトでも成立する。マーカーの行自体も消さない
+   - `AGENTS.md` の `<!-- kickoff:delegation-forbidden-paths -->` 〜 `<!-- /kickoff:delegation-forbidden-paths -->` の中に**追記する**(実装者への指示)。**既存の汎用項目(`delegate-codex.sh`・`.husky/` 等)は消さない** — これらはテンプレートからすべてのプロジェクトに配布されるため、どのプロジェクトでも成立する。マーカーの行自体も消さない。**この節のパスは出口検査が委託開始時に抽出して機械的に検査する**ため、実在するパスをバックティックで囲んで書く(ディレクトリは `src/auth/` または `src/auth/**`)
    - **`.claude/codex-denylist.txt` には書かない。** あちらは「該当ファイルが存在するだけで委託を止める」機密送信のフェイルクローズ検査で、そこにモジュールパスを入れると全委託が常に止まる
 
 ## フェーズ5: リポジトリのプロダクト化
