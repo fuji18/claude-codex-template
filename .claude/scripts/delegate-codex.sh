@@ -464,8 +464,15 @@ STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 ENDED_AT=""
 CODEX_SESSION_ID=""
 
-# $1=status $2=summary $3=error $4=resetAt
+# $1=status $2=summary $3=error $4=resetAt $5=accepted(true/false。既定 false)
 write_record() {
+  # JSON にそのまま埋めるため true/false のリテラルに正規化する。
+  # 呼び出し側の綴り間違いや空文字で record が壊れた JSON になるのを防ぐ。
+  local _accepted
+  case "${5:-false}" in
+    true) _accepted=true ;;
+    *) _accepted=false ;;
+  esac
   cat >"$REC" <<JSON
 {
   "id": $(json_str "$RUN_ID"),
@@ -483,7 +490,7 @@ write_record() {
   "summary": $(json_or_null "${2:-}"),
   "error": $(json_or_null "${3:-}"),
   "log": $(json_str "$LOG"),
-  "accepted": false
+  "accepted": $_accepted
 }
 JSON
 }
@@ -838,7 +845,14 @@ MSG
   fi
 fi
 
-write_record "completed" "$SUMMARY" "" ""
+# read-only の委託(explore / review)は検収対象の成果物を残さない。
+# サマリーは下の標準出力で司令塔に渡り切っており、あとから accept する対象が無い。
+# accepted: false のまま残すと codex-run.sh pending が SessionStart のたびに
+# 注入し続け、コンテキストを削るための委託がコンテキストを太らせる(Issue #22)。
+ACCEPT_ON_COMPLETE=false
+[ "$MODE" = "impl" ] || ACCEPT_ON_COMPLETE=true
+
+write_record "completed" "$SUMMARY" "" "" "$ACCEPT_ON_COMPLETE"
 emit "completed" 0
 printf -- '--- summary ---\n%s\n' "$SUMMARY"
 exit 0
