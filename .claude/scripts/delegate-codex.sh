@@ -112,7 +112,8 @@ usage() {
 
 環境変数:
   CODEX_HARNESS_MODE          ハーネスモードの上書き(既定は .harness/mode)
-  CODEX_DELEGATE_ACK_SECRETS  機密ファイル検出時の承認(=1 で続行)
+  CODEX_DELEGATE_ACK_SECRETS  機密ファイル検出時の承認(=1 で続行。承認付き再実行であって人間確認の保証ではない)
+  CODEX_DELEGATE_ENV_ALLOW    委託先へ追加で渡す環境変数名(カンマ区切り。既定は許可リストのみ)
 USAGE
 }
 
@@ -165,7 +166,17 @@ done
 #
 # Codex の sandbox は「書き込み」の制限であり、読み取りの deny-list は
 # 存在しない(§13 #7 で確定)。.gitignore されていてもディスク上にあれば
-# 読めるため、委託は機密を委託先へ送りうる。入口の人間確認が唯一の層。
+# 読めるため、委託は機密を委託先へ送りうる。
+#
+# この検査が守るのは **ワークツリー内だけ**(find . の走査範囲)。ホーム配下の
+# 資格情報(~/.config/gh/hosts.yml・~/.claude/ など)は走査対象外で、sandbox 設定でも
+# 読み取りを止められない。環境変数経由の漏れは codex exec の許可リスト(§2)で塞いだが、
+# ファイルとして置かれた資格情報は依然として委託先から読める。ここは限界として受け入れ、
+# 物理的な隔離(別コンテナ・別ユーザー実行)が要るなら別途判断する。
+#
+# 検出時の CODEX_DELEGATE_ACK_SECRETS=1 は「人間が確認した」ことの保証ではなく、
+# **承認付き再実行**にすぎない。司令塔も Bash から付けて再実行できるため、
+# 人間の目が入るかどうかは permission prompt の設定に依存する。
 #
 # 何を機密とみなすかはプロジェクト固有(§10.2)なので、パターンは
 # .claude/codex-denylist.txt に外出しし、ここでは読むだけにする。
@@ -729,9 +740,70 @@ if [ "$MODE" = "impl" ]; then
   FORBIDDEN_BEFORE="$(forbidden_snapshot)"
 fi
 
+# ---------- codex exec に渡す環境の組み立て(許可リスト方式) ----------
+#
+# 親の環境には LOCAL_GH_TOKEN / CLAUDE_CODE_MESSAGING_TOKEN 等の機密が乗っている。
+# codex exec は env -i で起動し、許可リストに載った変数だけを明示的に渡す
+# (実測・根拠: docs/template-dev/codex-delegation-plan.md §10.2)。
+#
+# 各変数を残す理由:
+#   PATH                              codex 自身と sandbox 内のシェルが node / git / npx を解決するのに要る
+#   HOME                               Codex の認証(~/.codex/auth.json)と設定の探索元
+#   USER / LOGNAME / SHELL            sandbox 内でシェルを起こすツール群が参照する。無くても動くが削る利得が無い
+#   TERM                               Codex の出力制御。--color never を渡しているが未設定だと警告が出る環境がある
+#   LANG / LC_* / TZ                  文字コード・日付整形。委託先が生成するログの再現性に効く
+#   TMPDIR                             sandbox が一時ファイルを書く先。既定から外している環境で必要
+#   proxy 系 / SSL_CERT_* / NODE_EXTRA_CA_CERTS  プロキシ配下・社内 CA 環境で API 到達に必須(このリポジトリでは未設定)
+#
+# pnpm / corepack / npm_config_* 系は許可リストに含めていない(本リポジトリは npm 固定
+# のため不要)。他のパッケージマネージャを使うプロジェクトで必要になったら
+# CODEX_DELEGATE_ENV_ALLOW で追加する。
+CODEX_ENV=()
+_codex_env_add() {
+  # 未設定は渡さない。空文字は「設定済みの空」として渡す。
+  [ -n "${!1+x}" ] || return 0
+  CODEX_ENV+=("$1=${!1}")
+}
+
+for _name in PATH HOME USER LOGNAME SHELL TERM LANG TZ TMPDIR \
+  HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy \
+  SSL_CERT_FILE SSL_CERT_DIR NODE_EXTRA_CA_CERTS; do
+  _codex_env_add "$_name"
+done
+
+# 接頭辞マッチ: compgen -e はエクスポート済み変数名のみを列挙する(compgen -v は
+# スクリプト内部のシェル変数まで拾うので使わない)。除外パターンを先に書くこと。
+# CODEX_DELEGATE_* / CODEX_HARNESS_MODE はこのスクリプト自身の制御変数であり、
+# 委託先に見せる意味が無い(特に CODEX_DELEGATE_ACK_SECRETS が子に渡ると
+# 「承認済み」の事実が委託先から観測できてしまう)。
+for _name in $(compgen -e); do
+  case "$_name" in
+    CODEX_DELEGATE_* | CODEX_HARNESS_MODE) continue ;;
+    LC_* | CODEX_*) _codex_env_add "$_name" ;;
+  esac
+done
+
+# 追加の逃げ道: CODEX_DELEGATE_ENV_ALLOW(加算のみ。全バイパスは用意しない)。
+# 未知の環境で必要な変数が出たときに、スクリプトを編集せずに通せる。
+if [ -n "${CODEX_DELEGATE_ENV_ALLOW:-}" ]; then
+  echo "delegate-codex: 警告 — CODEX_DELEGATE_ENV_ALLOW により追加の環境変数を委託先へ渡します: $CODEX_DELEGATE_ENV_ALLOW" >&2
+  _saved_ifs="$IFS"; IFS=','
+  for _name in $CODEX_DELEGATE_ENV_ALLOW; do
+    _name="$(printf '%s' "$_name" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+    [ -z "$_name" ] && continue
+    if ! printf '%s' "$_name" | grep -qE '^[A-Za-z_][A-Za-z0-9_]*$'; then
+      echo "delegate-codex: 警告 — 変数名として不正なため無視します: $_name" >&2
+      continue
+    fi
+    _codex_env_add "$_name"
+  done
+  IFS="$_saved_ifs"; unset _saved_ifs
+fi
+unset _name
+
 write_record "running" "" "" ""
 
-codex exec \
+env -i "${CODEX_ENV[@]}" codex exec \
   --cd "$ROOT" \
   --sandbox "$SANDBOX" \
   --json \
