@@ -256,6 +256,46 @@ MSG
   exit "$EX_UNAVAIL"
 fi
 
+# ---------- 出口検査の対象(プロジェクト固有パス)の抽出 ----------
+#
+# /kickoff フェーズ4 は AGENTS.md §4 のマーカー内へ、そのプロジェクトの実際の
+# モジュールパス(認証・決済・データ移行など)を追記する。それを出口検査の対象に
+# 加える(Issue #28)。スクリプト内の FORBIDDEN_PATHS は汎用項目の単一ソースとして
+# そのまま残り、ここで抽出した分と**マージ**して使う。汎用項目は AGENTS.md から
+# マーカーごと消されても消えない。
+#
+# ここで抽出する理由(プロンプト構築より前・codex exec より前):
+#   委託先が実行中に AGENTS.md を書き換えても、その回の検査は開始時点のリストで
+#   行われる必要がある。書き換えそのものは AGENTS.md(汎用項目)の内容ハッシュ差分
+#   として別途検出される。
+#
+# 抽出はバックティック囲みの文字列すべて。実在しないもの(説明のために囲んだだけの
+# 語や <!-- verify-probe: ... --> のような断片)は forbidden_files() の実在検査で
+# 落ちるため、列挙結果に現れないだけで無害。
+#
+# フェイルオープンの条件: マーカーが片方しか無いとき。sed の範囲指定が末尾まで
+# 走り、AGENTS.md 中の無関係なバックティック語まで禁止領域に化けて全委託が常に
+# 失敗するため、警告だけ出して抽出しない(片方消しによる無効化は、AGENTS.md 自身の
+# 改ざんとしてその回に検出される)。
+PROJECT_FORBIDDEN_PATHS=()
+_fp_start=0
+_fp_end=0
+grep -q '<!-- kickoff:delegation-forbidden-paths -->' "$AGENTS" 2>/dev/null && _fp_start=1
+grep -q '<!-- /kickoff:delegation-forbidden-paths -->' "$AGENTS" 2>/dev/null && _fp_end=1
+
+if [ "$_fp_start" = 1 ] && [ "$_fp_end" = 1 ]; then
+  while IFS= read -r _fp_line; do
+    [ -n "$_fp_line" ] && PROJECT_FORBIDDEN_PATHS+=("$_fp_line")
+  done < <(
+    sed -n '/<!-- kickoff:delegation-forbidden-paths -->/,/<!-- \/kickoff:delegation-forbidden-paths -->/p' "$AGENTS" 2>/dev/null |
+      grep -o '`[^`]*`' | sed 's/^`//; s/`$//' | LC_ALL=C sort -u
+  )
+  unset _fp_line
+elif [ "$_fp_start" = 1 ] || [ "$_fp_end" = 1 ]; then
+  echo "delegate-codex: 警告 — AGENTS.md の <!-- kickoff:delegation-forbidden-paths --> マーカーが片方しかありません。プロジェクト固有パスの抽出をスキップします(汎用項目の検査は従来どおり働きます)。" >&2
+fi
+unset _fp_start _fp_end
+
 # ---------- 入口検査4: Codex CLI ----------
 
 if ! command -v codex >/dev/null 2>&1; then
@@ -583,8 +623,10 @@ SANDBOX="read-only"
 #   - .husky/* / .claude/scripts/* はホストの git・Claude セッションが実行する
 #   - .github/workflows/* は非 fork PR で CLAUDE_CODE_OAUTH_TOKEN に触れる定義そのもの
 #
-# リストの単一ソースはここ。CLAUDE.md「Codex への委託禁止領域(パス)」と AGENTS.md §4 の
-# <!-- kickoff:delegation-forbidden-paths --> は説明に徹し、内容をここと一致させる。
+# ここは**汎用項目**の単一ソース(全プロジェクトに配布される層)。プロジェクト固有パスの
+# 単一ソースは AGENTS.md §4 の <!-- kickoff:delegation-forbidden-paths --> の中で、
+# 起動直後に PROJECT_FORBIDDEN_PATHS へ抽出済み(Issue #28)。CLAUDE.md の同名の節は
+# 説明に徹し、汎用項目の内容をここと一致させる。
 # 3 箇所目のリストファイルを作らないのは、そのファイル自身を守る層がまた要るため。
 # このスクリプトは起動直後に自身をコピーして exec するので、実行中のプロセスが読む
 # この配列は委託先から書き換えられない。
@@ -605,9 +647,21 @@ FORBIDDEN_PATHS=(
 # 禁止領域の実ファイルを列挙する。今回の委託自身が書く 3 ファイル(run record・生ログ・
 # last message)は当然変わるので除外する。除外しないと全ての impl 委託が必ず違反になる。
 forbidden_files() {
-  local _p
-  for _p in "${FORBIDDEN_PATHS[@]}"; do
+  local _p _d
+  # 汎用項目(FORBIDDEN_PATHS)と AGENTS.md から抽出したプロジェクト固有パスの両方を見る。
+  # 抽出側が空でも汎用項目が必ず走ることを保証しているのは ${arr[@]+"${arr[@]}"} の形
+  # (set -u の下で空配列を安全に展開する)であって、配列の並び順ではない。順序は
+  # 読みやすさのために「汎用が先」にしてあるだけで、入れ替えても結果は変わらない。
+  for _p in "${FORBIDDEN_PATHS[@]}" ${PROJECT_FORBIDDEN_PATHS[@]+"${PROJECT_FORBIDDEN_PATHS[@]}"}; do
     case "$_p" in
+      # /kickoff の記入例は dir/** 形式(.claude/commands/kickoff.md)。dir/ と同じく
+      # 配下すべてとして扱う。受けるのは末尾が /** または /* のものだけで、それ以外の
+      # 変則的なグロブ(**/*.ext のような先頭グロブ、src/**/*.ts、dir/*/ 等)は解釈せず、
+      # 下の catch-all で実在検査に落ちて無視される(誤検出はしないが保護もされない)。
+      */\*\* | */\*)
+        _d="${_p%/*}"
+        [ -d "$_d" ] && find "$_d" -type f -print 2>/dev/null
+        ;;
       */) [ -d "${_p%/}" ] && find "${_p%/}" -type f -print 2>/dev/null ;;
       *) [ -e "$_p" ] && printf '%s\n' "$_p" ;;
     esac
@@ -627,8 +681,8 @@ forbidden_files() {
 # (git リポジトリ外では冒頭で落とす)、追跡外・.gitignore 済みのファイルにも効くため。
 #
 # 空振り条件:
-#   - /kickoff が AGENTS.md へ追記するプロジェクト固有パスは、この配列に無い限り
-#     機械的には止まらない(散文の指示と司令塔の検収が担保)
+#   - AGENTS.md のマーカーが片方しか無いプロジェクトでは、固有パスの抽出をスキップする
+#     (汎用項目の検査は働く)。また抽出結果のうち実在しないパスは列挙されない
 #   - git hash-object が前後どちらの時点でも同じように失敗した場合、差分は検出できない
 #   - explore / review は read-only なのでこの検査を行わない
 #   - 割り込み(SIGINT / SIGTERM)で codex exec の途中に死んだ場合、この検査には到達しない。
@@ -640,7 +694,10 @@ forbidden_files() {
 #     ローテーションの整備は別チケットに送っている
 forbidden_snapshot() {
   local _f _h
-  forbidden_files | LC_ALL=C sort | while IFS= read -r _f; do
+  # sort -u なのは重複を畳むため(汎用項目とマーカー内の項目は重なる。ディレクトリ指定と
+  # その配下ファイルの二重指定も起こりうる)。重複行が残ると、出口検査の違反抽出
+  # (sort | uniq -u)が「2 回現れる行」として違反パスを取りこぼす。
+  forbidden_files | LC_ALL=C sort -u | while IFS= read -r _f; do
     _h="$(git hash-object -- "$_f" 2>/dev/null)"
     printf '%s %s\n' "${_h:-UNREADABLE}" "$_f"
   done
