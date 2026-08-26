@@ -950,6 +950,30 @@ Codex CLI が未インストール(段階0 が未達)のため、確かめられ
 
 再入防止(5-5)では、**mode=impl の委託が実行中なら steering を問わず** `exit 2` で止まる(`delegation-policy.md` の「並行数は 1 本まで」を機械化した層)。同じステアリングへの二重起動と別ステアリングへの並行委託でメッセージを出し分ける。`status=running` なのにプロセスが居ない record は強制終了の疑いとして警告を出して通すため、サマリーではなく `tasklist.md` と `git diff` を根拠に §12.6 の手順で回復する。record は `bash .claude/scripts/codex-run.sh set-status <id> <status>` で実態に合う状態へ更新する。read-only の `explore` / `review` は入口検査5 を通らないため、従来どおり並行できる。
 
+### 12.8 run record が溜まってきたとき(prune)
+
+`.harness/codex-runs/` は委託 1 本につき 3 ファイル(`<id>.json` / `<id>.log` / `<id>.last.txt`)を積む。出口検査の `forbidden_snapshot()` はこのディレクトリ配下を**委託の前後 2 回**ハッシュするため、record 数に比例して委託ごとのコストが増える。**自動削除はしない**(run record は会話に依存しない状態の正であり、勝手に消えると検収漏れが静かに発生する)。代わりに 2 層で抑える。
+
+1. **警告(自動)**: `delegate-codex.sh` は起動時に record 数が 50 件を超えていたら stderr に 1 行警告する。**委託は止めない**
+2. **削除(手動)**: 人間が `codex-run.sh prune` を叩く
+
+```bash
+bash .claude/scripts/codex-run.sh prune --dry-run   # 何が消えるか先に見る
+bash .claude/scripts/codex-run.sh prune             # 実行
+```
+
+既定で残るもの:
+
+| 条件 | 理由 |
+| --- | --- |
+| 新しい順に 20 本(`--keep N` で変更) | 直近の委託は検収済みでも手元に残す |
+| `accepted != true`(未検収) | 検収キューとして機能している。`--include-unaccepted` で対象に含められる |
+| `status=running` かつ pid 生存 | 実行中。フラグでも消さない |
+
+削除は 3 点セット単位で行うため、`.log` だけが残って検査対象に居座ることはない。`.harness/codex-runs/` は `.gitignore` 済みなので、削除がコミット履歴に影響することもない。
+
+**`.harness/decisions.jsonl` は prune の対象外**。あちらは追記のみの永続ログで、性質が違う(§10.7)。
+
 ---
 
 ## 13. 未確認の前提(着手前に実機で確かめる)

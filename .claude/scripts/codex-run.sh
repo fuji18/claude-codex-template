@@ -6,6 +6,7 @@
 #   .claude/scripts/codex-run.sh show <id>
 #   .claude/scripts/codex-run.sh accept <id>
 #   .claude/scripts/codex-run.sh set-status <id> <status>
+#   .claude/scripts/codex-run.sh prune [--dry-run] [--keep N] [--include-unaccepted]
 #
 # §12.6 の回復手順の最後(record の status を実態に合わせて更新し、
 # accepted の判定に進む)を成立させる。
@@ -38,6 +39,11 @@ usage() {
   set-status <id> <status>  status を差し替える
                           (running / completed / blocked / failed /
                            rate-limited / unavailable / interrupted / discarded)
+  prune [options]       検収済みの古い run record を 3 点セットで削除する
+                          --dry-run              消さずに対象を表示する
+                          --keep N               新しい順に N 本は残す(既定 20)
+                          --include-unaccepted   未検収(accepted != true)も対象にする
+                        実行中(status=running かつ pid 生存)は常に残す
 USAGE
 }
 
@@ -304,6 +310,125 @@ cmd_set_status() {
   exit 0
 }
 
+# run record の 3 点セット(<id>.json / <id>.log / <id>.last.txt)をまとめて削除する。
+# 自動実行はしない(人間が明示的に叩く)。run record は「会話に依存しない状態の正」で、
+# 勝手に消えると検収漏れが静かに発生するため。
+#
+# 既定で残すもの:
+#   - 新しい順に --keep N 本(既定 20)
+#   - accepted != true の record(未検収 = 検収キュー。--include-unaccepted で対象に入る)
+#   - status=running かつ pid 生存(実行中。--include-unaccepted でも消さない)
+#
+# 新旧はファイル名(RUN_ID = YYYYMMDD-HHMMSS-PID)の辞書順で判定する。delegate-codex.sh が
+# 必ずこの形で採番するため、startedAt を読むより安く、jq の有無にも date の実装にも依存しない。
+cmd_prune() {
+  local _dry=0 _keep=20 _unaccepted=0
+  local _files=() _f _id _status _accepted _pid _skip
+  local _rank=0 _cand=0 _removed=0
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --dry-run) _dry=1 ;;
+      --include-unaccepted) _unaccepted=1 ;;
+      --keep)
+        shift
+        _keep="${1:-}"
+        ;;
+      --keep=*) _keep="${1#--keep=}" ;;
+      *)
+        echo "codex-run: prune の不明なオプションです: $1" >&2
+        usage
+        exit 2
+        ;;
+    esac
+    shift
+  done
+
+  case "$_keep" in
+    '' | *[!0-9]*)
+      echo "codex-run: --keep には 0 以上の整数を指定してください: $_keep" >&2
+      exit 1
+      ;;
+  esac
+
+  [ -d "$RUN_DIR" ] || {
+    echo "削除対象の record はありません"
+    exit 0
+  }
+
+  # 逆順に並べて「新しい順」にする。glob の並びはロケール依存なので sort に任せる。
+  # マッチが 0 件のときは glob 文字列がそのまま来るため [ -f ] で落とす。
+  while IFS= read -r _f; do
+    [ -f "$_f" ] || continue
+    _files+=("$_f")
+  done < <(printf '%s\n' "$RUN_DIR"/*.json | LC_ALL=C sort -r)
+
+  for _f in "${_files[@]+"${_files[@]}"}"; do
+    _rank=$((_rank + 1))
+    _id="${_f##*/}"
+    _id="${_id%.json}"
+
+    # find_record と同じ理由の防御。id はこの後 rm のパスになる。
+    case "$_id" in
+      '' | */* | *..*)
+        echo "スキップ: $_id(不正な id)" >&2
+        continue
+        ;;
+    esac
+
+    _status="$(rec_field "$_f" status)"
+    _accepted="$(rec_field "$_f" accepted)"
+    _skip=""
+
+    if [ "$_rank" -le "$_keep" ]; then
+      _skip="直近 ${_keep} 本"
+    elif [ "$_accepted" != "true" ] && [ "$_unaccepted" -eq 0 ]; then
+      _skip="未検収"
+    elif [ "$_status" = "running" ]; then
+      _pid="$(rec_field "$_f" pid)"
+      # 非数値は「pid 不明」に正規化する(kill -0 はエラーで失敗するため)。
+      # 判定不能な running は「実行中かもしれない」側に倒して残す — record が壊れている・
+      # 強制終了で running のまま残った、という状況こそ #29 の背景であり、ここを削除に
+      # 倒すと検収前の record が静かに消える。保護の向きを delegate-codex.sh 5-5
+      # (再入防止)と揃える。
+      case "$_pid" in '' | *[!0-9]*) _pid="" ;; esac
+      if [ -z "$_pid" ] || kill -0 "$_pid" 2>/dev/null; then
+        _skip="実行中(pid=${_pid:-不明})"
+      fi
+    fi
+
+    if [ -n "$_skip" ]; then
+      [ "$_dry" -eq 1 ] && echo "残す: $_id  ($_skip)"
+      continue
+    fi
+
+    _cand=$((_cand + 1))
+    if [ "$_dry" -eq 1 ]; then
+      echo "削除候補: $_id  (status=${_status:-不明} accepted=${_accepted:-不明})"
+      continue
+    fi
+
+    # 3 点セット単位。片方だけ残さない(log だけ残ると出口検査のハッシュ対象に残り続ける)。
+    rm -f -- "$RUN_DIR/$_id.json" "$RUN_DIR/$_id.log" "$RUN_DIR/$_id.last.txt"
+    _removed=$((_removed + 1))
+  done
+
+  if [ "$_dry" -eq 1 ]; then
+    if [ "$_cand" -eq 0 ]; then
+      echo "削除対象の record はありません"
+    else
+      echo "削除候補: ${_cand} 件(--dry-run のため削除していません)"
+    fi
+  else
+    if [ "$_removed" -eq 0 ]; then
+      echo "削除対象の record はありません"
+    else
+      echo "削除: ${_removed} 件"
+    fi
+  fi
+  exit 0
+}
+
 SUBCOMMAND="${1:-}"
 [ $# -ge 1 ] && shift
 
@@ -313,6 +438,7 @@ case "$SUBCOMMAND" in
   show) cmd_show "${1:-}" ;;
   accept) cmd_accept "${1:-}" ;;
   set-status) cmd_set_status "${1:-}" "${2:-}" ;;
+  prune) cmd_prune "$@" ;;
   *)
     usage
     exit 2
