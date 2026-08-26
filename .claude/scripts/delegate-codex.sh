@@ -648,7 +648,17 @@ forbidden_snapshot() {
 
 # ---- 事前スナップショット(exit 0 の裏取りに使う。impl 以外では取らない) ----
 
-tree_snapshot() { git status --porcelain 2>/dev/null | LC_ALL=C sort; }
+# --untracked-files=all は必須。既定の -unormal は新規の未追跡ディレクトリを
+# `?? dir/` の 1 行に畳むため、そのディレクトリ配下に何ファイル作っても前後の
+# スナップショットが一致し、成果のある委託を「成果物が確認できない」として
+# failed / exit 2 に誤判定していた(Issue #27。実測は #20 の verification.md §3)。
+# 走査量は増えるが .gitignore 済みディレクトリは辿らないため実測差は誤差
+# (未追跡 5000 ファイルで約 +0.02 秒 / 呼び出し)。
+#
+# 既知の限界: これは status 行の比較であって内容の比較ではない。既にある未追跡
+# ファイルへの「追記だけ」は前後とも同じ `?? path` 行になるため検出できない。
+# 検出が必要になったら内容ハッシュ方式(forbidden_snapshot と同型)へ切り替える。
+tree_snapshot() { git status --porcelain --untracked-files=all 2>/dev/null | LC_ALL=C sort; }
 count_done() {
   local _n
   _n="$(grep -cE '^[[:space:]]*- \[[xX]\]' "$TASKLIST" 2>/dev/null)"
