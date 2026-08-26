@@ -154,7 +154,7 @@ fi
 # 黙って通ってしまう。フェイルクローズと宣言した層が静かに素通しするのは、
 # 層が無いことより悪い。ここで明示的に落とす。
 
-for _cmd in find grep sed head tail tr; do
+for _cmd in find grep sed head tail tr sort uniq; do
   if ! command -v "$_cmd" >/dev/null 2>&1; then
     echo "delegate-codex: '$_cmd' が見つかりません。入口検査が成立しないため委託しません。" >&2
     exit "$EX_UNAVAIL"
@@ -566,6 +566,79 @@ esac
 SANDBOX="read-only"
 [ "$MODE" = "impl" ] && SANDBOX="workspace-write"
 
+# ---------- 出口検査の対象(委託禁止領域)----------
+#
+# 入口検査が 5 系統あるのに出口が素通しだった穴を塞ぐ層。--sandbox workspace-write の
+# Codex はワークツリー内なら禁止領域も書けてしまい、書かれた先の一部は**後でサンドボックスの
+# 外で実行される**:
+#   - AGENTS.md の <!-- verify-probe: ... --> は、次回委託時に入口検査3 がホスト上の
+#     bash -c にそのまま渡す(サンドボックス内で 1 行書く → 次回起動でホスト実行)
+#   - .husky/* / .claude/scripts/* はホストの git・Claude セッションが実行する
+#   - .github/workflows/* は非 fork PR で CLAUDE_CODE_OAUTH_TOKEN に触れる定義そのもの
+#
+# リストの単一ソースはここ。CLAUDE.md「Codex への委託禁止領域(パス)」と AGENTS.md §4 の
+# <!-- kickoff:delegation-forbidden-paths --> は説明に徹し、内容をここと一致させる。
+# 3 箇所目のリストファイルを作らないのは、そのファイル自身を守る層がまた要るため。
+# このスクリプトは起動直後に自身をコピーして exec するので、実行中のプロセスが読む
+# この配列は委託先から書き換えられない。
+#
+# 末尾が / のものはディレクトリ配下すべてが対象。
+FORBIDDEN_PATHS=(
+  ".claude/scripts/delegate-codex.sh"
+  ".claude/scripts/check-protected-branch.sh"
+  ".husky/pre-commit"
+  ".husky/prepare-commit-msg"
+  ".claude/codex-denylist.txt"
+  "AGENTS.md"
+  ".github/workflows/"
+  ".harness/mode"
+  ".harness/codex-runs/"
+)
+
+# 禁止領域の実ファイルを列挙する。今回の委託自身が書く 3 ファイル(run record・生ログ・
+# last message)は当然変わるので除外する。除外しないと全ての impl 委託が必ず違反になる。
+forbidden_files() {
+  local _p
+  for _p in "${FORBIDDEN_PATHS[@]}"; do
+    case "$_p" in
+      */) [ -d "${_p%/}" ] && find "${_p%/}" -type f -print 2>/dev/null ;;
+      *) [ -e "$_p" ] && printf '%s\n' "$_p" ;;
+    esac
+  done | grep -Fxv -e "$REC" -e "$LOG" -e "$LAST" || true
+  # 戻り値は意図的に捨てる。grep -Fxv は除外後に 1 行も残らないと exit 1 を返し、
+  # pipefail の下では関数全体が非ゼロになる。この関数は出力だけが意味を持つ。
+}
+
+# `<hash> <path>` を path 順に並べたスナップショット。git status 系ではなく内容ハッシュで
+# 比べる理由は 3 つ:
+#   1. .harness/mode と .harness/codex-runs/ は .gitignore 済みで git diff にも
+#      git ls-files --others --exclude-standard にも出ない
+#   2. モード C では Codex がコミットするため、作業ツリー比較だけでは取りこぼす
+#   3. 委託前から dirty だったファイルを誤検出しない(内容が同じなら差分ゼロ)
+#
+# ハッシュに git hash-object を使うのは、git がこのスクリプトの動作前提であり
+# (git リポジトリ外では冒頭で落とす)、追跡外・.gitignore 済みのファイルにも効くため。
+#
+# 空振り条件:
+#   - /kickoff が AGENTS.md へ追記するプロジェクト固有パスは、この配列に無い限り
+#     機械的には止まらない(散文の指示と司令塔の検収が担保)
+#   - git hash-object が前後どちらの時点でも同じように失敗した場合、差分は検出できない
+#   - explore / review は read-only なのでこの検査を行わない
+#   - 割り込み(SIGINT / SIGTERM)で codex exec の途中に死んだ場合、この検査には到達しない。
+#     その状態で改ざんが残っていると、次回委託の BEFORE スナップショットが改ざん後の内容を
+#     基準に取るため以後検出できない。run record が status=running のまま残ることが唯一の
+#     手掛かりになる(回復手順は codex-delegation-plan.md §12.6)
+#   - .harness/codex-runs/ はローテーションされないため、run record が溜まるほど前後 2 回の
+#     ハッシュ計算コストが線形に増える。委託 1 本の所要時間に対しては十分小さいので、
+#     ローテーションの整備は別チケットに送っている
+forbidden_snapshot() {
+  local _f _h
+  forbidden_files | LC_ALL=C sort | while IFS= read -r _f; do
+    _h="$(git hash-object -- "$_f" 2>/dev/null)"
+    printf '%s %s\n' "${_h:-UNREADABLE}" "$_f"
+  done
+}
+
 # ---- 事前スナップショット(exit 0 の裏取りに使う。impl 以外では取らない) ----
 
 tree_snapshot() { git status --porcelain 2>/dev/null | LC_ALL=C sort; }
@@ -579,6 +652,7 @@ if [ "$MODE" = "impl" ]; then
   TREE_BEFORE="$(tree_snapshot)"
   HEAD_BEFORE="$(git rev-parse HEAD 2>/dev/null || echo none)"
   DONE_BEFORE="$(count_done)"
+  FORBIDDEN_BEFORE="$(forbidden_snapshot)"
 fi
 
 write_record "running" "" "" ""
@@ -634,6 +708,56 @@ ERR3="$(printf '%s' "$ERR_TAIL" | tail -3 | tr '\n' ' ')"
 ERR_ONLY="$(printf '%s' "$ERR_TAIL" | grep -Ei 'error|fail' || true)"
 SUMMARY=""
 [ -f "$LAST" ] && SUMMARY="$(head -c 2000 "$LAST")"
+
+# ---------- 出口検査: 委託禁止領域への差分 ----------
+#
+# 判定行(完了 / 判断待ち / 失敗)より前、かつ CODEX_EXIT の分岐より前に置く。
+# 理由は 2 つある:
+#   - 判断待ち・失敗で戻ってきた委託でも、禁止領域が書き換わっていれば脱出経路は
+#     成立している。委託先の自己申告より優先して司令塔に見せる
+#   - レート上限・認証失敗・異常終了(CODEX_EXIT != 0)の経路は無条件 exit なので、
+#     この検査を後ろに置くと丸ごと素通しになる。「改ざんしてから上限に当たった」
+#     セッションが rate-limited として静かに記録されるのが最悪のケース
+#
+# したがって出口検査は他のどの終了理由よりも優先する。上限で終わった委託であっても、
+# 禁止領域が変わっていれば failed / exit 2 として返す(待って再委託ではなく、
+# 差分の確認が先に必要なため)。
+if [ "$MODE" = "impl" ]; then
+  FORBIDDEN_AFTER="$(forbidden_snapshot)"
+  if [ "$FORBIDDEN_AFTER" != "$FORBIDDEN_BEFORE" ]; then
+    # 前後のスナップショットを合わせて「1 回しか出てこない行」を拾う。
+    # 変更 = 旧ハッシュ行と新ハッシュ行が 1 本ずつ、追加/削除 = 片方だけ。
+    # そこからパス部分だけを取り出して重複を畳む。
+    VIOLATIONS="$(
+      printf '%s\n%s\n' "$FORBIDDEN_BEFORE" "$FORBIDDEN_AFTER" |
+        grep -v '^[[:space:]]*$' | LC_ALL=C sort | uniq -u |
+        sed 's/^[^ ]* //' | LC_ALL=C sort -u
+    )"
+    VIOL_LINE="$(printf '%s' "$VIOLATIONS" | tr '\n' ' ')"
+    VIOL_ERR="委託禁止領域が変更されました: $VIOL_LINE"
+    # 非ゼロ終了と重なったときは、それも記録に残す(上限・認証失敗と区別できるように)。
+    [ "$CODEX_EXIT" -ne 0 ] && VIOL_ERR="$VIOL_ERR (codex exit=$CODEX_EXIT / $ERR3)"
+    SUMMARY="⚠️ 委託禁止領域が変更されました(出口検査): $VIOL_LINE
+
+$SUMMARY"
+    write_record "failed" "$SUMMARY" "$VIOL_ERR" ""
+    emit "failed" "$EX_FAIL"
+    cat >&2 <<'MSG'
+delegate-codex: 委託禁止領域のファイルが変更されました(出口検査)。
+
+これらはサンドボックスの外で実行される層(AGENTS.md の verify-probe / .husky/* /
+.github/workflows/* / run record)です。委託の成果をそのまま採用しないでください。
+
+  git diff -- <該当パス>
+
+で内容を確認し、意図しない変更は破棄してから検収してください。
+
+該当:
+MSG
+    printf '%s\n' "$VIOLATIONS" | sed 's/^/  /' >&2
+    exit "$EX_FAIL"
+  fi
+fi
 
 if [ "$CODEX_EXIT" -ne 0 ]; then
   if grep -Eqi "$RATE_ID_RE" "$LOG" 2>/dev/null ||
