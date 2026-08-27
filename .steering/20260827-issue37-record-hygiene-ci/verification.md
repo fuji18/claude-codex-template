@@ -205,3 +205,19 @@ A  .claude/scripts/check-record-hygiene.sh
 
 - `npm run format:check` — 変更後のワークフローで再実行して通した(下記コマンド参照)
 - `.github/workflows/record-hygiene.yml` の差分は `set -euo pipefail` / `github.token` / コメント 2 箇所のみ。判定ロジック(`check-record-hygiene.sh`)は無変更のため、§6 の検証 1〜11 の結果はそのまま有効
+
+## 実 PR での検証(PR #39)
+
+### ラウンド1: run 33125304790 — 赤にはなったが理由が出なかった(欠陥を検出)
+
+`Collect PR facts` は `changed=8 tickets=37` を正しく収集し、`Check record hygiene` は `failure` で終わった。しかし **annotation も Job Summary も 1 件も出ていない**。
+
+原因: GitHub Actions の `run:` の既定シェルは `bash -e {0}`(ログの `shell: /usr/bin/bash -e {0}` で確認)。`set -uo pipefail` を書いても **`-e` は残る**ため、`OUT="$(... check-record-hygiene.sh)"` がスクリプトの `exit 1` を返した時点でステップが打ち切られ、`rc=$?` 以降の annotation / Summary 出力に到達していなかった。
+
+**赤にはなるので検査そのものは機能するが、「何が漏れているか」が PR 上に一切表示されない。** 記録漏れを気づかせるのが目的の層としては致命的。
+
+- 手元検証(§6)では `bash "$S"` を直接叩いており、`-e` 付きシェルで呼ぶ経路を再現できていなかった
+- code-reviewer の Major 指摘への対応で「判定ステップに `-e` を付けてはいけない」と書いたが、**既定で付いている**ことを見落としていた
+
+修正: `Check record hygiene` の先頭に `set +e` を明示。`design.md` §2 にも反映した。
+

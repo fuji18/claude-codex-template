@@ -69,8 +69,12 @@ jobs:
 
       - name: Check record hygiene
         run: |
-          # ここは -e を付けない。スクリプトが exit 1 を返した瞬間にステップが打ち切られ、
-          # rc の捕捉と annotation / Summary の出力に到達できなくなるため。
+          # ここは -e を明示的に切る。GitHub Actions の run: の既定シェルは
+          # `bash -e {0}` であり、set -uo pipefail を書いても -e は残る。残したまま
+          # だとスクリプトが exit 1 を返した瞬間にステップが打ち切られ、rc の捕捉と
+          # annotation / Job Summary の出力に到達できない(赤にはなるが理由が出ない)。
+          # 実測: run 33125304790 で annotation も Summary も出ないことを確認した。
+          set +e
           set -uo pipefail
 
           OUT="$(CHANGED_FILES="$(cat "${RUNNER_TEMP}/changed.txt")" \

@@ -196,6 +196,10 @@ jobs:
 
       - name: Check record hygiene
         run: |
+          # GitHub Actions の run: の既定シェルは `bash -e {0}`。set -uo pipefail を
+          # 書いても -e は残るため、明示的に切る(残すとスクリプトの exit 1 で
+          # ステップが即座に打ち切られ、annotation / Job Summary が出ない)。
+          set +e
           set -uo pipefail
 
           OUT="$(CHANGED_FILES="$(cat "${RUNNER_TEMP}/changed.txt")" \
