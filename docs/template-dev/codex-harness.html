@@ -519,8 +519,8 @@
     <h1>Codex 併用ハーネス</h1>
     <p class="standfirst">実装フェーズを Codex に移し、Claude が週間上限に当たっても作業が止まらない構成。設計・検収は Claude に残す。</p>
     <div class="meta">
-      <span>改訂 <b>2026-08-25</b></span>
-      <span>段階 <b>6 / 6 完了</b></span>
+      <span>改訂 <b>2026-08-26</b></span>
+      <span>段階 <b>6 / 6 完了</b> + 堅牢化 8 件</span>
       <span>ブランチ <b>main</b></span>
       <span>正 <b>docs/template-dev/codex-delegation-plan.md</b></span>
     </div>
@@ -776,7 +776,7 @@ npm ci</code>
 
     <details class="callout warn">
       <summary class="callout-label">この表のうち、いま動くのは Mode A の Sonnet fork 経路だけ</summary>
-      <p><strong>段階0〜6 まで実装済み(2026-08-24 時点)。</strong> 環境(ChatGPT Plus 契約・Codex CLI v0.149.0・<code>codex login</code> の <code>chatgpt</code> モード・seccomp 修正による sandbox 起動)はすべて実機で確認済み。委託経路は <code>delegate-codex.sh</code> の <code>explore</code> / <code>review</code> / <code>impl</code> の 3 モードで、終了コード契約 <code>0</code>〜<code>5</code> + run record(<code>codex-run.sh</code>)+ 3 コマンド(<code>/add-feature</code> ・ <code>/next-ticket</code> ・ <code>/fix-issue</code>)の分岐まで通っている。<code>.harness/mode</code> によるモード B(節約)・モード C(縮退)の運用と、チケット丸ごと委託の <code>delegate:codex</code> ラベルも稼働中。<strong>2026-08-25: 委託の唯一の入口が自分自身を書き換えられて壊れる問題(自己編集ハザード)を、起動直後の自己コピー + <code>exec</code> で塞いだ</strong>(<a href="https://github.com/fuji18/claude-codex-template/issues/15">Issue #15</a>)。未実装のまま残しているのは <code>fix-ci</code> モードと <code>--background</code>(前景で 1 本ずつ流す運用を選択)。段階の内訳は §10 を参照。</p>
+      <p><strong>段階0〜6 まで実装済み(2026-08-24 時点)。</strong> 環境(ChatGPT Plus 契約・Codex CLI v0.149.0・<code>codex login</code> の <code>chatgpt</code> モード・seccomp 修正による sandbox 起動)はすべて実機で確認済み。委託経路は <code>delegate-codex.sh</code> の <code>explore</code> / <code>review</code> / <code>impl</code> の 3 モードで、終了コード契約 <code>0</code>〜<code>5</code> + run record(<code>codex-run.sh</code>)+ 3 コマンド(<code>/add-feature</code> ・ <code>/next-ticket</code> ・ <code>/fix-issue</code>)の分岐まで通っている。<code>.harness/mode</code> によるモード B(節約)・モード C(縮退)の運用と、チケット丸ごと委託の <code>delegate:codex</code> ラベルも稼働中。<strong>2026-08-25: 委託の唯一の入口が自分自身を書き換えられて壊れる問題(自己編集ハザード)を、起動直後の自己コピー + <code>exec</code> で塞いだ</strong>(<a href="https://github.com/fuji18/claude-codex-template/issues/15">Issue #15</a>)。<strong>2026-08-26: 実装レビュー(<a href="codex-harness-review-20260825.html">同日のレビュー記録</a>)で挙がった穴を 8 件塞いだ</strong> — 出口検査の新設(#20)・denylist の拡充(#21)・read-only 委託の auto-accept(#22)・環境変数のサニタイズ(#23)・impl 入口検査の穴 2 件(#24)・成果実在確認の誤検出(#27)・<code>AGENTS.md</code> 由来のプロジェクト固有禁止パス(#28)・run record のローテーション(#29)。<strong>いずれも新機能ではなく、既存の委託経路の防御と誤検出の修正</strong>(内訳は §10 末尾)。未実装のまま残しているのは <code>fix-ci</code> モードと <code>--background</code>(前景で 1 本ずつ流す運用を選択)。段階の内訳は §10 を参照。</p>
     </details>
 
     <details class="callout done">
@@ -1413,6 +1413,28 @@ Codex が A の tasklist を [x] に更新   → A が latest   ← 振動
         <span class="chip ok">完了</span>
       </div>
     </div>
+
+    <h3>段階完了後の堅牢化ラウンド(2026-08-26)</h3>
+
+    <p>段階0〜6 が揃った時点で<strong>ハーネス自身の実装レビュー</strong>(<a href="codex-harness-review-20260825.html">2026-08-25 の記録</a>)を回し、そこで挙がった指摘を Issue に分解して 1 日で消化した。<strong>段階を足したのではなく、既に通っている経路の穴を塞いだ回</strong>。共通するのは「委託先が触れる境界」と「記録の増え方」の 2 つ。</p>
+
+    <table>
+      <thead>
+        <tr><th>Issue</th><th>塞いだ穴</th><th>類型</th></tr>
+      </thead>
+      <tbody>
+        <tr class="is-changed"><td><a href="https://github.com/fuji18/claude-codex-template/issues/20">#20</a></td><td><b>出口検査を新設</b>。impl 委託の前後で禁止パスの内容ハッシュを突き合わせ、差分があれば委託全体を <code>failed</code> / <code>exit 2</code> にする。禁止パスに <code>AGENTS.md</code> ・ <code>.github/workflows/</code> ・ <code>.harness/mode</code> ・ <code>.harness/codex-runs/</code> を追加</td><td><b>サンドボックス外への波及</b><span class="note"> — 中で書けるが、書いた結果が後で外で実行される。<code>verify-probe</code> は次回委託時にホストの <code>bash -c</code> へ渡る</span></td></tr>
+        <tr class="is-changed"><td><a href="https://github.com/fuji18/claude-codex-template/issues/21">#21</a></td><td><b>denylist の拡充</b>。有効パターン 10 → 21(<code>.npmrc</code> ・ <code>.netrc</code> ・ <code>.git-credentials</code> ・ <code>*-service-account*.json</code> ・ <code>*.tfstate</code> ・ <code>*.sqlite</code> ・ <code>dump*.sql</code> 等)</td><td><b>送信側の穴</b><span class="note"> — 既定が npm スタックなのに <code>.npmrc</code>(<code>_authToken</code>)が入っていなかった</span></td></tr>
+        <tr class="is-changed"><td><a href="https://github.com/fuji18/claude-codex-template/issues/22">#22</a></td><td><b>read-only 委託の run record を auto-accept</b>。検収対象が残るのは impl だけなのに全モードが <code>accepted: false</code> で記録されていた</td><td><b>コンテキストの単調増加</b><span class="note"> — コンテキストを削るための委託が、SessionStart の固定コンテキストを増やしていた</span></td></tr>
+        <tr class="is-changed"><td><a href="https://github.com/fuji18/claude-codex-template/issues/23">#23</a></td><td><b>環境変数のサニタイズ</b>。<code>env -i</code> + 許可リスト方式に変更。加算のみの逃げ道は <code>CODEX_DELEGATE_ENV_ALLOW</code></td><td><b>検査対象外の経路</b><span class="note"> — 入口検査1 は <code>find .</code> でリポジトリ内しか見ない。<code>LOCAL_GH_TOKEN</code> ・ <code>CLAUDE_CODE_MESSAGING_TOKEN</code> が渡っていた(実測)</span></td></tr>
+        <tr class="is-changed"><td><a href="https://github.com/fuji18/claude-codex-template/issues/24">#24</a></td><td><b>impl 入口検査の穴 2 件</b>。5-1 に <code>.steering/</code> prefix 検査を追加、5-5 の判定軸を「steering 一致」から <code>mode=impl</code> へ変更(= 並行 1 本が機械的に効く)</td><td><b>ルールと実装の不一致</b><span class="note"> — 判定軸はルール文の<strong>理由節</strong>から引く。「同一ワーキングツリーを共有するため」なら軸は steering ではなく mode</span></td></tr>
+        <tr class="is-changed"><td><a href="https://github.com/fuji18/claude-codex-template/issues/27">#27</a></td><td><b>成果実在確認の誤検出</b>。<code>git status --porcelain</code> は新規の未追跡ディレクトリを 1 行に畳むため、その配下にだけ作る委託が「成果なし」と誤判定されていた。<code>-uall</code> で解消</td><td><b>フェイルクローズ側の誤検出</b><span class="note"> — 素通しではなく、正常な委託が失敗扱いされる経路</span></td></tr>
+        <tr class="is-changed"><td><a href="https://github.com/fuji18/claude-codex-template/issues/28">#28</a></td><td><b>出口検査に <code>AGENTS.md</code> 由来のプロジェクト固有パスを追加</b>。委託の開始時にマーカー内のバックティック囲みを抽出し、スクリプト内の汎用項目とマージする</td><td><b>下流だけで顕在化する穴</b><span class="note"> — テンプレート自身は固有パスを持たないため表面化しないが、<code>/kickoff</code> を通ったプロジェクトは初日からこの状態だった</span></td></tr>
+        <tr class="is-changed"><td><a href="https://github.com/fuji18/claude-codex-template/issues/29">#29</a></td><td><b>run record のローテーション</b>。<code>codex-run.sh prune</code>(<code>--dry-run</code> / <code>--keep N</code>(既定 20)/ <code>--include-unaccepted</code>)。未検収・実行中・直近 N 本は残す。自動削除はせず、<code>delegate-codex.sh</code> は閾値超過を警告するだけ</td><td><b>前の修正が呼んだコスト</b><span class="note"> — #20 で <code>.harness/codex-runs/</code> が検査対象になり、run 数に比例して委託ごとのハッシュコストが線形に増えた</span></td></tr>
+      </tbody>
+    </table>
+
+    <p class="note">この 8 件はいずれも <code>delegate-codex.sh</code> ・ <code>AGENTS.md</code> ・ <code>.claude/codex-denylist.txt</code> という<strong>委託禁止領域そのもの</strong>が対象のため、Codex には委託せず <code>implement-ticket</code> の fork(Sonnet)が実装した。往復は #22 以降 5 回連続で 0 回(実測は <code>.harness/decisions.jsonl</code>)。</p>
   </section>
 
   <section>
