@@ -25,6 +25,12 @@
 
 - **[auto]** **`check-record-hygiene.sh` の `CHANGELOG_TRIGGERS` に `.github/workflows/` を追加した**(#41)。今後は `.github/workflows/` 配下だけを変更した PR も CHANGELOG の追記が必要になります(不要な変更ならラベル `no-changelog` で外せます)。`.github/` 全体ではなく `workflows/` に絞っており、`.github/ISSUE_TEMPLATE/` 等は対象外です。あわせて、**manifest の `owned` / `merge` に面を足すときはこの配列も同時に直す**という運用をスクリプト側のコメントに明記しました(manifest からの動的生成はしません)
 
+**モード C(縮退)復帰時のガードレール健全性を機械検査するようにした(Issue #42)。** 縮退モードは `delegate-codex.sh` を通らない唯一の経路で、入口検査も出口検査も掛かりません。さらに `.git` を `writable_roots` に渡す設計のため、**委託先自身が `core.hooksPath` を書き換えて husky 層を無効化できる**状態でした。復帰時検収に機械的な確認ステップが無く、人間が読み飛ばせば検出機会が消えます。
+
+- **[auto]** **`check-guard-integrity.sh` に `degraded` サブコマンドを追加した**(#42)。`core.hooksPath` が `.husky` 配下を指しているか / `.git/hooks/` に直書きフックが無いか / `Codex-authored` コミットの差分が委託禁止領域に触れていないかを検査します。**引数なしの既存呼び出し(SessionStart hook / CI の `harness-integrity`)の挙動は変わりません**(CI の fresh checkout では `core.hooksPath` 未設定が正常なため、既定に混ぜると恒常的に赤くなる)
+- **[auto]** **`delegate-codex.sh` に `--print-forbidden` を追加した**(#42)。委託禁止領域の一覧を 1 行 1 パスで出力するだけの read-only モードです。`check-guard-integrity.sh degraded` がこれを読むことで、パス一覧の単一ソースが `delegate-codex.sh` のまま保たれます(配列は複製していません)。あわせて `FORBIDDEN_PATHS` の定義位置を入口検査より前へ移しました(codex CLI が無くても一覧を引けるようにするため)
+- **[auto]** `.claude/rules/mode/degraded.md` の復帰手順の先頭に上記コマンドを組み込み、`.codex/skills/degraded-mode-ticket/SKILL.md` §5 に「`.git/` 配下を改変しない」を明記しました
+
 ## 2026-08-27
 
 **チケット完了時の記録漏れを CI で機械的に検出するようにした(Issue #37)。** この CHANGELOG は #20〜#29 の 8 件連続で追記されず、`/sync-template` を使う側が `[manual]` 項目に気づけない状態になっていました。散文の運用ルールだけでは 2 度守られなかった(4 回連続 → 8 回連続と悪化した)ため、機械的な層を足しています。
