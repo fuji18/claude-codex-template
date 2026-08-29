@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Codex 併用ハーネス 実装レビュー</title>
+<style>
+  :root {
+    --bg: #f7f6f3;
+    --surface: #ffffff;
+    --ink: #1f2430;
+    --ink-soft: #5a6172;
+    --line: #e3e1da;
+    --accent: #2f5d8a;
+    --accent-soft: #eaf1f8;
+    --high: #b3372f;   --high-bg: #fbeae8;
+    --mid: #b06a10;    --mid-bg: #fbf1e2;
+    --low: #5b7040;    --low-bg: #eef3e6;
+    --good: #2c6e5a;   --good-bg: #e6f2ee;
+    --code-bg: #f0efe9;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181d;
+      --surface: #1e2128;
+      --ink: #e6e4de;
+      --ink-soft: #a3a8b4;
+      --line: #333844;
+      --accent: #7aa7d4;
+      --accent-soft: #253141;
+      --high: #e08078;  --high-bg: #3a2523;
+      --mid: #d9a05b;   --mid-bg: #38301f;
+      --low: #a4bb85;   --low-bg: #29301f;
+      --good: #7cc0aa;  --good-bg: #1f322c;
+      --code-bg: #262a33;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", system-ui, sans-serif;
+    line-height: 1.75;
+    font-size: 15px;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 40px 24px 80px; }
+  header { border-bottom: 2px solid var(--accent); padding-bottom: 20px; margin-bottom: 32px; }
+  h1 { font-size: 26px; margin: 0 0 8px; letter-spacing: .02em; }
+  .meta { color: var(--ink-soft); font-size: 13px; }
+  h2 {
+    font-size: 20px; margin: 48px 0 16px; padding-left: 12px;
+    border-left: 4px solid var(--accent);
+  }
+  h3 { font-size: 16px; margin: 28px 0 8px; }
+  p { margin: 10px 0; }
+  code {
+    background: var(--code-bg); padding: 1px 6px; border-radius: 4px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px; word-break: break-all;
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 18px 22px; margin: 14px 0;
+  }
+  .card h3 { margin-top: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .badge {
+    display: inline-block; font-size: 12px; font-weight: 700;
+    padding: 1px 10px; border-radius: 999px; white-space: nowrap;
+  }
+  .b-high { color: var(--high); background: var(--high-bg); }
+  .b-mid  { color: var(--mid);  background: var(--mid-bg); }
+  .b-low  { color: var(--low);  background: var(--low-bg); }
+  .b-good { color: var(--good); background: var(--good-bg); }
+  .files { font-size: 12.5px; color: var(--ink-soft); margin-top: 10px; }
+  .files code { font-size: 12px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; background: var(--surface); font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); font-weight: 700; }
+  .scroll { overflow-x: auto; }
+  ul { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 18px 0; }
+  .summary-grid .card { margin: 0; }
+  .kicker { font-size: 12px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .08em; }
+  .verdict { font-size: 17px; font-weight: 700; margin: 4px 0 6px; }
+  blockquote {
+    margin: 12px 0; padding: 10px 16px; border-left: 3px solid var(--line);
+    color: var(--ink-soft); background: var(--surface); border-radius: 0 8px 8px 0;
+  }
+  .toc { font-size: 14px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Codex 併用ハーネス 実装レビュー</h1>
+  <div class="meta">
+    対象: <code>docs/template-dev/codex-delegation-plan.md</code> に基づく実装一式(委託スクリプト / ガードレール / CI / AGENTS.md / 運用記録)<br>
+    レビュー日: 2026-08-29 / ブランチ: <code>feature/issue37-record-hygiene-ci</code>
+  </div>
+</header>
+
+<div class="card toc">
+  <strong>目次</strong>
+  <ul>
+    <li><a href="#summary">1. 総評</a></li>
+    <li><a href="#security">2. セキュリティ懸念</a></li>
+    <li><a href="#cost">3. コストパフォーマンス</a></li>
+    <li><a href="#structure">4. 構成の適正化が可能な個所</a></li>
+    <li><a href="#priority">5. 対応の優先順位(まとめ)</a></li>
+  </ul>
+</div>
+
+<h2 id="summary">1. 総評</h2>
+
+<p class="verdict">全体として計画(codex-delegation-plan.md)への忠実度が高く、防衛層の設計品質は同種の自作ハーネスとしてはかなり高い水準。ただし「機械検査の網の外にある経路」が 3 つ残っており、そこが今後の主要リスク。</p>
+
+<div class="summary-grid">
+  <div class="card">
+    <div class="kicker">強み</div>
+    <ul>
+      <li>フェイルオープン / フェイルクローズの使い分けが層ごとに<strong>理由つきで</strong>選択されている(委託 = クローズ、保護ブランチ = オープン)</li>
+      <li><code>env -i</code> + 許可リストによる環境変数の遮断、出口の内容ハッシュ検査、判定順序(出口検査 &gt; レート上限)など、細部の詰めが実測に裏づけられている</li>
+      <li>単一ソース原則の徹底(<code>branch-policy.json</code> / <code>check-protected-branch.sh</code> / <code>harness-mode.sh</code> / <code>latest-steering.sh</code>)</li>
+      <li>実測記録(<code>decisions.jsonl</code>)→ CI 強制(record-hygiene)という改善ループが機械化されている</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="kicker">主要な残存リスク</div>
+    <ul>
+      <li><strong>モード C(縮退)は機械検査ゼロの経路</strong>(S-2)</li>
+      <li><strong>CI が呼ぶ判定スクリプトが委託禁止領域に入っていない</strong>(S-3 / 今回のレビューで最重要)</li>
+      <li>verify-probe のホスト実行に形式検査がない(S-4)</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="security">2. セキュリティ懸念</h2>
+
+<p>深刻度は「攻撃・事故が成立したときの影響 × 成立しやすさ」で付けた。既に文書化済みの受容リスクは、その旨を明記した。</p>
+
+<div class="card">
+  <h3><span class="badge b-high">高</span>S-3: CI の判定実体スクリプトが委託禁止領域に入っていない</h3>
+  <p><code>FORBIDDEN_PATHS</code> は <code>.github/workflows/</code> を守っているが、そのワークフローが <code>bash</code> で呼ぶ判定スクリプト本体は守っていない:</p>
+  <ul>
+    <li><code>.claude/scripts/check-record-hygiene.sh</code> — record-hygiene.yml が呼ぶ判定の実体。冒頭に <code>exit 0</code> を 1 行足すだけで記録漏れ検査が全 PR で無効化される</li>
+    <li><code>.claude/scripts/check-guard-integrity.sh</code> — ci.yml の harness-integrity と SessionStart の自壊検知の実体。骨抜きにすると「husky 層が消えたことに気づけない」という、このハーネスが最も恐れている状態が静かに成立する</li>
+    <li><code>.claude/scripts/codex-run.sh</code> — 検収状態(<code>accepted</code>)の書き換えツール。委託先がここに「自分の record を accept する」処理を仕込めると、<code>.harness/codex-runs/</code> を直接守っている意味が半減する</li>
+    <li><code>.claude/settings.json</code> / <code>.claude/hooks/session-start.sh</code> — PreToolUse hook の定義そのものと、司令塔コンテキストへの注入元(プロンプトインジェクションの経路になり得る)</li>
+  </ul>
+  <p><strong>「workflows/ を守るなら、workflows が実行するスクリプトも同等に守る」が一貫した線。</strong>個別列挙よりも <code>.claude/scripts/</code> / <code>.claude/hooks/</code> / <code>.claude/settings.json</code> をディレクトリ単位で <code>FORBIDDEN_PATHS</code> に足す方が漏れがない(ハーネス改修はもともと委託しない方針なので、運用への影響はない)。</p>
+  <div class="files">該当: <code>.claude/scripts/delegate-codex.sh</code> の FORBIDDEN_PATHS 配列 / <code>AGENTS.md</code> §4 / <code>CLAUDE.md</code> 委託禁止領域の節(3 箇所同時更新)</div>
+</div>
+
+<div class="card">
+  <h3><span class="badge b-mid">中</span>S-2: モード C(縮退)は機械検査を一切通らない</h3>
+  <p>縮退モードは人間が <code>codex</code> を直接起動するため、<code>delegate-codex.sh</code> の入口検査(denylist・依存導通)も出口検査(禁止領域ハッシュ)も掛からない。守りは AGENTS.md / SKILL.md の散文と git hook・CI のみ。さらに:</p>
+  <ul>
+    <li><code>writable_roots=[".git"]</code> を渡す設計のため、<code>.git/config</code> の <code>core.hooksPath</code> 書き換えや <code>.git/hooks/</code> 直書きで <strong>husky 層(ベンダー中立ガードレールの本体)を委託先自身が無効化できる</strong></li>
+    <li>禁止領域(AGENTS.md の verify-probe を含む)への変更もコミットに紛れ込ませられる</li>
+  </ul>
+  <p>復帰時検収(§2.3)が唯一の砦だが、現在の手順は「codex-log.md を読む・/check・code-reviewer」で、<strong>ガードレール自体の無事を確かめるステップがない</strong>。</p>
+  <p><strong>提案</strong>: <code>.claude/rules/mode/degraded.md</code> の復帰手順に機械化された 1 コマンドを足す — 例: <code>check-guard-integrity.sh</code> を拡張して「<code>core.hooksPath</code> が <code>.husky/_</code> 系を指すか」「<code>.git/hooks/</code> に実行可能ファイルが増えていないか」「縮退中コミットの diff が禁止領域に触れていないか(<code>git log --grep Codex-authored</code> の範囲で <code>git diff --stat</code> を禁止領域に当てる)」を検査する。</p>
+  <div class="files">該当: <code>.claude/rules/mode/degraded.md</code> / <code>.codex/skills/degraded-mode-ticket/SKILL.md</code> / <code>.claude/scripts/check-guard-integrity.sh</code></div>
+</div>
+
+<div class="card">
+  <h3><span class="badge b-mid">中</span>S-4: verify-probe がホスト上で無検査実行される</h3>
+  <p>入口検査3 は AGENTS.md から抽出した文字列をそのまま <code>bash -c</code> でホスト実行する(<code>delegate-codex.sh:255</code> 付近)。AGENTS.md は出口ハッシュ検査で守られているが、検査が効かない改ざん経路が 3 つ残る:</p>
+  <ul>
+    <li>モード C 経由(S-2 のとおり機械検査なし)</li>
+    <li>SIGINT / SIGTERM で出口検査に到達せず死んだ委託(スクリプト自身がコメントで認めている空振り条件 — 次回の BEFORE スナップショットが改ざん後を基準に取るため、以後検出不能)</li>
+    <li>人間の誤マージ・手動編集</li>
+  </ul>
+  <p><strong>提案(いずれも安価)</strong>: ① プローブの形式を制限する(例: <code>npx --no-install</code> / <code>--version</code> 系のみ許可する正規表現検査。外れたら警告してスキップ)。② 実行前にプローブ内容を必ず stderr に表示する(現状は失敗時のみ)。③ <code>env -i PATH=... bash -c</code> で実行して環境変数への到達を断つ。</p>
+  <div class="files">該当: <code>.claude/scripts/delegate-codex.sh</code> 入口検査3</div>
+</div>
+
+<div class="card">
+  <h3><span class="badge b-mid">中</span>S-1: ホーム配下の資格情報は委託先から読める(文書化済みの受容リスク)</h3>
+  <p>denylist の走査はワークツリー内のみで、<code>~/.config/gh/hosts.yml</code>・<code>~/.claude/</code>・<code>~/.codex/auth.json</code> 等は読み放題。ネットワーク無効で直接送信は塞がれているが、<strong>「ワークツリー内のファイルに書き出す → コミット / PR に紛れて公開される」という持ち出し経路は残る</strong>。denylist コメント・計画書 §13 とも限界として明記しており判断は妥当。ただし最後の防衛線が「検収レビューと CI の secretlint」であることは認識しておくべき(secretlint は既知パターンしか捕まえない)。</p>
+  <p><strong>提案</strong>: 恒久対応は専用ユーザー / 別コンテナ実行(計画書も言及)。安価な緩和として、impl 委託の出口で「新規・変更ファイルに高エントロピー文字列がないか」を secretlint(ローカルに導入済み)で変更ファイルだけに当てる手はある。</p>
+  <div class="files">該当: <code>.claude/codex-denylist.txt</code> / <code>delegate-codex.sh</code> 入口検査1</div>
+</div>
+
+<div class="card">
+  <h3><span class="badge b-low">低</span>S-5: その他(受容可能と判断)</h3>
+  <ul>
+    <li><code>CODEX_DELEGATE_ACK_SECRETS=1</code> は司令塔自身が付けて再実行できる — スクリプト内コメントで自認済み。permission prompt 設定に依存する旨も明記されており、扱いは誠実</li>
+    <li>再入防止(5-5)の TOCTOU — 2 本の impl を同時起動すると両方が検査を通過し得るが、運用上司令塔は 1 人で、実害は作業ツリーの競合止まり</li>
+    <li>pid 再利用による誤検知は「止める側」に倒れる(フェイルセーフ)。回復手順 §12.6 も用意済み</li>
+    <li><code>record-hygiene.yml</code> は <code>pull_request</code>(target ではない)+ read 権限のみで、fork PR からのシークレット窃取経路なし。<code>PR_BODY</code> の env 渡しでスクリプトインジェクションも回避 — 良い実装</li>
+    <li><code>claude.yml</code> の author_association 絞り込みは action 側の検証と二重化されており適切</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h3><span class="badge b-good">良</span>特筆すべき良い実装</h3>
+  <ul>
+    <li><strong>出口検査の優先順位</strong>: 禁止領域の差分検査をレート上限・認証失敗の判定より前に置き、「改ざんしてから上限に当たった」セッションが rate-limited として静かに記録される最悪ケースを潰している</li>
+    <li><strong>自己コピー exec</strong>: 実行中の自己書き換えハザードを起動直後のコピーで遮断し、かつマーカー変数を子プロセスから隠している</li>
+    <li><strong>環境変数の許可リスト</strong>(<code>env -i</code>)+ <code>CODEX_DELEGATE_ENV_ALLOW</code> は加算のみで全バイパスを用意していない</li>
+    <li><strong><code>prepare-commit-msg</code> の <code>MERGE_HEAD</code> 判定</strong>: <code>git revert -e</code> が $2=merge を渡してくる実測に基づく、引数だけでは防げない穴の閉じ方</li>
+    <li><strong><code>.codex/config.toml</code> を防衛線と見なさない</strong>宣言と、sandbox を CLI フラグで常時明示する実装の一致</li>
+  </ul>
+</div>
+
+<h2 id="cost">3. コストパフォーマンス</h2>
+
+<p>設計目標「実装ループのログを司令塔のコンテキストから排除する」は実測で機能している。decisions.jsonl の記録では、生ログ 66,347 B に対し司令塔へ返ったのは約 60 B(<strong>0.09%</strong>)。チケット丸ごと委託(#8)でも 92 KB → 50 B。</p>
+
+<div class="scroll">
+<table>
+  <tr><th>観点</th><th>評価</th><th>根拠</th></tr>
+  <tr>
+    <td>委託の往復コスト</td>
+    <td><span class="badge b-good">良</span></td>
+    <td>実測 2 件とも差し戻し 0 回。design.md を書き切る運用と exit code 契約(0〜5)が効いている</td>
+  </tr>
+  <tr>
+    <td>セッション状態の外部化</td>
+    <td><span class="badge b-good">良</span></td>
+    <td>run record + SessionStart 注入で「委託を挟んで /clear」が成立。read-only 委託の自動 accept(Issue #22)で注入の肥大も抑止済み</td>
+  </tr>
+  <tr>
+    <td>CI の分割</td>
+    <td><span class="badge b-good">良</span></td>
+    <td>record-hygiene を ci.yml から分離し、ラベル操作のたびに npm ci + テストが再実行される無駄を回避。Claude レビューは main 向け PR の opened / ready のみ + draft 除外で、モード B(draft 積み)と整合</td>
+  </tr>
+  <tr>
+    <td>編集ごとの品質チェック</td>
+    <td><span class="badge b-mid">改善余地</span></td>
+    <td>下記 C-1</td>
+  </tr>
+  <tr>
+    <td>効果測定のループ</td>
+    <td><span class="badge b-mid">未完</span></td>
+    <td>下記 C-2</td>
+  </tr>
+</table>
+</div>
+
+<div class="card">
+  <h3><span class="badge b-mid">改善余地</span>C-1: <code>lint-on-edit.sh</code> が編集のたびに全体 lint + 全体 tsc を回す</h3>
+  <p>PostToolUse(async)で <code>npm run lint</code>(eslint 全体)と <code>npm run typecheck</code>(tsc 全体)を実行し、それぞれ tail 20 行がコンテキストに載る。現在の規模では軽微だが、コードが育つと CPU とコンテキストの両方で線形に高くなる。またロック方式が「実行中はスキップ」のため、<strong>連続編集の最後の編集が検査されない</strong>穴がある(先行プロセスは古い状態を lint している)。</p>
+  <p><strong>提案</strong>: eslint は編集ファイル単体に絞る(<code>npx eslint "$f"</code>)。tsc は単体不可なので <code>--incremental</code> を検討するか、fork 側の「変更ファイルの型チェック」と役割が重複している分は削る選択肢もある。なお PostToolUse の prettier(全編集)+ lint-staged(コミット時)+ CI の format:check と、フォーマットは 3 重に掛かっている — 各層は安価なので優先度は低いが、認識はしておくとよい。</p>
+  <div class="files">該当: <code>.claude/scripts/lint-on-edit.sh</code> / <code>.claude/settings.json</code> PostToolUse</div>
+</div>
+
+<div class="card">
+  <h3><span class="badge b-mid">未完</span>C-2: econ モードの効果測定が回っていない</h3>
+  <p>delegation-policy.md は「閾値は初期値であり実測で上下させる」と宣言しているが、週枠寿命の比較測定は <code>decisions.jsonl</code> に「未実施」と記録されたまま(mode-b-weekly-budget-baseline-followup)。委託粒度の損益分岐(design.md を書き切るコスト vs 実装ループのコスト)を検証するデータが揃わないと、閾値調整のループが空転する。次に econ モードでチケットを消化するタイミングで <code>/usage</code> の記録を忘れないよう、リマインドの仕掛け(econ モード注入文への 1 行追記など)を検討。</p>
+  <div class="files">該当: <code>.harness/decisions.jsonl</code> / <code>.claude/rules/mode/econ.md</code></div>
+</div>
+
+<div class="card">
+  <h3><span class="badge b-low">軽微</span>C-3: スケールで効いてくる箇所(手当済みだが監視対象)</h3>
+  <ul>
+    <li><code>forbidden_snapshot()</code> は run record の蓄積で前後 2 回のハッシュコストが線形増 — 50 件警告 + 手動 prune で手当済み。妥当</li>
+    <li>SessionStart の司令塔ルール注入は毎セッション約 12 KB。「キャッシュ対象を小さく保つ」方針自身が監視ポイントと言っており、lead ルールを太らせるときはこの注入コストに跳ねることを意識する</li>
+    <li>record-hygiene は <code>edited</code> / <code>labeled</code> でも発火するが、5 分 timeout の軽量ジョブ + concurrency 打ち切りで問題なし</li>
+  </ul>
+</div>
+
+<h2 id="structure">4. 構成の適正化が可能な個所</h2>
+
+<div class="card">
+  <h3><span class="badge b-mid">推奨</span>O-1: CHANGELOG 検査の対象に <code>.github/workflows/</code> が入っていない</h3>
+  <p><code>check-record-hygiene.sh</code> の <code>CHANGELOG_TRIGGERS</code> は <code>.claude/</code> / <code>.husky/</code> / <code>.codex/</code> / <code>AGENTS.md</code> の 4 つだが、<code>template-manifest.json</code> では 5 本のワークフロー(ci.yml / claude.yml / claude-code-review.yml / record-hygiene.yml / template-update-check.yml)も <strong>owned = テンプレート同期対象</strong>。ワークフローだけを変更した PR は CHANGELOG 未更新でも緑になり、「/sync-template で取り込む側が [manual] 項目に気づけない」というこの検査が塞ごうとした穴がそのまま残る。トリガーに <code>.github/workflows/</code> を足すだけで閉じる。</p>
+  <div class="files">該当: <code>.claude/scripts/check-record-hygiene.sh</code> CHANGELOG_TRIGGERS / <code>.claude/template-manifest.json</code></div>
+</div>
+
+<div class="card">
+  <h3><span class="badge b-mid">再検討</span>O-2: <code>rec_field()</code> の二重実装は既に乖離コストが顕在化している</h3>
+  <p><code>delegate-codex.sh</code> と <code>codex-run.sh</code> に同一実装をコピーし「2 箇所・十数行のため共有ファイルは作らない」と注記されているが、decisions.jsonl の記録によれば sed フォールバックの末尾カンマバグ(Critical: jq 不在環境で再入防止がフェイルオープン)を<strong>両方で</strong>直した実績が既にある。判定ロジックを 1 箇所に集約する方針(check-protected-branch.sh / harness-mode.sh / latest-steering.sh)とも不整合。<code>.claude/scripts/lib-record.sh</code> のような共有ファイルに切り出して <code>source</code> する形が、このリポジトリ自身の設計原則に合う。切り出す場合はそのファイルも委託禁止領域に足すこと(S-3 のディレクトリ単位保護を採るなら自動的に含まれる)。</p>
+  <div class="files">該当: <code>.claude/scripts/delegate-codex.sh</code> / <code>.claude/scripts/codex-run.sh</code></div>
+</div>
+
+<div class="card">
+  <h3><span class="badge b-low">提案</span>O-3: SIGINT 後の「改ざん基準化」を安価に検出できる</h3>
+  <p>S-4 で触れた空振り条件(割り込みで出口検査に到達しなかった委託の後、次回の BEFORE スナップショットが改ざん後を基準に取る)への安価な緩和策: 禁止領域の汎用項目はほぼすべて git 追跡ファイルなので、<strong>委託の起動時に「running のまま残った record がある場合、禁止領域を <code>git diff HEAD -- &lt;paths&gt;</code> で確認し、dirty なら警告を強める(または止める)」</strong>を機械化できる。現在は文言での注意喚起(§12.6 への誘導)のみで、人間が読み飛ばすと検出機会が失われる。</p>
+  <div class="files">該当: <code>.claude/scripts/delegate-codex.sh</code> 入口検査 5-5 の警告分岐</div>
+</div>
+
+<div class="card">
+  <h3><span class="badge b-good">現状維持が適正</span>O-4: あえて変えない方がよい箇所</h3>
+  <ul>
+    <li><strong><code>delegate-codex.sh</code> の 1,043 行単一ファイル</strong>: 分割すると「唯一の入口」原則と自己コピー保護(コピーは 1 ファイルしか運ばない)が壊れる。内部は検査番号つきの区画に整理されており可読性は保たれている。現状維持を推奨</li>
+    <li><strong>3 モードの手動切替(<code>.harness/mode</code> は人間が書く)</strong>: Claude が自分で降格・復帰しない設計は、モード詐称の防止と責任分界の両面で正しい</li>
+    <li><strong>保護ブランチ検査のフェイルオープン</strong>: コミット不能に倒さない判断と、その代わりに「黙って素通ししない」(全層で stderr 警告)+ CI 最終検証という補償の組み合わせは一貫している</li>
+    <li><strong>run record の自動削除をしない</strong>(prune は人間の明示操作のみ): 未検収 record = 検収キューという意味づけが明確で、警告閾値 50 件も妥当</li>
+  </ul>
+</div>
+
+<h2 id="priority">5. 対応の優先順位(まとめ)</h2>
+
+<div class="scroll">
+<table>
+  <tr><th>#</th><th>項目</th><th>種別</th><th>工数目安</th><th>効果</th></tr>
+  <tr>
+    <td>1</td>
+    <td><strong>S-3</strong>: <code>FORBIDDEN_PATHS</code> に <code>.claude/scripts/</code> / <code>.claude/hooks/</code> / <code>.claude/settings.json</code> を追加(AGENTS.md §4・CLAUDE.md と 3 箇所同時)</td>
+    <td>セキュリティ</td><td>小</td>
+    <td>CI 判定の無効化・検収偽装・hook 定義改ざんの経路を一括で閉じる</td>
+  </tr>
+  <tr>
+    <td>2</td>
+    <td><strong>O-1</strong>: <code>CHANGELOG_TRIGGERS</code> に <code>.github/workflows/</code> を追加</td>
+    <td>構成</td><td>極小</td>
+    <td>テンプレート同期対象の検査漏れを閉じる(1 行)</td>
+  </tr>
+  <tr>
+    <td>3</td>
+    <td><strong>S-2</strong>: モード C 復帰検収にガードレール健全性の機械検査を追加(<code>core.hooksPath</code> / <code>.git/hooks/</code> / 縮退中コミットの禁止領域 diff)</td>
+    <td>セキュリティ</td><td>中</td>
+    <td>機械検査ゼロの経路に最低限の網を張る</td>
+  </tr>
+  <tr>
+    <td>4</td>
+    <td><strong>S-4</strong>: verify-probe の形式検査 + 実行前表示 + <code>env -i</code> 実行</td>
+    <td>セキュリティ</td><td>小</td>
+    <td>ホスト実行経路の悪用余地を大幅に縮小</td>
+  </tr>
+  <tr>
+    <td>5</td>
+    <td><strong>C-1</strong>: <code>lint-on-edit.sh</code> を編集ファイル単位に絞る</td>
+    <td>コスト</td><td>小</td>
+    <td>規模拡大時の CPU・コンテキスト消費を抑止。スキップ穴も解消</td>
+  </tr>
+  <tr>
+    <td>6</td>
+    <td><strong>O-2</strong>: <code>rec_field()</code> の共有ファイル化</td>
+    <td>構成</td><td>小</td>
+    <td>単一ソース原則との整合。次の乖離バグを予防</td>
+  </tr>
+  <tr>
+    <td>7</td>
+    <td><strong>O-3</strong>: running 残置時の禁止領域 <code>git diff HEAD</code> 検査</td>
+    <td>セキュリティ</td><td>小</td>
+    <td>SIGINT 後の改ざん基準化を機械検出</td>
+  </tr>
+  <tr>
+    <td>8</td>
+    <td><strong>C-2</strong>: econ モード効果測定のリマインド組み込み</td>
+    <td>コスト</td><td>極小</td>
+    <td>閾値調整ループを実データで回せるようにする</td>
+  </tr>
+</table>
+</div>
+
+<blockquote>
+S-1(ホーム配下の資格情報)は文書化済みの受容リスクとして優先表から外した。恒久対応(専用ユーザー / 別コンテナ)はプロダクト開発で本物の秘密情報を扱い始める前に再評価すること。
+</blockquote>
+
+</div>
+</body>
+</html>
