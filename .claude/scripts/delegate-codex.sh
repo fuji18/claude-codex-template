@@ -109,6 +109,7 @@ usage() {
   explore <調査指示 | ファイルパス>   広域コード探索(read-only)
   review  <base-ref>                 敵対的レビュー(read-only)
   impl <.steering/[dir]>             実装フェーズの委託(workspace-write)
+  --print-forbidden                  委託禁止領域の一覧を 1 行 1 パスで出力(read-only)
 
 環境変数:
   CODEX_HARNESS_MODE          ハーネスモードの上書き(既定は .harness/mode)
@@ -118,7 +119,7 @@ USAGE
 }
 
 case "$MODE" in
-  explore | review | impl) ;;
+  explore | review | impl | --print-forbidden) ;;
   fix-ci)
     echo "delegate-codex: 'fix-ci' は本テンプレートでは未実装です" >&2
     exit "$EX_FAIL"
@@ -129,7 +130,7 @@ case "$MODE" in
     ;;
 esac
 
-if [ -z "$TARGET" ]; then
+if [ "$MODE" != "--print-forbidden" ] && [ -z "$TARGET" ]; then
   echo "delegate-codex: target が空です" >&2
   usage
   exit "$EX_FAIL"
@@ -161,6 +162,106 @@ for _cmd in find grep sed head tail tr sort uniq; do
     exit "$EX_UNAVAIL"
   fi
 done
+
+# ---------- 委託禁止領域の定義(単一ソース) ----------
+#
+# 出口検査(§末尾)と --print-forbidden の両方がここを読む。入口検査より前に置くのは、
+# --print-forbidden が codex CLI 不在でも応答できる必要があるため(入口検査4 に到達しない)。
+#
+# 入口検査が 5 系統あるのに出口が素通しだった穴を塞ぐ層。--sandbox workspace-write の
+# Codex はワークツリー内なら禁止領域も書けてしまい、書かれた先の一部は**後でサンドボックスの
+# 外で実行される**:
+#   - AGENTS.md の <!-- verify-probe: ... --> は、次回委託時に入口検査3 がホスト上の
+#     bash -c にそのまま渡す(サンドボックス内で 1 行書く → 次回起動でホスト実行)
+#   - .husky/* / .claude/scripts/* / .claude/hooks/* はホストの git・Claude セッションが実行する
+#   - .claude/settings.json は PreToolUse hook の定義そのもの(どのコマンドを止めるかの宣言)
+#   - .github/workflows/* は非 fork PR で CLAUDE_CODE_OAUTH_TOKEN に触れる定義そのもの
+#
+# ここは**汎用項目**の単一ソース(全プロジェクトに配布される層)。プロジェクト固有パスの
+# 単一ソースは AGENTS.md §4 の <!-- kickoff:delegation-forbidden-paths --> の中で、
+# 起動直後に PROJECT_FORBIDDEN_PATHS へ抽出済み(Issue #28)。CLAUDE.md の同名の節は
+# 説明に徹し、汎用項目の内容をここと一致させる。
+# 3 箇所目のリストファイルを作らないのは、そのファイル自身を守る層がまた要るため。
+# このスクリプトは起動直後に自身をコピーして exec するので、実行中のプロセスが読む
+# この配列は委託先から書き換えられない。
+#
+# .claude/scripts/ と .claude/hooks/ を個別ファイルではなくディレクトリで指定しているのは、
+# 「.github/workflows/ を守るなら、workflows が bash で呼ぶ判定の実体も同等に守る」線を
+# 一貫させるため(Issue #40)。個別列挙にすると、判定スクリプトが 1 本増えるたびに同じ
+# 漏れを繰り返す。実際 #37 で足した check-record-hygiene.sh は、冒頭に exit 0 を 1 行
+# 書くだけで全 PR の記録漏れ検査を無効化できる状態のまま守られていなかった。
+# .claude/ 全体をディレクトリごと禁止にはしない。skills/ commands/ agents/ rules/ の
+# 定型追記まで止めると委託の余地が過剰に狭まるため、対象は**実行される実体**
+# (scripts / hooks / settings.json)に限る。
+#
+# 末尾が / のものはディレクトリ配下すべてが対象。
+FORBIDDEN_PATHS=(
+  ".claude/scripts/"
+  ".claude/hooks/"
+  ".claude/settings.json"
+  ".husky/pre-commit"
+  ".husky/prepare-commit-msg"
+  ".claude/codex-denylist.txt"
+  "AGENTS.md"
+  ".github/workflows/"
+  ".harness/mode"
+  ".harness/codex-runs/"
+)
+
+AGENTS="AGENTS.md"
+
+# ---------- 出口検査の対象(プロジェクト固有パス)の抽出 ----------
+#
+# /kickoff フェーズ4 は AGENTS.md §4 のマーカー内へ、そのプロジェクトの実際の
+# モジュールパス(認証・決済・データ移行など)を追記する。それを出口検査の対象に
+# 加える(Issue #28)。スクリプト内の FORBIDDEN_PATHS は汎用項目の単一ソースとして
+# そのまま残り、ここで抽出した分と**マージ**して使う。汎用項目は AGENTS.md から
+# マーカーごと消されても消えない。
+#
+# ここで抽出する理由(プロンプト構築より前・codex exec より前):
+#   委託先が実行中に AGENTS.md を書き換えても、その回の検査は開始時点のリストで
+#   行われる必要がある。書き換えそのものは AGENTS.md(汎用項目)の内容ハッシュ差分
+#   として別途検出される。
+#
+# 抽出はバックティック囲みの文字列すべて。実在しないもの(説明のために囲んだだけの
+# 語や <!-- verify-probe: ... --> のような断片)は forbidden_files() の実在検査で
+# 落ちるため、列挙結果に現れないだけで無害。
+#
+# フェイルオープンの条件: マーカーが片方しか無いとき。sed の範囲指定が末尾まで
+# 走り、AGENTS.md 中の無関係なバックティック語まで禁止領域に化けて全委託が常に
+# 失敗するため、警告だけ出して抽出しない(片方消しによる無効化は、AGENTS.md 自身の
+# 改ざんとしてその回に検出される)。
+PROJECT_FORBIDDEN_PATHS=()
+_fp_start=0
+_fp_end=0
+grep -q '<!-- kickoff:delegation-forbidden-paths -->' "$AGENTS" 2>/dev/null && _fp_start=1
+grep -q '<!-- /kickoff:delegation-forbidden-paths -->' "$AGENTS" 2>/dev/null && _fp_end=1
+
+if [ "$_fp_start" = 1 ] && [ "$_fp_end" = 1 ]; then
+  while IFS= read -r _fp_line; do
+    [ -n "$_fp_line" ] && PROJECT_FORBIDDEN_PATHS+=("$_fp_line")
+  done < <(
+    sed -n '/<!-- kickoff:delegation-forbidden-paths -->/,/<!-- \/kickoff:delegation-forbidden-paths -->/p' "$AGENTS" 2>/dev/null |
+      grep -o '`[^`]*`' | sed 's/^`//; s/`$//' | LC_ALL=C sort -u
+  )
+  unset _fp_line
+elif [ "$_fp_start" = 1 ] || [ "$_fp_end" = 1 ]; then
+  echo "delegate-codex: 警告 — AGENTS.md の <!-- kickoff:delegation-forbidden-paths --> マーカーが片方しかありません。プロジェクト固有パスの抽出をスキップします(汎用項目の検査は従来どおり働きます)。" >&2
+fi
+unset _fp_start _fp_end
+
+# ---------- --print-forbidden: 一覧だけを出力して終了 ----------
+#
+# 他スクリプト(check-guard-integrity.sh degraded)が禁止領域の判定に使う出力口。
+# 配列を複製させないために置く。ここが単一ソースであり続ける。
+# 出力は 1 行 1 パス(末尾 / はディレクトリ配下すべて)。
+if [ "$MODE" = "--print-forbidden" ]; then
+  printf '%s\n' "${FORBIDDEN_PATHS[@]}"
+  if [ "${#PROJECT_FORBIDDEN_PATHS[@]}" -gt 0 ]; then
+    printf '%s\n' "${PROJECT_FORBIDDEN_PATHS[@]}"
+  fi
+  exit 0
+fi
 
 # ---------- 入口検査1: 機密ファイル ----------
 #
@@ -236,7 +337,6 @@ fi
 
 # ---------- 入口検査2・3: AGENTS.md と依存の導通 ----------
 
-AGENTS="AGENTS.md"
 if [ ! -f "$AGENTS" ]; then
   cat >&2 <<'MSG'
 delegate-codex: AGENTS.md がありません。
@@ -266,46 +366,6 @@ delegate-codex: 検証プローブが失敗しました: $PROBE
 MSG
   exit "$EX_UNAVAIL"
 fi
-
-# ---------- 出口検査の対象(プロジェクト固有パス)の抽出 ----------
-#
-# /kickoff フェーズ4 は AGENTS.md §4 のマーカー内へ、そのプロジェクトの実際の
-# モジュールパス(認証・決済・データ移行など)を追記する。それを出口検査の対象に
-# 加える(Issue #28)。スクリプト内の FORBIDDEN_PATHS は汎用項目の単一ソースとして
-# そのまま残り、ここで抽出した分と**マージ**して使う。汎用項目は AGENTS.md から
-# マーカーごと消されても消えない。
-#
-# ここで抽出する理由(プロンプト構築より前・codex exec より前):
-#   委託先が実行中に AGENTS.md を書き換えても、その回の検査は開始時点のリストで
-#   行われる必要がある。書き換えそのものは AGENTS.md(汎用項目)の内容ハッシュ差分
-#   として別途検出される。
-#
-# 抽出はバックティック囲みの文字列すべて。実在しないもの(説明のために囲んだだけの
-# 語や <!-- verify-probe: ... --> のような断片)は forbidden_files() の実在検査で
-# 落ちるため、列挙結果に現れないだけで無害。
-#
-# フェイルオープンの条件: マーカーが片方しか無いとき。sed の範囲指定が末尾まで
-# 走り、AGENTS.md 中の無関係なバックティック語まで禁止領域に化けて全委託が常に
-# 失敗するため、警告だけ出して抽出しない(片方消しによる無効化は、AGENTS.md 自身の
-# 改ざんとしてその回に検出される)。
-PROJECT_FORBIDDEN_PATHS=()
-_fp_start=0
-_fp_end=0
-grep -q '<!-- kickoff:delegation-forbidden-paths -->' "$AGENTS" 2>/dev/null && _fp_start=1
-grep -q '<!-- /kickoff:delegation-forbidden-paths -->' "$AGENTS" 2>/dev/null && _fp_end=1
-
-if [ "$_fp_start" = 1 ] && [ "$_fp_end" = 1 ]; then
-  while IFS= read -r _fp_line; do
-    [ -n "$_fp_line" ] && PROJECT_FORBIDDEN_PATHS+=("$_fp_line")
-  done < <(
-    sed -n '/<!-- kickoff:delegation-forbidden-paths -->/,/<!-- \/kickoff:delegation-forbidden-paths -->/p' "$AGENTS" 2>/dev/null |
-      grep -o '`[^`]*`' | sed 's/^`//; s/`$//' | LC_ALL=C sort -u
-  )
-  unset _fp_line
-elif [ "$_fp_start" = 1 ] || [ "$_fp_end" = 1 ]; then
-  echo "delegate-codex: 警告 — AGENTS.md の <!-- kickoff:delegation-forbidden-paths --> マーカーが片方しかありません。プロジェクト固有パスの抽出をスキップします(汎用項目の検査は従来どおり働きます)。" >&2
-fi
-unset _fp_start _fp_end
 
 # ---------- 入口検査4: Codex CLI ----------
 
@@ -670,47 +730,10 @@ esac
 SANDBOX="read-only"
 [ "$MODE" = "impl" ] && SANDBOX="workspace-write"
 
-# ---------- 出口検査の対象(委託禁止領域)----------
+# ---------- 出口検査(委託禁止領域)のヘルパー ----------
 #
-# 入口検査が 5 系統あるのに出口が素通しだった穴を塞ぐ層。--sandbox workspace-write の
-# Codex はワークツリー内なら禁止領域も書けてしまい、書かれた先の一部は**後でサンドボックスの
-# 外で実行される**:
-#   - AGENTS.md の <!-- verify-probe: ... --> は、次回委託時に入口検査3 がホスト上の
-#     bash -c にそのまま渡す(サンドボックス内で 1 行書く → 次回起動でホスト実行)
-#   - .husky/* / .claude/scripts/* / .claude/hooks/* はホストの git・Claude セッションが実行する
-#   - .claude/settings.json は PreToolUse hook の定義そのもの(どのコマンドを止めるかの宣言)
-#   - .github/workflows/* は非 fork PR で CLAUDE_CODE_OAUTH_TOKEN に触れる定義そのもの
-#
-# ここは**汎用項目**の単一ソース(全プロジェクトに配布される層)。プロジェクト固有パスの
-# 単一ソースは AGENTS.md §4 の <!-- kickoff:delegation-forbidden-paths --> の中で、
-# 起動直後に PROJECT_FORBIDDEN_PATHS へ抽出済み(Issue #28)。CLAUDE.md の同名の節は
-# 説明に徹し、汎用項目の内容をここと一致させる。
-# 3 箇所目のリストファイルを作らないのは、そのファイル自身を守る層がまた要るため。
-# このスクリプトは起動直後に自身をコピーして exec するので、実行中のプロセスが読む
-# この配列は委託先から書き換えられない。
-#
-# .claude/scripts/ と .claude/hooks/ を個別ファイルではなくディレクトリで指定しているのは、
-# 「.github/workflows/ を守るなら、workflows が bash で呼ぶ判定の実体も同等に守る」線を
-# 一貫させるため(Issue #40)。個別列挙にすると、判定スクリプトが 1 本増えるたびに同じ
-# 漏れを繰り返す。実際 #37 で足した check-record-hygiene.sh は、冒頭に exit 0 を 1 行
-# 書くだけで全 PR の記録漏れ検査を無効化できる状態のまま守られていなかった。
-# .claude/ 全体をディレクトリごと禁止にはしない。skills/ commands/ agents/ rules/ の
-# 定型追記まで止めると委託の余地が過剰に狭まるため、対象は**実行される実体**
-# (scripts / hooks / settings.json)に限る。
-#
-# 末尾が / のものはディレクトリ配下すべてが対象。
-FORBIDDEN_PATHS=(
-  ".claude/scripts/"
-  ".claude/hooks/"
-  ".claude/settings.json"
-  ".husky/pre-commit"
-  ".husky/prepare-commit-msg"
-  ".claude/codex-denylist.txt"
-  "AGENTS.md"
-  ".github/workflows/"
-  ".harness/mode"
-  ".harness/codex-runs/"
-)
+# 判定対象の配列(FORBIDDEN_PATHS / PROJECT_FORBIDDEN_PATHS)はスクリプト冒頭で定義済み。
+# ここにはそれを使う関数だけを置く。
 
 # 禁止領域の実ファイルを列挙する。今回の委託自身が書く 3 ファイル(run record・生ログ・
 # last message)は当然変わるので除外する。除外しないと全ての impl 委託が必ず違反になる。
