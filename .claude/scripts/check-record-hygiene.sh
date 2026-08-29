@@ -28,9 +28,16 @@ DECISIONS_PATH=".harness/decisions.jsonl"
 CHANGELOG_ESCAPE_LABEL="no-changelog"
 DECISIONS_ESCAPE_LABEL="no-decision-record"
 
-# CHANGELOG の追記を要求する変更対象。末尾が / のものはディレクトリ配下すべてを指す
-# (.claude/template-manifest.json の owned / merge の面に対応する)。
-CHANGELOG_TRIGGERS=(".claude/" ".husky/" ".codex/" "AGENTS.md")
+# CHANGELOG の追記を要求する変更対象。末尾が / のものはディレクトリ配下すべてを指す。
+#
+# ここは .claude/template-manifest.json の owned / merge に載っている「面」と対応させる。
+# 基準は「/sync-template で取り込む側が [manual] 項目に気づけなければ困るか」であって、
+# ディレクトリの見た目ではない。.github/ 全体ではなく .github/workflows/ に絞るのは、
+# manifest に載っているのがワークフロー 5 本だけだからで、ISSUE_TEMPLATE 等は対象外。
+#
+# manifest から動的に生成はしない。manifest の構造変更に検査が引きずられる方が高くつく。
+# owned / merge に新しい面を足すときは、この配列も同時に直す(2 箇所の手作業で足りる)。
+CHANGELOG_TRIGGERS=(".claude/" ".husky/" ".codex/" ".github/workflows/" "AGENTS.md")
 
 CHANGED_FILES="${CHANGED_FILES:-}"
 PR_LABELS="${PR_LABELS:-}"
