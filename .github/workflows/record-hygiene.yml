@@ -1,0 +1,110 @@
+name: Record Hygiene
+
+# チケット完了時の記録漏れ(CHANGELOG / decisions.jsonl)の機械的検査。
+# ci.yml に同居させないのは、逃げ道ラベルの付与とボディ編集で即座に再判定させるために
+# pull_request の types を広げる必要があり、ci.yml で広げると quality ジョブ
+# (npm ci + lint + typecheck + test)までラベル操作のたびに再実行されるため。
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+concurrency:
+  group: record-hygiene-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  record-hygiene:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      # PR の「事実」の収集だけをここで行う(判定はしない)。
+      # 判定は .claude/scripts/check-record-hygiene.sh に集約してあり、
+      # 手元から同じ環境変数を渡せば同じ結果が再現できる。
+      - name: Collect PR facts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          # PR ボディは環境変数経由で渡す(${{ }} を run に直接展開しない)
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          # ここは -e を付ける。gh api が rate limit や一時障害で失敗したまま先へ進むと、
+          # changed.txt / tickets.txt が空のまま「違反なし」で緑になる(fail-open)。
+          # 記録漏れが静かに見逃されるのは、このチケットが塞ごうとしている事象そのもの。
+          # 判定ステップ側は逆に -e を付けてはいけない(下の注記を参照)。
+          set -euo pipefail
+
+          # 変更ファイル一覧。--paginate で 100 件を超える PR でも取りこぼさない
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+            --jq '.[].filename' > "${RUNNER_TEMP}/changed.txt"
+
+          # ラベルはイベントペイロードから読む(API 呼び出し不要)
+          jq -r '.pull_request.labels[].name' "$GITHUB_EVENT_PATH" > "${RUNNER_TEMP}/labels.txt"
+
+          # PR ボディの close キーワードから Issue 番号を拾う
+          printf '%s' "$PR_BODY" \
+            | grep -oiE '(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]+#[0-9]+' \
+            | grep -oE '[0-9]+' | sort -u > "${RUNNER_TEMP}/closes.txt" || true
+
+          # そのうち ticket ラベルが付いているものだけを検査対象にする
+          # (/fix-issue のバグ Issue や単発のドキュメント PR で鳴らせないため)
+          : > "${RUNNER_TEMP}/tickets.txt"
+          while IFS= read -r n; do
+            [ -n "$n" ] || continue
+            if gh api "repos/${GITHUB_REPOSITORY}/issues/${n}" --jq '.labels[].name' 2>/dev/null \
+                 | grep -qx 'ticket'; then
+              echo "$n" >> "${RUNNER_TEMP}/tickets.txt"
+            fi
+          done < "${RUNNER_TEMP}/closes.txt"
+
+          echo "changed=$(wc -l < "${RUNNER_TEMP}/changed.txt") tickets=$(tr '\n' ' ' < "${RUNNER_TEMP}/tickets.txt")"
+
+      - name: Check record hygiene
+        run: |
+          # ここは -e を明示的に切る。GitHub Actions の run: の既定シェルは
+          # `bash -e {0}` であり、set -uo pipefail を書いても -e は残る。残したまま
+          # だとスクリプトが exit 1 を返した瞬間にステップが打ち切られ、rc の捕捉と
+          # annotation / Job Summary の出力に到達できない(赤にはなるが理由が出ない)。
+          # 実測: run 33125304790 で annotation も Summary も出ないことを確認した。
+          set +e
+          set -uo pipefail
+
+          OUT="$(CHANGED_FILES="$(cat "${RUNNER_TEMP}/changed.txt")" \
+                 PR_LABELS="$(cat "${RUNNER_TEMP}/labels.txt")" \
+                 TICKET_ISSUES="$(cat "${RUNNER_TEMP}/tickets.txt")" \
+                 bash .claude/scripts/check-record-hygiene.sh)"
+          rc=$?
+
+          if [ -n "$OUT" ]; then
+            printf '%s\n' "$OUT" | while IFS='|' read -r level msg; do
+              case "$level" in
+                ERROR) echo "::error title=チケット記録の漏れ::$msg" ;;
+                NOTICE) echo "::notice title=チケット記録の検査スキップ::$msg" ;;
+              esac
+            done
+          fi
+
+          {
+            echo "## チケット記録の検査"
+            echo
+            if [ -z "$OUT" ]; then
+              echo "記録漏れは検出されませんでした。"
+            else
+              printf '%s\n' "$OUT" | while IFS='|' read -r level msg; do
+                case "$level" in
+                  ERROR) echo "- ❌ $msg" ;;
+                  NOTICE) echo "- ⏭️ $msg" ;;
+                esac
+              done
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          exit "$rc"

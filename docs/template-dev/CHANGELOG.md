@@ -10,8 +10,19 @@
   - **`[manual]`** — 取り込む側に作業が必要。**何をすればよいかを 1 行で書く**(これが無い `[manual]` は書いた意味がない)
 - 破壊的変更(既存の運用が壊れる)は `[manual]` にし、行頭に **⚠️** を付ける
 - `/sync-template` は `syncedAt` のコミット日以降の日付見出しだけを読む。**日付を遡って過去の見出しに追記しない**(取り込む側が見落とす)
+- **`.claude/` / `.husky/` / `.codex/` / `AGENTS.md` を変更する PR は、このファイルの更新も必須。** CI(`.github/workflows/record-hygiene.yml`)が機械的に検査し、漏れていれば PR を落とす。追記が不要な変更(リバート・誤字修正など)はラベル `no-changelog` で外す
 
 ---
+
+## 2026-08-27
+
+**チケット完了時の記録漏れを CI で機械的に検出するようにした(Issue #37)。** この CHANGELOG は #20〜#29 の 8 件連続で追記されず、`/sync-template` を使う側が `[manual]` 項目に気づけない状態になっていました。散文の運用ルールだけでは 2 度守られなかった(4 回連続 → 8 回連続と悪化した)ため、機械的な層を足しています。
+
+- **[manual]** **記録漏れの CI 検査を追加した**(#37)。`.github/workflows/record-hygiene.yml`(新規)と `.claude/scripts/check-record-hygiene.sh`(新規)が、PR に対して 2 つの検査を行い、漏れがあれば **PR を落とします**(annotation + Job Summary に理由が出ます)。**取り込む側の作業**: リポジトリに逃げ道ラベルを 2 つ作る — `gh label create no-changelog` と `gh label create no-decision-record`。作らないとラベルを付けられず、検査を外せません
+  - **検査1(CHANGELOG)**: `.claude/` / `.husky/` / `.codex/` / `AGENTS.md` を変更した PR で `docs/template-dev/CHANGELOG.md` が未更新なら落とす。逃げ道は `no-changelog`
+  - **検査2(decisions.jsonl)**: `ticket` ラベル付き Issue を `Closes #N` でクローズする PR で `.harness/decisions.jsonl` に `"issue": N` の行が無ければ落とす。逃げ道は `no-decision-record`
+  - **Codex 委託を使わないプロジェクトでは検査2 は実質空振りします**(`.harness/decisions.jsonl` が無い場合は「記録できません」で落ちるため、使わないなら `no-decision-record` を常用するか、ワークフローを削除してください)
+- **[auto]** `.claude/rules/lead/delegation-policy.md`「実測の記録」に、**記録を書くのは PR を出す前**(検収が終わり往復回数と指摘数が確定した時点)であることと、逃げ道ラベルの表を明記した(#37)。従来の「チケット完了時」は実運用と食い違っており、マージ後に回すと記録そのものが落ちていました
 
 ## 2026-08-26
 

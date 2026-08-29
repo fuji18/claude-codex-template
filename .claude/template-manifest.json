@@ -16,6 +16,7 @@
     ".github/workflows/claude.yml",
     ".github/workflows/claude-code-review.yml",
     ".github/workflows/template-update-check.yml",
+    ".github/workflows/record-hygiene.yml",
     ".github/pull_request_template.md",
     "docs/ui-design-request-template.md",
     ".codex/skills/"

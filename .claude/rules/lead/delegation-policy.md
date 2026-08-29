@@ -42,3 +42,14 @@
 ### 実測の記録
 
 チケット完了時に `.harness/decisions.jsonl` へ 1 行追記する(委託先・往復回数・検収の指摘数)。**上の閾値は初期値**であり、この実測で上下させる。
+
+**書くのは PR を出す前**(検収が終わり、往復回数と指摘数が確定した時点)。マージ後に回すと記録そのものが落ちる — #23 は司令塔が検収指摘の反映まで自分で手を動かし、通常の検収フローから外れた分岐で欠落した。事後に埋めても `review_findings` は再構成値にしかならず、他エントリと精度が揃わない。
+
+この 2 つの記録は CI(`.github/workflows/record-hygiene.yml`)が機械的に検査する。判定の実体は `.claude/scripts/check-record-hygiene.sh` で、環境変数を渡せば手元でも同じ結果を再現できる。
+
+| 検査 | 落ちる条件 | 逃げ道ラベル |
+| --- | --- | --- |
+| `docs/template-dev/CHANGELOG.md` | `.claude/` / `.husky/` / `.codex/` / `AGENTS.md` を変更した PR で CHANGELOG が未更新 | `no-changelog` |
+| `.harness/decisions.jsonl` | PR が `ticket` ラベル付き Issue を `Closes #N` でクローズするのに `"issue": N` の行が無い | `no-decision-record` |
+
+**逃げ道ラベルは司令塔が理由を添えて付ける。** 鳴りっぱなしを避けるための弁であって、既定の回避手段ではない。
