@@ -28,12 +28,15 @@
 
 以下は Codex に委託しない(司令塔または `implement-ticket` の fork が直接書く)。振り分けの判断基準は `.claude/rules/lead/delegation-policy.md`。
 
-- `.claude/scripts/delegate-codex.sh` — 委託の唯一の入口。壊れたものがコミットされると以後すべての委託が不能になり、その委託自身は自分の変更を検証できない(実行中プロセスの保護は #15 の自己コピー exec で別途実装済み。`docs/template-dev/codex-delegation-plan.md` §9)
-- `.claude/scripts/check-protected-branch.sh` / `.husky/pre-commit` / `.husky/prepare-commit-msg` — ベンダー中立ガードレールの本体
+- `.claude/scripts/` — 委託の唯一の入口(`delegate-codex.sh`)、保護ブランチ判定、CI が `bash` で呼ぶ判定の実体(`check-record-hygiene.sh` / `check-guard-integrity.sh`)、検収状態を書き換える `codex-run.sh` がすべてここにある。`.github/workflows/` を守っても、そのワークフローが実行する実体が書き換え可能なら防御は成立しない。個別列挙はスクリプトが増えるたびに漏れるのでディレクトリ単位で禁止する(実行中プロセスの保護は #15 の自己コピー exec で別途実装済み。`docs/template-dev/codex-delegation-plan.md` §9)
+- `.claude/hooks/` / `.claude/settings.json` — PreToolUse hook の定義そのものと、司令塔コンテキストへの注入元(プロンプトインジェクションの経路になり得る)
+- `.husky/pre-commit` / `.husky/prepare-commit-msg` — ベンダー中立ガードレールの本体
 - `.claude/codex-denylist.txt` — 委託先が自分の送信禁止リストを編集できてはならない
 - `AGENTS.md` — 委託先の憲法。入口検査3 の `<!-- verify-probe: ... -->` は次回委託時にホスト上の `bash -c` へそのまま渡されるため、書き換えを許すとサンドボックス外でのコマンド実行経路になる
 - `.github/workflows/` — 非 fork PR で `CLAUDE_CODE_OAUTH_TOKEN` にアクセスできるワークフロー定義そのもの
 - `.harness/mode` / `.harness/codex-runs/` — ハーネスモードと run record。委託先が自分の結果を `accepted` に書き換えたりモードを詐称したりできてはならない
+
+`.claude/` 配下でも `skills/` / `commands/` / `agents/` / `rules/` / `docs/` は禁止領域に含めない。対象は**実行される実体**(scripts / hooks / settings.json)に限る。
 
 **機密の送信禁止(`.claude/codex-denylist.txt`)とは別の層。** denylist は該当ファイルが存在するだけで委託を止めるフェイルクローズ検査、こちらは司令塔が「どのチケットを渡すか」を決める振り分け判断。
 

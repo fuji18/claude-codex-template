@@ -133,8 +133,9 @@ touch .git/.probe 2>/dev/null && rm -f .git/.probe && echo GIT_WRITABLE || echo 
 これは機械的にも検査されます。委託の終了時に以下のパスの内容ハッシュが照合され、差分があると委託全体が `failed` として扱われます(あなたの報告内容にかかわらず)。他の作業が正しくても巻き添えで無効になるため、触らないでください。
 
 <!-- kickoff:delegation-forbidden-paths -->
-- `.claude/scripts/delegate-codex.sh` — 実行中のあなた自身の起動元。委託の唯一の入口であり、壊れたものがコミットされると以後すべての委託が不能になります(実行中のプロセス自体は自己コピーで保護済み)
-- `.claude/scripts/check-protected-branch.sh` / `.husky/pre-commit` / `.husky/prepare-commit-msg` — ガードレール本体
+- `.claude/scripts/` — 委託の入口(`delegate-codex.sh`)・保護ブランチ判定・CI が呼ぶ判定スクリプトの実体が置かれる場所です。実行中のあなた自身の起動元も含みます(プロセス自体は自己コピーで保護済み)。`delegate-codex.sh` を壊れた状態でコミットすると以後すべての委託が不能になりますし、判定スクリプトはここが 1 行書き換わるだけで CI の検査やガードレールの自壊検知が静かに無効化されます
+- `.claude/hooks/` / `.claude/settings.json` — Claude 側のフック定義とその実体です。司令塔のコンテキストへ注入される内容の出所でもあります
+- `.husky/pre-commit` / `.husky/prepare-commit-msg` — ベンダー非依存のガードレール本体
 - `.claude/codex-denylist.txt` — 委託先が自分の送信禁止リストを書き換えることはできません
 - `AGENTS.md` — このファイル自身。冒頭の `<!-- verify-probe: ... -->` は次回の委託時にホスト側で実行されるため、あなたが書き換えるとサンドボックスの外へ影響が出ます
 - `.github/workflows/` — CI 定義そのもの。ここを書き換えると認証済みトークンに触れられます

@@ -14,6 +14,13 @@
 
 ---
 
+## 2026-08-29
+
+**委託禁止領域に CI/hook の判定実体を含めた(Issue #40)。** `.github/workflows/` は守られていたのに、**そのワークフローが `bash` で呼ぶ判定スクリプトの本体は守られていませんでした**。定義を守っても、定義が実行する実体が書き換え可能なら防御は成立しません。
+
+- **[manual]** ⚠️ **`FORBIDDEN_PATHS` に `.claude/scripts/` / `.claude/hooks/` / `.claude/settings.json` を追加した**(#40)。個別ファイル列挙(`delegate-codex.sh` / `check-protected-branch.sh`)は**ディレクトリ単位**に置き換え。#37 で足した `check-record-hygiene.sh` は冒頭に `exit 0` を 1 行書くだけで全 PR の記録漏れ検査を無効化できる状態でしたし、`check-guard-integrity.sh` を骨抜きにすると「husky 層が消えたことに気づけない」状態になります。`.claude/` 全体は禁止にせず、対象は**実行される実体**(scripts / hooks / settings.json)に限っています(`skills/` / `commands/` / `agents/` / `rules/` は従来どおり委託可)。**取り込む側の作業**: `AGENTS.md`(`merge` 区分)§4 のマーカー内に `.claude/scripts/` / `.claude/hooks/` / `.claude/settings.json` の 3 項目を足し、既存の `.claude/scripts/delegate-codex.sh` / `.claude/scripts/check-protected-branch.sh` の行を整理する。`CLAUDE.md`(`never` 区分)の禁止領域リストにも同じ変更を反映する
+- **[auto]** ハーネス改修を Codex に委託していたプロジェクトでは、`.claude/scripts/` 配下を触る impl 委託が今後 `status=failed` / `exit 2` で止まります。ハーネス改修はもともと委託しない方針(`.claude/rules/lead/delegation-policy.md`)なので、通常の運用で失うものはありません
+
 ## 2026-08-27
 
 **チケット完了時の記録漏れを CI で機械的に検出するようにした(Issue #37)。** この CHANGELOG は #20〜#29 の 8 件連続で追記されず、`/sync-template` を使う側が `[manual]` 項目に気づけない状態になっていました。散文の運用ルールだけでは 2 度守られなかった(4 回連続 → 8 回連続と悪化した)ため、機械的な層を足しています。

@@ -677,7 +677,8 @@ SANDBOX="read-only"
 # 外で実行される**:
 #   - AGENTS.md の <!-- verify-probe: ... --> は、次回委託時に入口検査3 がホスト上の
 #     bash -c にそのまま渡す(サンドボックス内で 1 行書く → 次回起動でホスト実行)
-#   - .husky/* / .claude/scripts/* はホストの git・Claude セッションが実行する
+#   - .husky/* / .claude/scripts/* / .claude/hooks/* はホストの git・Claude セッションが実行する
+#   - .claude/settings.json は PreToolUse hook の定義そのもの(どのコマンドを止めるかの宣言)
 #   - .github/workflows/* は非 fork PR で CLAUDE_CODE_OAUTH_TOKEN に触れる定義そのもの
 #
 # ここは**汎用項目**の単一ソース(全プロジェクトに配布される層)。プロジェクト固有パスの
@@ -688,10 +689,20 @@ SANDBOX="read-only"
 # このスクリプトは起動直後に自身をコピーして exec するので、実行中のプロセスが読む
 # この配列は委託先から書き換えられない。
 #
+# .claude/scripts/ と .claude/hooks/ を個別ファイルではなくディレクトリで指定しているのは、
+# 「.github/workflows/ を守るなら、workflows が bash で呼ぶ判定の実体も同等に守る」線を
+# 一貫させるため(Issue #40)。個別列挙にすると、判定スクリプトが 1 本増えるたびに同じ
+# 漏れを繰り返す。実際 #37 で足した check-record-hygiene.sh は、冒頭に exit 0 を 1 行
+# 書くだけで全 PR の記録漏れ検査を無効化できる状態のまま守られていなかった。
+# .claude/ 全体をディレクトリごと禁止にはしない。skills/ commands/ agents/ rules/ の
+# 定型追記まで止めると委託の余地が過剰に狭まるため、対象は**実行される実体**
+# (scripts / hooks / settings.json)に限る。
+#
 # 末尾が / のものはディレクトリ配下すべてが対象。
 FORBIDDEN_PATHS=(
-  ".claude/scripts/delegate-codex.sh"
-  ".claude/scripts/check-protected-branch.sh"
+  ".claude/scripts/"
+  ".claude/hooks/"
+  ".claude/settings.json"
   ".husky/pre-commit"
   ".husky/prepare-commit-msg"
   ".claude/codex-denylist.txt"
