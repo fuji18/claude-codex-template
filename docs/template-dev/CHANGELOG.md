@@ -10,7 +10,7 @@
   - **`[manual]`** — 取り込む側に作業が必要。**何をすればよいかを 1 行で書く**(これが無い `[manual]` は書いた意味がない)
 - 破壊的変更(既存の運用が壊れる)は `[manual]` にし、行頭に **⚠️** を付ける
 - `/sync-template` は `syncedAt` のコミット日以降の日付見出しだけを読む。**日付を遡って過去の見出しに追記しない**(取り込む側が見落とす)
-- **`.claude/` / `.husky/` / `.codex/` / `AGENTS.md` を変更する PR は、このファイルの更新も必須。** CI(`.github/workflows/record-hygiene.yml`)が機械的に検査し、漏れていれば PR を落とす。追記が不要な変更(リバート・誤字修正など)はラベル `no-changelog` で外す
+- **`.claude/` / `.husky/` / `.codex/` / `.github/workflows/` / `AGENTS.md` を変更する PR は、このファイルの更新も必須。** CI(`.github/workflows/record-hygiene.yml`)が機械的に検査し、漏れていれば PR を落とす。追記が不要な変更(リバート・誤字修正など)はラベル `no-changelog` で外す
 
 ---
 
@@ -20,6 +20,10 @@
 
 - **[manual]** ⚠️ **`FORBIDDEN_PATHS` に `.claude/scripts/` / `.claude/hooks/` / `.claude/settings.json` を追加した**(#40)。個別ファイル列挙(`delegate-codex.sh` / `check-protected-branch.sh`)は**ディレクトリ単位**に置き換え。#37 で足した `check-record-hygiene.sh` は冒頭に `exit 0` を 1 行書くだけで全 PR の記録漏れ検査を無効化できる状態でしたし、`check-guard-integrity.sh` を骨抜きにすると「husky 層が消えたことに気づけない」状態になります。`.claude/` 全体は禁止にせず、対象は**実行される実体**(scripts / hooks / settings.json)に限っています(`skills/` / `commands/` / `agents/` / `rules/` は従来どおり委託可)。**取り込む側の作業**: `AGENTS.md`(`merge` 区分)§4 のマーカー内に `.claude/scripts/` / `.claude/hooks/` / `.claude/settings.json` の 3 項目を足し、既存の `.claude/scripts/delegate-codex.sh` / `.claude/scripts/check-protected-branch.sh` の行を整理する。`CLAUDE.md`(`never` 区分)の禁止領域リストにも同じ変更を反映する
 - **[auto]** ハーネス改修を Codex に委託していたプロジェクトでは、`.claude/scripts/` 配下を触る impl 委託が今後 `status=failed` / `exit 2` で止まります。ハーネス改修はもともと委託しない方針(`.claude/rules/lead/delegation-policy.md`)なので、通常の運用で失うものはありません
+
+**CHANGELOG 検査のトリガに `.github/workflows/` を追加した(Issue #41)。** `/sync-template` の同期対象(`owned`)にワークフロー 5 本が載っているのに、検査のトリガは 4 項目のままでした。**ワークフローだけを変更した PR は CHANGELOG 未更新でも緑**で、#37 が塞いだはずの穴が同期対象の一部で残っていました。
+
+- **[auto]** **`check-record-hygiene.sh` の `CHANGELOG_TRIGGERS` に `.github/workflows/` を追加した**(#41)。今後は `.github/workflows/` 配下だけを変更した PR も CHANGELOG の追記が必要になります(不要な変更ならラベル `no-changelog` で外せます)。`.github/` 全体ではなく `workflows/` に絞っており、`.github/ISSUE_TEMPLATE/` 等は対象外です。あわせて、**manifest の `owned` / `merge` に面を足すときはこの配列も同時に直す**という運用をスクリプト側のコメントに明記しました(manifest からの動的生成はしません)
 
 ## 2026-08-27
 

@@ -49,7 +49,7 @@
 
 | 検査 | 落ちる条件 | 逃げ道ラベル |
 | --- | --- | --- |
-| `docs/template-dev/CHANGELOG.md` | `.claude/` / `.husky/` / `.codex/` / `AGENTS.md` を変更した PR で CHANGELOG が未更新 | `no-changelog` |
+| `docs/template-dev/CHANGELOG.md` | `.claude/` / `.husky/` / `.codex/` / `.github/workflows/` / `AGENTS.md` を変更した PR で CHANGELOG が未更新 | `no-changelog` |
 | `.harness/decisions.jsonl` | PR が `ticket` ラベル付き Issue を `Closes #N` でクローズするのに `"issue": N` の行が無い | `no-decision-record` |
 
 **逃げ道ラベルは司令塔が理由を添えて付ける。** 鳴りっぱなしを避けるための弁であって、既定の回避手段ではない。
