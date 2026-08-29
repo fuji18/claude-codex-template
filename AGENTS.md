@@ -83,9 +83,22 @@ touch .git/.probe 2>/dev/null && rm -f .git/.probe && echo GIT_WRITABLE || echo 
 
 ## 2. 検証コマンド
 
-<!-- verify-probe: npx --no-install eslint --version -->
+<!-- verify-probe: python3 --version -->
 
 > 上の行は `delegate-codex.sh` が読む機械可読マーカーです。**依存が入っているかどうかだけ**を確かめる速いコマンドを 1 つ書いてください。`--no-install` を外さないこと(ネットワーク無効の sandbox では取得を試みた時点で失敗します)。
+>
+> **形式制約(`delegate-codex.sh` の入口検査3 が機械検査します)。** この行はホスト上で実行されるため、次の形に限って実行されます。外れた場合は**実行されず警告が出ます**(委託は続行します)。
+>
+> - 実行されるのは次の 3 つの形だけです:
+>   - `<コマンド> <確認フラグ>` — 例: `node --version` / `java -version` / `rake --version`
+>   - `npx --no-install <パッケージ> <確認フラグ>` — 例: `npx --no-install eslint --version`
+>   - `python3 -I -m <モジュール> <確認フラグ>` — 例: `python3 -I -m pytest --version`(**`-I` は必須**。付けないとカレントディレクトリのファイルが読まれます)
+> - `<確認フラグ>` は **`--version` のみ**で、**必ず末尾**に置くこと。`version`(ダッシュなし)・`-v`・`--help` は使えません(ダッシュなしの `version` は多くの処理系で『カレントディレクトリの `version` というファイルを実行する』意味になるため)。**`java -version` だけは従来形として通ります**
+> - `<コマンド>` は **`node` `npm` `npx` `python3` `ruby` `java` `rake` `gradle` のみ**です。`yarn` / `pnpm` / `mvn` は使えません(`--version` でもワークツリーの設定ファイルに従って別のコードを実行するため)。ここに無い処理系のプロジェクトでは、プローブは警告つきでスキップされます(委託は続きます)
+> - **`install` / `add` / `run` / `exec` のようなサブコマンドは書けません。** 依存の取得やライフサイクルスクリプトがホスト上で走るためです(`npx` の `--no-install` が必須なのも同じ理由)
+> - 使える文字は英数と `.` `_` `/` `@` `=` `:` `+` `-`、区切りは半角スペース 1 個のみ(`;` `|` `&` `$` `` ` `` 引用符・リダイレクト・改行はすべて不可)
+> - 全体 200 文字以内
+> - **形式が合っていても安全になるわけではありません。** `npx --no-install <パッケージ>` はワークツリーの `node_modules/.bin/` を解決します。プローブの形式検査は「文字列が任意コマンドに化けること」を防ぐもので、ワークツリーに置かれた実行ファイルまでは守りません(だからこのファイルも `node_modules/` も書き換えないでください)
 
 | 用途 | コマンド |
 | --- | --- |
@@ -137,7 +150,7 @@ touch .git/.probe 2>/dev/null && rm -f .git/.probe && echo GIT_WRITABLE || echo 
 - `.claude/hooks/` / `.claude/settings.json` — Claude 側のフック定義とその実体です。司令塔のコンテキストへ注入される内容の出所でもあります
 - `.husky/pre-commit` / `.husky/prepare-commit-msg` — ベンダー非依存のガードレール本体
 - `.claude/codex-denylist.txt` — 委託先が自分の送信禁止リストを書き換えることはできません
-- `AGENTS.md` — このファイル自身。冒頭の `<!-- verify-probe: ... -->` は次回の委託時にホスト側で実行されるため、あなたが書き換えるとサンドボックスの外へ影響が出ます
+- `AGENTS.md` — このファイル自身。冒頭の `<!-- verify-probe: ... -->` は次回の委託時にホスト側で実行されるため、あなたが書き換えるとサンドボックスの外へ影響が出ます。形式検査が入っていますが、**検査を通る範囲でも書き換えないでください**
 - `.github/workflows/` — CI 定義そのもの。ここを書き換えると認証済みトークンに触れられます
 - `.harness/mode` / `.harness/codex-runs/` — ハーネスモードと委託の実行記録。自分の結果を承認済みにすることはできません
 <!-- /kickoff:delegation-forbidden-paths -->

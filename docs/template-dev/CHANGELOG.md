@@ -31,6 +31,11 @@
 - **[auto]** **`delegate-codex.sh` に `--print-forbidden` を追加した**(#42)。委託禁止領域の一覧を 1 行 1 パスで出力するだけの read-only モードです。`check-guard-integrity.sh degraded` がこれを読むことで、パス一覧の単一ソースが `delegate-codex.sh` のまま保たれます(配列は複製していません)。あわせて `FORBIDDEN_PATHS` の定義位置を入口検査より前へ移しました(codex CLI が無くても一覧を引けるようにするため)
 - **[auto]** `.claude/rules/mode/degraded.md` の復帰手順の先頭に上記コマンドを組み込み、`.codex/skills/degraded-mode-ticket/SKILL.md` §5 に「`.git/` 配下を改変しない」を明記しました
 
+**`verify-probe` のホスト実行に形式検査と環境遮断を入れた(Issue #43)。** 入口検査3 は `AGENTS.md` の `<!-- verify-probe: ... -->` から抽出した文字列を、そのままホスト上の `bash -c` に渡していました。`AGENTS.md` は `merge` 区分でプロジェクトが自由に書き換えるため、悪意または誤りのある内容がそのままホスト実行に化ける経路が残っていました。
+
+- **[auto]** `delegate-codex.sh` に `probe_format_reason()` を追加し、**プローブ全体が 3 つの固定形(`<cmd> <verify>` / `npx --no-install <pkg> <verify>` / `python -I -m <module> <verify>`)のいずれかに完全一致すること**を機械検査するようにしました(#43)。`npm install ... --version` のようなサブコマンド付きは通りません(ホスト側にはネットワークがあり、依存取得と postinstall がそのまま走るため)。形式外は**実行せず警告のみ**で委託は続行します(フェイルオープン)。形式適合時は実行内容を stderr に表示したうえで `env -i` + 最小の環境変数(`PATH` / `HOME` / `TMPDIR`)で実行し、親プロセスの環境変数に依存した意図しない挙動を遮断します。なお `python -m` 形は `-I` を必須にしています(付けないとカレントディレクトリのファイルがモジュールとして読まれるため)。形式検査が守るのは「文字列が任意コマンドに化けること」までで、ワークツリーに置かれた実行ファイル(`node_modules/.bin/` 等)は出口ハッシュ検査と `check-guard-integrity.sh degraded` の担当です。確認フラグは `--version` に限定しています(ダッシュなしの `version` は多くの処理系で「カレントディレクトリの `version` というファイルを実行する」意味になり、実測で任意コード実行に到達しました。`java -version` のみ従来形も通します)。許可コマンドは実測で「ワークツリーの設定ファイルに影響されない」ことを確認した 8 つ(`node` `npm` `npx` `python3` `ruby` `java` `rake` `gradle`)に限定しました(`python` は未検証のため除外)。`yarn`(`.yarnrc` の `yarn-path`)・`mvn`(`.mvn/jvm.config`)・`pnpm`(`package.json` の `packageManager`)は、`--version` でもワークツリーの設定で実行されるコードが変わることを実測で確認したため除外しています。他の処理系のプロジェクトではプローブが警告つきでスキップされます(委託は止まりません)
+- **[manual]** ⚠️ `AGENTS.md`(`merge` 区分)§2 に形式制約の説明を追記しました。独自の `verify-probe` を書いているプロジェクトは、取り込み後に形式適合を確認してください(適合しない場合は実行されず警告が出るだけで委託自体は止まりません)
+
 ## 2026-08-27
 
 **チケット完了時の記録漏れを CI で機械的に検出するようにした(Issue #37)。** この CHANGELOG は #20〜#29 の 8 件連続で追記されず、`/sync-template` を使う側が `[manual]` 項目に気づけない状態になっていました。散文の運用ルールだけでは 2 度守られなかった(4 回連続 → 8 回連続と悪化した)ため、機械的な層を足しています。
