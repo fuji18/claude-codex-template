@@ -32,7 +32,7 @@
 - `.claude/hooks/` / `.claude/settings.json` — PreToolUse hook の定義そのものと、司令塔コンテキストへの注入元(プロンプトインジェクションの経路になり得る)
 - `.husky/pre-commit` / `.husky/prepare-commit-msg` — ベンダー中立ガードレールの本体
 - `.claude/codex-denylist.txt` — 委託先が自分の送信禁止リストを編集できてはならない
-- `AGENTS.md` — 委託先の憲法。入口検査3 の `<!-- verify-probe: ... -->` は次回委託時にホスト上の `bash -c` へそのまま渡されるため、書き換えを許すとサンドボックス外でのコマンド実行経路になる
+- `AGENTS.md` — 委託先の憲法。入口検査3 の `<!-- verify-probe: ... -->` は次回委託時にホスト上の `bash -c` へそのまま渡されるため、書き換えを許すとサンドボックス外でのコマンド実行経路になる(入口検査3 に許可リスト形式の機械検査と `env -i` 実行を入れてあるが、**多層防御であって置き換えではない**。禁止領域からは外さない)
 - `.github/workflows/` — 非 fork PR で `CLAUDE_CODE_OAUTH_TOKEN` にアクセスできるワークフロー定義そのもの
 - `.harness/mode` / `.harness/codex-runs/` — ハーネスモードと run record。委託先が自分の結果を `accepted` に書き換えたりモードを詐称したりできてはならない
 
