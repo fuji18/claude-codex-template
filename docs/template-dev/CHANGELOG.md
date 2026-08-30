@@ -16,6 +16,10 @@
 
 ## 2026-08-30
 
+**中断された委託が残す「出口検査が見えない穴」を、残置 record 検出時に機械確認するようにした(Issue #46)。** `status=running` のまま残った record(強制終了の疑い)はこれまで警告のみで、次の委託の BEFORE スナップショットが禁止領域の改ざんを「元からあったもの」として取り込み、以後恒久的に検出できなくなる穴がありました。
+
+- **[auto]** 入口検査5-5 が `status=running` の残置 record を見つけたとき、委託禁止領域(`FORBIDDEN_PATHS` / `PROJECT_FORBIDDEN_PATHS`)に未コミットの変更(`git diff HEAD` または未追跡ファイル)があれば `exit 2` で止まるようになりました(5-5b)。pathspec は `GIT_LITERAL_PATHSPECS=1` と `:` 始まりの除外で正規化しており、`AGENTS.md` 由来の断片に git の magic pathspec が紛れても検査が無音で空振りしません。**誤爆条件**: 司令塔がハーネス層を改修中に過去の残置 record が残っていると止まります。解除は `bash .claude/scripts/codex-run.sh set-status <id> failed` で record を実態に合わせるだけでよく、編集中の差分を捨てる必要はありません
+
 **run record を読む `rec_field()` の二重実装を共有ファイルに集約した(Issue #45)。** `delegate-codex.sh` と `codex-run.sh` に同じ十数行がコピーされており、jq 不在環境で再入防止がフェイルオープンする Critical(sed フォールバックの末尾カンマ)を**両方で直した実績**がありました。同じバグを 2 回直した時点で「小さいから複製の方が安い」という前提は崩れています。
 
 - **[auto]** `.claude/scripts/lib-record.sh` を新規追加し、両スクリプトが `source` するようにした(#45)。関数の挙動は変えていないので、`/sync-template` の上書きだけで完結します
