@@ -16,6 +16,13 @@
 
 ## 2026-08-30
 
+**econ モードの効果測定の設計を確定し、記録漏れを防ぐ 1 行を注入文に入れた(Issue #47)。** `delegation-policy.md` は委託粒度の閾値を「実測で上下させる」と宣言していますが、モード B の週枠寿命の比較は `decisions.jsonl` に「未実施」と記録されたままでした。宣言だけがあって実測が回らない状態は、#37 が機械化で塞いだ「散文の運用ルールは守られない」と同じ構造です。
+
+- **[auto]** `docs/template-dev/econ-measurement.md` を新規追加(何を・いつ・どう記録し、どの条件で結論を出すか)。記録は **1 チケット 1 点**で、週枠使用率は週次リセットまで単調増加するため、同じ週の隣接エントリの差で per-ticket の消費が出ます。着手時の値を持ち越す必要がないので、セッションが分割される econ モードでも落ちません。`docs/template-dev/` はテンプレート側の開発記録(manifest の `never`)なので同期されません — 設計の背景を読みたいときだけテンプレートリポジトリを参照してください
+- **[manual]** `.harness/decisions.jsonl` に任意フィールド `usage`(`mode` / `weekly_pct` / `week_resets_at` / `measured_at` / `raw`)を足せるようにした。**既存キーは変更していない**ため、CI(`check-record-hygiene.sh` 検査2)が見る `"issue": N` の前提は変わりません。`usage` が無い行があってよく、**CI の必須項目にはしません**(`/usage` を読めない経路で全 PR が落ちるため)。`.harness/` は manifest の `never`(`/sync-template` が触らない)なので**自動では反映されません**。**取り込む側の作業**: 次に `decisions.jsonl` を書くときから `usage` を足す
+- **[auto]** **`.claude/rules/lead/delegation-policy.md`「実測の記録」の 1 行に `/usage` の週枠使用率を足した**(行数は増えていません)。`usage` のリマインドをここに置くのは、モード別の注入文(`mode/econ.md`)だけだと **normal モードのサンプルが構造的に溜まらず、モード比較が永久に「サンプル不足」で止まる**ためです
+- **[manual]** **`.claude/rules/mode/econ.md` の「司令塔の作法」に作法5 を 1 行足した。** econ モードのセッションで `decisions.jsonl` を書く前に、`/usage` の週枠使用率をユーザーへ 1 行で尋ねて記録します(答えが無ければ `null` のまま進み、PR は止めません)。**取り込む側の作業**: econ モードを使っているプロジェクトでは、次回の econ 運用時にこの記録が 1 件残ることを確認する
+
 **中断された委託が残す「出口検査が見えない穴」を、残置 record 検出時に機械確認するようにした(Issue #46)。** `status=running` のまま残った record(強制終了の疑い)はこれまで警告のみで、次の委託の BEFORE スナップショットが禁止領域の改ざんを「元からあったもの」として取り込み、以後恒久的に検出できなくなる穴がありました。
 
 - **[auto]** 入口検査5-5 が `status=running` の残置 record を見つけたとき、委託禁止領域(`FORBIDDEN_PATHS` / `PROJECT_FORBIDDEN_PATHS`)に未コミットの変更(`git diff HEAD` または未追跡ファイル)があれば `exit 2` で止まるようになりました(5-5b)。pathspec は `GIT_LITERAL_PATHSPECS=1` と `:` 始まりの除外で正規化しており、`AGENTS.md` 由来の断片に git の magic pathspec が紛れても検査が無音で空振りしません。**誤爆条件**: 司令塔がハーネス層を改修中に過去の残置 record が残っていると止まります。解除は `bash .claude/scripts/codex-run.sh set-status <id> failed` で record を実態に合わせるだけでよく、編集中の差分を捨てる必要はありません
