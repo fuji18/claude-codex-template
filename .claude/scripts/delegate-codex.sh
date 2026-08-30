@@ -778,6 +778,7 @@ MSG
   # pid を OS が別プロセスに再利用していると「実行中」と誤認して止める。判定軸が全
   # ステアリングに広がったぶん露出は増えた。止まったときは §12.6 の手順で record を
   # 実態に合わせる(`codex-run.sh set-status <id> <status>`)。
+  _stale_ids=""
   if [ -d "$RUN_DIR" ]; then
     for _f in "$RUN_DIR"/*.json; do
       [ -f "$_f" ] || continue
@@ -804,8 +805,91 @@ MSG
       # プロセスが居ない running = 強制終了の疑い。止めはしないが必ず知らせる。
       echo "delegate-codex: 警告 — 過去の委託 $_rid が status=running のまま残っています(プロセス不在 = 強制終了の可能性)。" >&2
       echo "  回復手順は codex-delegation-plan.md §12.6。tasklist.md と git diff --stat を突き合わせてから続けてください。" >&2
+      _stale_ids="${_stale_ids}${_stale_ids:+ }$_rid"
     done
   fi
+
+  # ---- 5-5b: running 残置 record があるとき、禁止領域が dirty なら止める(Issue #46)----
+  #
+  # 出口検査(禁止領域の内容ハッシュを前後で比べる層)は、SIGINT / SIGTERM で
+  # codex exec の途中に死ぬと到達しない。その状態で禁止領域が書き換わっていると、
+  # 次回委託の BEFORE スナップショットが改ざん後の内容を「元からあったもの」として
+  # 取り込み、以後その改ざんは恒久的に検出できない。status=running のまま残った
+  # record がその唯一の手掛かりなので、人間が上の警告を読み飛ばしても効くように
+  # 機械検査をここに置く。
+  #
+  # 止める側に倒す理由: 5-5 が pid 再利用の誤検知を「止める側」に倒している既存方針と
+  # 揃える。通したコスト(改ざんの検出機会を恒久的に失う)が、止めたコスト
+  # (record を実態に合わせる 1 コマンド)より大きい。
+  #
+  # 誤爆する条件(承知のうえ): 司令塔が禁止領域を正当に編集している最中に、過去の
+  # running 残置 record が残っていると止まる。テンプレート自体の改修中は現実に起きる。
+  # 解除は record を実態に合わせるだけでよく、編集中の差分を捨てる必要はない。残置
+  # record を放置したまま委託を重ねる状態こそが塞ぎたい穴なので、この誤爆は「先に
+  # record を始末させる」催促として機能する。
+  #
+  # 検査対象外: .harness/mode と .harness/codex-runs/ 配下。どちらも .gitignore 済みで、
+  # git diff にも git ls-files --others --exclude-standard にも出ない(git 追跡外)。
+  # ここでは見られないため、出口検査の内容ハッシュ比較だけが見る層として残る。
+  #
+  # 空振り条件: コミットが 1 つも無いリポジトリ(HEAD が無い)と、git 側が失敗した場合は
+  # 確認できないため警告だけ出して通す。検査対象パスが空(正規化後に 1 件も残らない)場合も
+  # 同様に確認できないため通す。PROJECT_FORBIDDEN_PATHS に `:` で始まる断片が入っていた場合は
+  # その要素を捨てる(検査対象から外れるが、他の要素の検査は働く)。
+  if [ -n "$_stale_ids" ]; then
+    # pathspec は正規化してから渡す(#46 検収指摘)。PROJECT_FORBIDDEN_PATHS は AGENTS.md の
+    # バックティック断片を無検証で抽出したものなので、git の magic pathspec(`:(exclude)...`)
+    # が紛れ込みうる。混ざると他の一致結果ごと除外され、この検査が exit 0 のまま無音で
+    # 空振りする(実測)。中断した委託が AGENTS.md に断片を仕込んでから死ねば、次回起動で
+    # この検査自身が無効化される — 塞ごうとしている穴を検査が再現してしまう。
+    # 末尾グロブの畳み方は forbidden_files() の case と同じ規則に揃える。揃えないと、
+    # 出口検査が無視する変則グロブ(src/**/*.ts 等)を git が解釈し、保護対象でない
+    # ファイルで誤ってブロックする。
+    _forb_specs=()
+    for _p in "${FORBIDDEN_PATHS[@]}" ${PROJECT_FORBIDDEN_PATHS[@]+"${PROJECT_FORBIDDEN_PATHS[@]}"}; do
+      case "$_p" in
+        :*) continue ;;
+        */\*\* | */\*) _forb_specs+=("${_p%/*}") ;;
+        *) _forb_specs+=("$_p") ;;
+      esac
+    done
+    unset _p
+    _forb_dirty=""
+    if [ "${#_forb_specs[@]}" -gt 0 ] &&
+      git rev-parse --verify -q HEAD >/dev/null 2>&1 &&
+      _forb_diff="$(GIT_LITERAL_PATHSPECS=1 git diff HEAD --name-only -- "${_forb_specs[@]}" 2>/dev/null)" &&
+      _forb_new="$(GIT_LITERAL_PATHSPECS=1 git ls-files --others --exclude-standard -- "${_forb_specs[@]}" 2>/dev/null)"; then
+      _forb_dirty="$(
+        printf '%s\n%s\n' "$_forb_diff" "$_forb_new" |
+          grep -v '^[[:space:]]*$' | LC_ALL=C sort -u || true
+      )"
+    else
+      echo "delegate-codex: 警告 — 禁止領域の差分を確認できませんでした(検査対象パスが空、コミットがまだ無い、または git が失敗)。出口検査の基準が汚染されていないか手で確認してください。" >&2
+    fi
+    if [ -n "$_forb_dirty" ]; then
+      cat >&2 <<MSG
+delegate-codex: 中断された委託(status=running のまま残った record: $_stale_ids)があり、
+かつ委託禁止領域に未コミットの変更があります。
+
+この状態で新しい委託を始めると、出口検査の基準(BEFORE スナップショット)がこの変更を
+「元からあったもの」として取り込み、以後この変更を検出できなくなります。
+
+  1. 差分を確認する:              git diff HEAD -- <該当パス>
+  2. 意図しない変更は破棄する:    git checkout -- <該当パス>
+  3. 残置 record を実態に合わせる:
+       bash .claude/scripts/codex-run.sh set-status <id> failed
+
+意図した編集(司令塔がハーネス層を改修中など)であれば 3 だけで通ります。差分を捨てる
+必要はありません。回復手順の全文は docs/template-dev/codex-delegation-plan.md §12.6。
+
+該当:
+MSG
+      printf '%s\n' "$_forb_dirty" | sed 's/^/  /' >&2
+      exit "$EX_FAIL"
+    fi
+    unset _forb_dirty _forb_diff _forb_new _forb_specs
+  fi
+  unset _stale_ids
 fi
 
 # ---------- ハーネスモード ----------
