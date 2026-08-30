@@ -11,6 +11,7 @@ Claude の週枠を温存する運用。**モードの切替を宣言するの�
 2. **`/check` も `code-reviewer` も回さない。** 機械的検証は CI に、スペック整合は枠が戻ってからの一括レビューに委ねる
 3. 実装委託(`delegate-codex.sh impl`)は**人間がターミナルから叩く**。Claude セッションを開けたまま待たない
 4. 委託後の `/commit` → `push` → **draft PR** は、最小コンテキストの新セッションで行う
+5. **`decisions.jsonl` を書く前に `/usage` の週枠使用率をユーザーに 1 行で尋ね、`usage` に載せる**(答えが無ければ `null` のまま進む。設計: `docs/template-dev/econ-measurement.md`)
 
 検収を飛ばした分の担保は、ベンダー中立ガードレール(`.husky/*`)と CI(`ci.yml`)。
 

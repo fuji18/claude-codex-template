@@ -7,6 +7,7 @@
 |---|---|
 | `CHANGELOG.md` | **テンプレート利用側が `/sync-template` で読む変更履歴**(`[auto]` / `[manual]` 区分)。テンプレート側を変更したら必ずここに追記する |
 | `cost-model.md` | トークンコストの実測値と、モデル運用・コンテキスト管理の判断根拠。ルールファイル(`.claude/rules/`)は subagent 起動のたびに全量ロードされるため、根拠はここに分離する |
+| `econ-measurement.md` | **モード B(econ)の効果測定の設計**(何を・いつ・どう記録し、どの条件で結論を出すか)。記録の実体は `.harness/decisions.jsonl` の `usage` フィールド |
 | `initial-requirements.example.md` | `docs/ideas/initial-requirements.md` の記入例(「早起きは三文の得」) |
 | `dependabot-product.example.yml` | プロダクト開発向け `.github/dependabot.yml` の記入例 |
 | `harness-setup-v2.md` | ハーネス層(`/harness-setup`)の設計判断の記録 |
