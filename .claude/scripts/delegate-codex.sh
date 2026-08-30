@@ -41,6 +41,7 @@ set -uo pipefail
 # 触るのはテンプレート開発では常態なので、起動直後に自身を一時ディレクトリへコピーし、
 # そちらを exec して走る。以降どれだけ元ファイルが書き換わっても、読んでいるのは
 # コピーなので影響がない(根拠: docs/template-dev/codex-delegation-plan.md §9)。
+# 共有ファイル(lib-record.sh)も同じディレクトリへ一緒にコピーし、コピー側から source する。
 #
 # exec は PID もカレントディレクトリも変えないため、$$ を使う RUN_ID / run record の
 # pid、および git rev-parse --show-toplevel 以下の相対パス参照は従来どおり成立する。
@@ -61,6 +62,13 @@ elif [ -z "${CODEX_DELEGATE_SELF_COPY:-}" ]; then
   _copy_dir="$(mktemp -d 2>/dev/null || true)"
   if [ -n "$_copy_dir" ] && [ -d "$_copy_dir" ] &&
     cp "$_self" "$_copy_dir/delegate-codex.sh" 2>/dev/null; then
+    # source する共有ファイル(lib-record.sh)も一緒に運ぶ。運ばないと、コピーを exec
+    # しているのに実行中に読むファイルがリポジトリ側に残り、自己編集ハザード対策に
+    # 穴が開く(委託先が実行中に書き換えられる)。
+    # **ここはフェイルオープン**: 失敗しても委託は止めない。下の解決順が $ROOT へ
+    # フォールバックし、警告を出す(design §1)。
+    _self_dir="$(cd "$(dirname "$_self")" 2>/dev/null && pwd || true)"
+    [ -n "$_self_dir" ] && cp "$_self_dir/lib-record.sh" "$_copy_dir/lib-record.sh" 2>/dev/null
     export CODEX_DELEGATE_SELF_COPY="$_copy_dir"
     # exec が失敗した場合、非対話シェルはその場で終了する(execfail 未設定。実測 exit 127)。
     # したがってマーカーを export したまま下のブロックへ抜ける経路は存在しない。
@@ -94,6 +102,39 @@ if [ -z "$ROOT" ]; then
   exit "$EX_FAIL"
 fi
 cd "$ROOT" || exit "$EX_FAIL"
+
+# ---------- run record 読み出しの共有関数 ----------
+#
+# rec_field() は codex-run.sh と共有する(#45)。過去に sed フォールバックの同じバグ
+# (末尾カンマ)を 2 箇所で直した実績があり、複製を続けるコストの方が高いと判断した。
+#
+# **解決順は「自身の隣 → リポジトリ」**:
+#   1) 自己コピー先の一時ディレクトリ(上のブロックが lib-record.sh も一緒に運ぶ)
+#   2) $ROOT/.claude/scripts/(自己コピーが無効・失敗した経路のフォールバック)
+# 1 を優先するのは、リポジトリ側から source すると「コピーを exec して自己編集から
+# 守る」設計に穴が開くため(委託先が実行中に書き換えられる)。
+#
+# **見つからなければ止める(フェイルクローズ)。** rec_field は入口検査5-5(impl の
+# 再入防止)が使う。未定義のまま進むと空文字列が返って検査が素通しするだけで、
+# 失敗として現れない(design §1)。
+_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
+LIB_RECORD=""
+for _cand in "${_lib_dir:+$_lib_dir/lib-record.sh}" "$ROOT/.claude/scripts/lib-record.sh"; do
+  [ -n "$_cand" ] && [ -f "$_cand" ] && {
+    LIB_RECORD="$_cand"
+    break
+  }
+done
+if [ -z "$LIB_RECORD" ]; then
+  echo "delegate-codex: .claude/scripts/lib-record.sh が見つかりません(run record を読めないため中止します)。" >&2
+  exit "$EX_FAIL"
+fi
+# shellcheck source=lib-record.sh
+. "$LIB_RECORD"
+if [ -n "${SELF_COPY_DIR:-}" ] && [ "$LIB_RECORD" != "$SELF_COPY_DIR/lib-record.sh" ]; then
+  echo "delegate-codex: 警告 — lib-record.sh の一時コピーを使えていません。委託中にこのファイルが書き換わると異常終了します。" >&2
+fi
+unset _lib_dir _cand
 
 # ---------- 引数 ----------
 
@@ -632,32 +673,6 @@ json_str() {
 
 json_or_null() {
   if [ -z "${1:-}" ]; then printf 'null'; else json_str "$1"; fi
-}
-
-# $1=json ファイル $2=キー名。無い/null は空文字列を返す。
-# codex-run.sh にも同じ実装をコピーする(2 箇所・十数行のため共有ファイルは作らない)。
-#
-# sed フォールバックの既知の癖(検収で実測): クォートされていない値
-# (pid / accepted など)では `[^"]*` が末尾のカンマまで飲み込む。
-# "pid": 82711, → 82711, が返り、kill -0 "82711," が引数エラーで必ず失敗する。
-# = 再入防止(5-5)が jq 不在環境で静かにフェイルオープンしていた。
-# 捕獲後に末尾のカンマと空白を必ず剥がす。クォートされた値は `[^"]*` が
-# 閉じ引用符で止まるためもともと影響を受けない。
-rec_field() {
-  local _out=""
-  if command -v jq >/dev/null 2>&1; then
-    # `// empty` は使わない。jq の // は false も falsy として捨てるため、
-    # "accepted": false が「キーが無い」と区別できなくなり、sed 経路と
-    # 結果が食い違う(実測)。null のときだけ空を返す形にする。
-    _out="$(jq -r --arg k "$2" '.[$k] | if . == null then empty else . end' "$1" 2>/dev/null)"
-  else
-    _out="$(sed -n "s/^[[:space:]]*\"$2\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([^\"]*\)\"\{0,1\},\{0,1\}[[:space:]]*$/\1/p" "$1" | head -1)"
-    _out="${_out%"${_out##*[![:space:]]}"}"
-    _out="${_out%,}"
-    _out="${_out%"${_out##*[![:space:]]}"}"
-  fi
-  [ "$_out" = "null" ] && _out=""
-  printf '%s' "$_out"
 }
 
 STEERING=""

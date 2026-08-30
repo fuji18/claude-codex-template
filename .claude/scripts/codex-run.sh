@@ -47,25 +47,15 @@ usage() {
 USAGE
 }
 
-# $1=json ファイル $2=キー名。無い/null は空文字列を返す。
-# delegate-codex.sh と同一の実装(2 箇所・十数行のため共有ファイルは作らない)。
-rec_field() {
-  local _out=""
-  if command -v jq >/dev/null 2>&1; then
-    # `// empty` は false も捨ててしまう(accepted: false が「キー無し」と
-    # 区別できなくなり sed 経路と食い違う)。null のときだけ空を返す。
-    _out="$(jq -r --arg k "$2" '.[$k] | if . == null then empty else . end' "$1" 2>/dev/null)"
-  else
-    # クォートされていない値(pid 等)では `[^"]*` が末尾のカンマまで飲み込む。
-    # 剥がさないと pid が "82711," になり kill -0 が必ず失敗する。
-    _out="$(sed -n "s/^[[:space:]]*\"$2\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([^\"]*\)\"\{0,1\},\{0,1\}[[:space:]]*$/\1/p" "$1" | head -1)"
-    _out="${_out%"${_out##*[![:space:]]}"}"
-    _out="${_out%,}"
-    _out="${_out%"${_out##*[![:space:]]}"}"
-  fi
-  [ "$_out" = "null" ] && _out=""
-  printf '%s' "$_out"
-}
+# run record のフィールド読み出し(rec_field)は delegate-codex.sh と共有する(#45)。
+# こちらは自己コピー exec を持たないので、リポジトリ内のパスをそのまま読む。
+LIB_RECORD="$ROOT/.claude/scripts/lib-record.sh"
+if [ ! -f "$LIB_RECORD" ]; then
+  echo "codex-run: $LIB_RECORD が見つかりません(run record を読めないため中止します)。" >&2
+  exit 2
+fi
+# shellcheck source=lib-record.sh
+. "$LIB_RECORD"
 
 find_record() {
   local _id="$1" _f
