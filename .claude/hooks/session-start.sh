@@ -27,11 +27,22 @@ if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] && [ -f package.json ] && [ ! -d node_
 fi
 
 # --- ハーネスの自壊検知: hook スクリプトの実行権限が落ちていないか ---
-# PreToolUse hook は実行失敗時にフェイルオープン(素通り)になるため、ここで警告する
+# PreToolUse hook は実行失敗時にフェイルオープン(素通り)になるため、ここで警告する。
+# lib-*.sh は source 専用の共有ライブラリ(#45)なので要件が逆になる(非実行が正)。
 for s in .claude/scripts/*.sh .claude/hooks/*.sh; do
-  if [ -f "$s" ] && [ ! -x "$s" ]; then
-    echo "⚠️ hook スクリプトに実行権限がない: $s(chmod +x で復旧すること。PreToolUse はフェイルオープンになる)"
-  fi
+  [ -f "$s" ] || continue
+  case "$(basename "$s")" in
+    lib-*.sh)
+      if [ -x "$s" ]; then
+        echo "⚠️ source 専用ライブラリに実行権限が付いている: $s(git update-index --chmod=-x で外すこと。CI の harness-integrity が落ちる)"
+      fi
+      ;;
+    *)
+      if [ ! -x "$s" ]; then
+        echo "⚠️ hook スクリプトに実行権限がない: $s(chmod +x で復旧すること。PreToolUse はフェイルオープンになる)"
+      fi
+      ;;
+  esac
 done
 
 # ディスクの権限と git 上の権限は食い違いうる。core.fileMode=false の環境(WSL や
@@ -42,12 +53,22 @@ done
 if command -v git >/dev/null 2>&1; then
   # git ls-files -s の出力は "<mode> <sha> <stage>\tパス"。パスに空白が入っても
   # 切れないよう、フィールド分割ではなくタブ以降を丸ごと取る。
+  # lib-*.sh は 100644 が正、それ以外の *.sh は 100755 が正(#45)。
   BADMODE="$(git ls-files -s .claude/scripts/ .claude/hooks/ 2>/dev/null |
-    awk -F'\t' '$2 ~ /\.sh$/ && $1 !~ /^100755 / {print $2}')"
+    awk -F'\t' '
+      $2 !~ /\.sh$/ { next }
+      {
+        n = split($2, p, "/")
+        if (p[n] ~ /^lib-/) {
+          if ($1 ~ /^100755 /) print $2 "  → 実行ビットを外す: git update-index --chmod=-x " $2
+        } else {
+          if ($1 !~ /^100755 /) print $2 "  → 実行ビットを付ける: git update-index --chmod=+x " $2
+        }
+      }')"
   if [ -n "$BADMODE" ]; then
-    echo "⚠️ git 上で実行権限が落ちているスクリプトがある(CI の harness-integrity が落ちる):"
+    echo "⚠️ git 上の実行ビットが種別と合っていないスクリプトがある(CI の harness-integrity が落ちる):"
     printf '%s\n' "$BADMODE" | sed 's/^/   - /'
-    echo "   復旧: git update-index --chmod=+x [パス](chmod だけでは core.fileMode=false の環境で index に反映されない)"
+    echo "   chmod だけでは core.fileMode=false の環境で index に反映されない"
   fi
 fi
 

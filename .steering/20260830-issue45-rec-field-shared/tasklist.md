@@ -44,3 +44,33 @@ jq を外す `nojq` ヘルパーは design.md §7-1 にある。
 
 - [x] `git status --short` に想定外の差分・一時ファイルが残っていない
 - [x] 変更したファイルを対象に品質チェックを回す(`npm run format:check`)
+
+---
+
+## 改訂: CI の実行ビット検査との衝突を直す(design.md §10)
+
+CI `harness-integrity` が `lib-record.sh` に実行権限が無いことで落ちた。
+**実行ビットを付けて黙らせるのではなく、検査側に「実行される実体 / source 専用ライブラリ」の
+区別を入れる**(design.md §10)。
+
+### 実装
+
+- [x] `.github/workflows/ci.yml` の実行ビット検査ループ(85〜93 行)を design.md §10-1 で置換する。
+      **既存のエラー文面は 1 文字も変えない**
+- [x] `.claude/hooks/session-start.sh` のディスク権限ループ(31〜35 行)を §10-2(a) で置換する
+- [x] `.claude/hooks/session-start.sh` の git index mode 検査(45〜52 行)を §10-2(b) で置換する
+- [x] `.claude/scripts/lib-record.sh` のヘッダに §10-3 の 3 行を足す
+- [x] `docs/template-dev/CHANGELOG.md` の `## 2026-08-30` 節末尾に §10-4 の項目を足す
+
+### 検証(design.md §10-5)
+
+- [x] `lib-record.sh` の git index mode が `100644` のまま
+- [x] 他の `.claude/scripts/*.sh` / `.claude/hooks/*.sh` はすべて `100755` のまま
+- [x] ci.yml のループをローカルで `bash -e` 再現し、無出力・exit 0
+- [x] **抜け道が塞がっている**: `lib-record.sh` に実行ビットを付けると落ちる /
+      shebang を足すと落ちる(**どちらも確認後に元へ戻す**)
+- [x] **既存の検査が生きている**: `harness-mode.sh` の実行ビットを外すと従来の文面で落ちる
+      (**確認後に戻す**)
+- [x] `bash -n .claude/hooks/session-start.sh` が通る
+- [x] `.claude/hooks/session-start.sh` を直接実行し、実行ビット関連の警告が出ない
+- [x] `git status --short` に一時ファイル・想定外の差分が残っていない

@@ -326,3 +326,170 @@ nojq() {
 - **関数本体を「ついでに」改善しない。** sed 経路の癖(§6)も含めて現状のまま移す。
   改善は挙動変更であり、このチケットのスコープ外
 - 迷ったら止めて報告する。`.claude/scripts/` はハーネスの中枢で、静かな劣化が最も高くつく場所
+
+---
+
+## 10. 改訂: CI・SessionStart の実行ビット検査と衝突した(CI red の修正)
+
+**§2〜§9 は有効。この節はそこに足す変更。**
+
+### 何が起きたか
+
+PR #53 の CI `harness-integrity` が落ちた:
+
+```
+::error::hook スクリプトに実行権限がありません: .claude/scripts/lib-record.sh
+```
+
+`.github/workflows/ci.yml:86` と `.claude/hooks/session-start.sh:31` の 2 箇所が
+**`.claude/scripts/*.sh` と `.claude/hooks/*.sh` は全部が実行可能であること**を要求していた。
+`lib-record.sh` を source 専用(実行ビットなし)にした §2 の判断と正面から衝突する。
+**計画時に見落とした**(この検査の存在を確認していなかった)。
+
+### 方針: 実行ビットを付けて黙らせない
+
+`git update-index --chmod=+x lib-record.sh` で CI は通るが、**採らない**。
+shebang も持たない source 専用ファイルに実行ビットを付けるのは、ファイルの性質について
+嘘をつくことになる。この検査の目的は「hook の実体が実行不能になって PreToolUse が
+フェイルオープンする」ことの検知であって、ライブラリに実行ビットを求めることではない。
+
+**検査側に「実行される実体」と「読み込まれるライブラリ」の区別を入れる。**
+命名規約は **`lib-*.sh` = source 専用**とする。
+
+### 検査をゆるめない(抜け道を作らない)
+
+単に「`lib-*.sh` は実行ビット検査を免除する」にすると、**hook の実体を `lib-` に
+リネームするだけで検査を逃れられる**。そうならないよう、ライブラリ側には**別の縛りを課す**:
+
+| 種別 | 実行ビット | shebang | `bash -n` | git index mode |
+| --- | --- | --- | --- | --- |
+| `lib-*.sh`(source 専用) | **付いていないこと**(付いていたらエラー) | **持たないこと**(持っていたらエラー) | 要 | `100644` |
+| それ以外の `*.sh` | 付いていること(従来どおり) | 問わない(従来どおり) | 要 | `100755` |
+
+shebang の有無まで見るのは、「単体で起動しない」という主張を機械的に確かめられる唯一の
+手掛かりだから。実行される実体なら shebang を持つので、`lib-` に改名しても検査は通らない。
+
+### 10-1. `.github/workflows/ci.yml`(85〜93 行の `for` ループを置換)
+
+`jq . .claude/settings.json > /dev/null` の次の行から、`done` までを次で置き換える:
+
+```yaml
+          # .claude/scripts/lib-*.sh は source 専用の共有ライブラリ(#45)。
+          # 実行ビットを免除するのではなく、種別ごとに要件を分ける。
+          # 「lib- に改名すれば実行ビット検査を逃れられる」抜け道を作らないため、
+          # ライブラリ側には非実行 + shebang 無しという別の縛りを課す。
+          for s in .claude/scripts/*.sh .claude/hooks/*.sh; do
+            [ -f "$s" ] || continue
+            case "$(basename "$s")" in
+              lib-*.sh)
+                if [ -x "$s" ]; then
+                  echo "::error::source 専用ライブラリに実行権限が付いています: $s — git update-index --chmod=-x $s を実行してコミットし直してください"
+                  exit 1
+                fi
+                if head -n 1 "$s" | grep -q '^#!'; then
+                  echo "::error::source 専用ライブラリに shebang があります: $s — lib-*.sh は単体で起動しない前提です。実行される実体なら lib- 以外の名前にしてください"
+                  exit 1
+                fi
+                ;;
+              *)
+                if [ ! -x "$s" ]; then
+                  echo "::error::hook スクリプトに実行権限がありません: $s — ローカルで chmod +x しても core.fileMode=false の環境では index に反映されません。git update-index --chmod=+x $s を実行してコミットし直してください"
+                  exit 1
+                fi
+                ;;
+            esac
+            bash -n "$s"
+          done
+```
+
+**既存のエラー文面(`hook スクリプトに実行権限がありません: …`)は 1 文字も変えないこと。**
+`else` 側は分岐が増えただけで、判定も文面も従来と同じ。
+
+### 10-2. `.claude/hooks/session-start.sh`(29〜52 行)
+
+このファイルは `set -uo pipefail`(`-e` なし)。それでも `[ ... ] && echo` を
+ループ末尾に置く形は避け、`if` / `fi` で書くこと。
+
+**(a) ディスク上の権限を見るループ(31〜35 行)を置換:**
+
+```bash
+# --- ハーネスの自壊検知: hook スクリプトの実行権限が落ちていないか ---
+# PreToolUse hook は実行失敗時にフェイルオープン(素通り)になるため、ここで警告する。
+# lib-*.sh は source 専用の共有ライブラリ(#45)なので要件が逆になる(非実行が正)。
+for s in .claude/scripts/*.sh .claude/hooks/*.sh; do
+  [ -f "$s" ] || continue
+  case "$(basename "$s")" in
+    lib-*.sh)
+      if [ -x "$s" ]; then
+        echo "⚠️ source 専用ライブラリに実行権限が付いている: $s(git update-index --chmod=-x で外すこと。CI の harness-integrity が落ちる)"
+      fi
+      ;;
+    *)
+      if [ ! -x "$s" ]; then
+        echo "⚠️ hook スクリプトに実行権限がない: $s(chmod +x で復旧すること。PreToolUse はフェイルオープンになる)"
+      fi
+      ;;
+  esac
+done
+```
+
+**(b) git index の mode を見る `awk`(45〜52 行)を置換:**
+
+`BADMODE=` の代入と、その下の `if [ -n "$BADMODE" ]` ブロックを次で置き換える:
+
+```bash
+  # git ls-files -s の出力は "<mode> <sha> <stage>\tパス"。パスに空白が入っても
+  # 切れないよう、フィールド分割ではなくタブ以降を丸ごと取る。
+  # lib-*.sh は 100644 が正、それ以外の *.sh は 100755 が正(#45)。
+  BADMODE="$(git ls-files -s .claude/scripts/ .claude/hooks/ 2>/dev/null |
+    awk -F'\t' '
+      $2 !~ /\.sh$/ { next }
+      {
+        n = split($2, p, "/")
+        if (p[n] ~ /^lib-/) {
+          if ($1 ~ /^100755 /) print $2 "  → 実行ビットを外す: git update-index --chmod=-x " $2
+        } else {
+          if ($1 !~ /^100755 /) print $2 "  → 実行ビットを付ける: git update-index --chmod=+x " $2
+        }
+      }')"
+  if [ -n "$BADMODE" ]; then
+    echo "⚠️ git 上の実行ビットが種別と合っていないスクリプトがある(CI の harness-integrity が落ちる):"
+    printf '%s\n' "$BADMODE" | sed 's/^/   - /'
+    echo "   chmod だけでは core.fileMode=false の環境で index に反映されない"
+  fi
+```
+
+### 10-3. `lib-record.sh` のヘッダに 1 行足す
+
+`# **source 専用。** 実行ビットは付けない(関数定義しか無い)。` の次の行に:
+
+```
+# 命名規約: .claude/scripts/lib-*.sh は source 専用。CI(ci.yml の harness-integrity)と
+# SessionStart hook が、この名前のファイルに **実行ビットが無いこと・shebang が無いこと**
+# を機械検査する(#45 §10)。単体で起動する実体を lib- で始まる名前にしないこと。
+```
+
+### 10-4. CHANGELOG に 1 項目足す
+
+§8 で追加した `## 2026-08-30` 節の末尾に追記する:
+
+```markdown
+- **[manual]** **`.claude/scripts/lib-*.sh` を「source 専用ライブラリ」の命名規約にした**(#45)。CI(`ci.yml` の `harness-integrity`)と SessionStart hook の実行ビット検査が、`lib-*.sh` にだけ**逆の要件**(実行ビットが無いこと・shebang が無いこと・git index が `100644`)を課します。「`lib-` に改名すれば実行ビット検査を逃れられる」抜け道を塞ぐため、免除ではなく別の縛りを課す形にしています。**取り込む側の作業**: `.claude/scripts/` に `lib-` で始まる名前の**実行されるスクリプト**がある場合は改名する(そのままだと CI が落ちます)
+```
+
+### 10-5. 検証(追加分)
+
+- [ ] `.claude/scripts/lib-record.sh` の git index mode が `100644` のまま
+      (`git ls-files -s .claude/scripts/lib-record.sh`)
+- [ ] 他の `.claude/scripts/*.sh` / `.claude/hooks/*.sh` はすべて `100755` のまま
+- [ ] **ci.yml のループをローカルで再現して緑になる**こと。ワークフローの当該ループを
+      そのまま `bash -e` で流し、何も出ずに exit 0 になることを確認する
+- [ ] **抜け道が塞がっていること**: 一時的に `.claude/scripts/lib-record.sh` に
+      実行ビットを付けた状態(`chmod +x`)で上のループを流すと**エラーで落ちる**こと。
+      および、一時的に先頭へ `#!/bin/bash` を足した状態でも**落ちる**こと。
+      **どちらも確認後に必ず元へ戻す**
+- [ ] **既存の検査が生きていること**: 一時的に `.claude/scripts/harness-mode.sh` から
+      実行ビットを外すと、従来どおりの文面で落ちること。**確認後に必ず戻す**
+- [ ] `bash -n .claude/hooks/session-start.sh` が通る
+- [ ] `.claude/hooks/session-start.sh` を直接実行し、実行ビット関連の警告が出ないこと
+      (他の警告は出てよい)

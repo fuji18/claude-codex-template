@@ -2,6 +2,9 @@
 # run record(.harness/codex-runs/*.json)を読むための共有関数。
 #
 # **source 専用。** 実行ビットは付けない(関数定義しか無い)。
+# 命名規約: .claude/scripts/lib-*.sh は source 専用。CI(ci.yml の harness-integrity)と
+# SessionStart hook が、この名前のファイルに **実行ビットが無いこと・shebang が無いこと**
+# を機械検査する(#45 §10)。単体で起動する実体を lib- で始まる名前にしないこと。
 # 利用側: .claude/scripts/delegate-codex.sh / .claude/scripts/codex-run.sh
 #
 # 委託禁止領域に入るか: 入る。FORBIDDEN_PATHS の ".claude/scripts/" がディレクトリ単位
