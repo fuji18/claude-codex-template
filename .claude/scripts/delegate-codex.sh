@@ -219,6 +219,16 @@ done
 #   - .husky/* / .claude/scripts/* / .claude/hooks/* はホストの git・Claude セッションが実行する
 #   - .claude/settings.json は PreToolUse hook の定義そのもの(どのコマンドを止めるかの宣言)
 #   - .github/workflows/* は非 fork PR で CLAUDE_CODE_OAUTH_TOKEN に触れる定義そのもの
+#   - .claude/branch-policy.json は保護ブランチ検査の全 3 層(PreToolUse hook / .husky/* /
+#     CI の branch-policy ジョブ)が読む**判定データ**。判定ロジックは一本化して守ってあるが、
+#     データが書き換われば全層が「正常に動作したうえで素通し」する。層の数では防げない
+#     (Issue #56 / S1)
+#   - .claude/rules/* は SessionStart hook と CLAUDE.md 経由で、司令塔と全サブエージェントの
+#     コンテキストへ本文がそのまま注入される。1 段落足すだけで恒久的な指示注入の足場になる
+#   - CLAUDE.md も同じ性質(全エージェントに毎回ロードされる)
+#   - .mcp.json は MCP サーバ定義 = セッション開始時のローカルプロセス起動指示
+#   - .codex/ は Codex 側の設定(network_access 等)とモード C の手順書。「Codex 自身は
+#     .codex/ に書けない」は codex-cli v0.149.0 の実測に依存した前提で、CLI 更新で崩れうる
 #
 # ここは**汎用項目**の単一ソース(全プロジェクトに配布される層)。プロジェクト固有パスの
 # 単一ソースは AGENTS.md §4 の <!-- kickoff:delegation-forbidden-paths --> の中で、
@@ -233,20 +243,31 @@ done
 # 一貫させるため(Issue #40)。個別列挙にすると、判定スクリプトが 1 本増えるたびに同じ
 # 漏れを繰り返す。実際 #37 で足した check-record-hygiene.sh は、冒頭に exit 0 を 1 行
 # 書くだけで全 PR の記録漏れ検査を無効化できる状態のまま守られていなかった。
-# .claude/ 全体をディレクトリごと禁止にはしない。skills/ commands/ agents/ rules/ の
-# 定型追記まで止めると委託の余地が過剰に狭まるため、対象は**実行される実体**
-# (scripts / hooks / settings.json)に限る。
+# .claude/ 全体をディレクトリごと禁止にはしない。skills/ commands/ agents/ docs/ の
+# 定型追記まで止めると委託の余地が過剰に狭まる。対象は次の 3 系統に限る(Issue #56):
+#   1. 実行される実体      … scripts/ hooks/ settings.json .husky/* .github/workflows/
+#   2. 注入される実体      … rules/ CLAUDE.md AGENTS.md .mcp.json
+#   3. 全層が読む判定データ … branch-policy.json
+# rules/ をディレクトリ単位にしたのは scripts/ と同じ理由。lead/ と mode/ だけを個別列挙すると
+# CLAUDE.md 経由で全サブエージェントに載る spec-driven.md が漏れ、ファイルが増えるたびに
+# 同じ漏れを繰り返す。rules/ への正当な追記はもともと司令塔の仕事(context-management.md
+# 「ルールを追記するときの置き場所」)なので、委託の余地はほぼ狭まらない。
 #
 # 末尾が / のものはディレクトリ配下すべてが対象。
 FORBIDDEN_PATHS=(
   ".claude/scripts/"
   ".claude/hooks/"
   ".claude/settings.json"
+  ".claude/branch-policy.json"
+  ".claude/rules/"
   ".husky/pre-commit"
   ".husky/prepare-commit-msg"
   ".claude/codex-denylist.txt"
   "AGENTS.md"
+  "CLAUDE.md"
+  ".mcp.json"
   ".github/workflows/"
+  ".codex/"
   ".harness/mode"
   ".harness/codex-runs/"
 )

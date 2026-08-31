@@ -148,10 +148,15 @@ touch .git/.probe 2>/dev/null && rm -f .git/.probe && echo GIT_WRITABLE || echo 
 <!-- kickoff:delegation-forbidden-paths -->
 - `.claude/scripts/` — 委託の入口(`delegate-codex.sh`)・保護ブランチ判定・CI が呼ぶ判定スクリプトの実体が置かれる場所です。実行中のあなた自身の起動元も含みます(プロセス自体は自己コピーで保護済み)。`delegate-codex.sh` を壊れた状態でコミットすると以後すべての委託が不能になりますし、判定スクリプトはここが 1 行書き換わるだけで CI の検査やガードレールの自壊検知が静かに無効化されます
 - `.claude/hooks/` / `.claude/settings.json` — Claude 側のフック定義とその実体です。司令塔のコンテキストへ注入される内容の出所でもあります
+- `.claude/branch-policy.json` — 保護ブランチ判定の単一ソースです。ここを書き換えると、判定の全層が正常に動いたまま保護を素通しします
+- `.claude/rules/` — 司令塔とすべてのサブエージェントのコンテキストへ本文がそのまま注入される場所です。1 段落の追記が恒久的な指示になります
 - `.husky/pre-commit` / `.husky/prepare-commit-msg` — ベンダー非依存のガードレール本体
 - `.claude/codex-denylist.txt` — 委託先が自分の送信禁止リストを書き換えることはできません
 - `AGENTS.md` — このファイル自身。冒頭の `<!-- verify-probe: ... -->` は次回の委託時にホスト側で実行されるため、あなたが書き換えるとサンドボックスの外へ影響が出ます。形式検査が入っていますが、**検査を通る範囲でも書き換えないでください**
+- `CLAUDE.md` — プロジェクトメモリ。全エージェントに毎回読み込まれます
+- `.mcp.json` — MCP サーバ定義。セッション開始時にローカルでプロセスを起動する指示です
 - `.github/workflows/` — CI 定義そのもの。ここを書き換えると認証済みトークンに触れられます
+- `.codex/` — あなた自身の設定(ネットワーク許可など)とモード C の手順書です
 - `.harness/mode` / `.harness/codex-runs/` — ハーネスモードと委託の実行記録。自分の結果を承認済みにすることはできません
 <!-- /kickoff:delegation-forbidden-paths -->
 
