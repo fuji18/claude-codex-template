@@ -14,6 +14,15 @@
 
 ---
 
+## 2026-08-31
+
+**委託禁止領域を「実行される実体」から 3 系統に広げ、適用漏れ 3 系統を塞いだ(Issue #56)。** 保護ブランチ検査は判定ロジックを 1 本化して守ってありましたが、**その判定が読むデータ**(`.claude/branch-policy.json`)は禁止領域に無く、委託先が `protectedBranches` を差し替えても出口検査に掛かりませんでした。全層が正常に動作したうえで素通しする形になるため、層を増やしても防げない経路です。同じ理屈で、司令塔のコンテキストへ本文が注入される `.claude/rules/` と `CLAUDE.md` も保護されていませんでした。
+
+- **[auto]** `FORBIDDEN_PATHS` に 5 項目を追加: `.claude/branch-policy.json` / `.claude/rules/` / `CLAUDE.md` / `.mcp.json` / `.codex/`。`AGENTS.md` §4 のマーカー内と `CLAUDE.md` の説明も同時に更新済みです
+- **[auto]** 原則を 3 系統に整理しました。**実行される実体**(scripts / hooks / settings.json / `.husky/*` / workflows)、**コンテキストへ注入される実体**(rules / CLAUDE.md / AGENTS.md / .mcp.json)、**全層が読む判定データ**(branch-policy.json)。`skills/` / `commands/` / `agents/` / `docs/` の除外は据え置きです
+- **[auto]** `.claude/rules/` はディレクトリ単位です。`lead/` と `mode/` だけを個別列挙すると、`CLAUDE.md` 経由で全サブエージェントに載る `spec-driven.md` が漏れます
+- **[manual]** ⚠️ **委託先が `CLAUDE.md` / `.claude/rules/` を編集する運用をしていた場合、その委託は `failed` / `exit 2` になります。** ルールへの追記はもともと司令塔の仕事(`context-management.md`)なので実害は無いはずですが、**取り込む側の作業**: `/kickoff` 以外で Codex に `CLAUDE.md` を書かせる手順を作っていないか確認してください
+
 ## 2026-08-30
 
 **econ モードの効果測定の設計を確定し、記録漏れを防ぐ 1 行を注入文に入れた(Issue #47)。** `delegation-policy.md` は委託粒度の閾値を「実測で上下させる」と宣言していますが、モード B の週枠寿命の比較は `decisions.jsonl` に「未実施」と記録されたままでした。宣言だけがあって実測が回らない状態は、#37 が機械化で塞いだ「散文の運用ルールは守られない」と同じ構造です。
