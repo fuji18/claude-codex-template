@@ -16,6 +16,13 @@
 
 ## 2026-08-31
 
+**モード C 復帰検査に `.git/config` のホストコマンド実行ベクタ検査(D2.5)を足した(Issue #58)。** 縮退モードは `.git` を writable_roots に渡すため、委託先が `.git/config` を丸ごと書けます。D1(`core.hooksPath`)と D2(`.git/hooks/` 直書き)は見ていましたが、`core.fsmonitor` のように**復帰検収より先に発火する**キーが検査対象外でした。
+
+- **[auto]** `check-guard-integrity.sh degraded` に D2.5 を追加。`core.fsmonitor` / `core.sshCommand` / `core.pager` / `core.editor` / `sequence.editor` / `core.gitProxy` / `credential.*.helper` / `url.*.insteadOf|pushInsteadOf` / `filter.*.clean|smudge` / `diff.*.command` / `merge.*.driver` / `include.path` / `includeIf.*.path` / `alias.*`(`!` 形式のみ)を**値ごと報告**します。D1/D2 と同じく**報告のみで停止はしません**
+- **[auto]** 検査範囲は `--local` のみです。devcontainer は `--global` / `--system` に `credential.helper` の `!` 形式を既定で置いているため、混ぜると平常運用で必ず誤爆します(実測)
+- **[auto]** `alias.*` は `!` 形式だけが対象です。git は組み込みサブコマンドを上書きするエイリアスを無視するため(実測)、`!` の無いエイリアスは既存コマンドの乗っ取り経路になりません
+- **[manual]** **モード C を運用しているプロジェクトは、push の前に `bash .claude/scripts/check-guard-integrity.sh degraded` を回す運用に変えてください。** `core.sshCommand` / `credential.helper` は push の瞬間に発火するため、Claude 復帰時の検収まで待つと検査が間に合いません(§12.3 手順 7 / `.claude/rules/mode/degraded.md` に反映済み)
+
 **委託禁止領域を「実行される実体」から 3 系統に広げ、適用漏れ 3 系統を塞いだ(Issue #56)。** 保護ブランチ検査は判定ロジックを 1 本化して守ってありましたが、**その判定が読むデータ**(`.claude/branch-policy.json`)は禁止領域に無く、委託先が `protectedBranches` を差し替えても出口検査に掛かりませんでした。全層が正常に動作したうえで素通しする形になるため、層を増やしても防げない経路です。同じ理屈で、司令塔のコンテキストへ本文が注入される `.claude/rules/` と `CLAUDE.md` も保護されていませんでした。
 
 - **[auto]** `FORBIDDEN_PATHS` に 5 項目を追加: `.claude/branch-policy.json` / `.claude/rules/` / `CLAUDE.md` / `.mcp.json` / `.codex/`。`AGENTS.md` §4 のマーカー内と `CLAUDE.md` の説明も同時に更新済みです
