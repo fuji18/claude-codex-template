@@ -14,6 +14,14 @@
 
 ---
 
+## 2026-09-01
+
+**`core.hooksPath` の判定を 1 本化し、ポリシー空洞化検査を強化した(Issue #59)。** `delegate-codex.sh` 入口検査 5-3 は「空 or 実在しないディレクトリ」だけを見ており、`check-guard-integrity.sh` の D1(モード C 復帰検収)より緩い判定でした。実在する無関係なディレクトリを指す `core.hooksPath` を 5-3 は素通しし、D1 だけが検出する食い違いがありました。
+
+- **[auto]** `core.hooksPath` の判定を `check-guard-integrity.sh` の `check_hooks_path()` に集約し、新しい `hooks-path` サブコマンドを追加しました。`delegate-codex.sh` 5-3 はこのサブコマンドを呼ぶだけになり、D1 と同じ厳しさ(`.husky` 配下かどうかまで判定)に揃いました
+- **[auto]** 検査 1(単一ソースの空洞化)に「`baseBranch` が `protectedBranches` に含まれるか」「`allowedPrefixes` が保護ブランチ名に前方一致する接頭辞(`main` や空文字列)を持たないか」を追加しました。`protectedBranches` を差し替える・`allowedPrefixes` に保護ブランチ名相当を紛れ込ませる、という「全層が正常動作したまま保護が消える」2 パターンを検出します
+- **[manual]** `AGENTS.md` §1-3 と `.codex/skills/degraded-mode-ticket/SKILL.md` 検査3 の散文から `git config --get core.hooksPath` を自分で読んで判断する手順を削除し、`bash .claude/scripts/check-guard-integrity.sh hooks-path` を実行する導線に統一しました。**取り込む側の作業**: これらのファイルをテンプレートから独自にカスタマイズしていた場合、`core.hooksPath` を直接比較する記述が残っていないか確認してください
+
 ## 2026-08-31
 
 **モード C 復帰検査に `.git/config` のホストコマンド実行ベクタ検査(D2.5)を足した(Issue #58)。** 縮退モードは `.git` を writable_roots に渡すため、委託先が `.git/config` を丸ごと書けます。D1(`core.hooksPath`)と D2(`.git/hooks/` 直書き)は見ていましたが、`core.fsmonitor` のように**復帰検収より先に発火する**キーが検査対象外でした。

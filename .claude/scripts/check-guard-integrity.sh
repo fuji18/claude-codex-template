@@ -5,6 +5,7 @@
 #   - .claude/hooks/session-start.sh … 早期警告(Claude セッション開始時)
 #   - .github/workflows/ci.yml       … 最終検証(クライアント非依存・Claude を一度も起動しなくても効く)
 #   - .claude/rules/mode/degraded.md … モード C 復帰時の検収(degraded サブコマンド)
+#   - .claude/scripts/delegate-codex.sh … impl 入口検査 5-3(hooks-path サブコマンド)
 #
 # 両者で判定がずれないよう、実体はこのファイルだけに置く
 # (check-protected-branch.sh / latest-steering.sh と同じ思想)。
@@ -18,17 +19,20 @@ set -uo pipefail
 
 # ---------- サブコマンド ----------
 #
-# 引数なし … 既存の自壊検知(SessionStart hook / CI の harness-integrity が呼ぶ)
-# degraded … 上記に加えて、モード C(縮退)復帰時のガードレール健全性検査
+# 引数なし   … 既存の自壊検知(SessionStart hook / CI の harness-integrity が呼ぶ)
+# degraded   … 上記に加えて、モード C(縮退)復帰時のガードレール健全性検査
+# hooks-path … core.hooksPath の判定だけを行う(delegate-codex.sh 入口検査 5-3 が呼ぶ)。
+#              5-3 が独自に「空 or 実在しない」だけを見ていたため D1 より緩く、実在する
+#              無関係なディレクトリを素通ししていた(#59)。判定の実体をここに集約する。
 #
 # 分けている理由はコストではなく誤検知。縮退検査は「作業ツリーの .git と縮退中コミット」を
 # 見る検査で、CI の fresh checkout では core.hooksPath が未設定・.git/hooks/ が sample だけ
 # なのが正常。既定に混ぜると harness-integrity ジョブが恒常的に赤くなる。
 SUBCOMMAND="${1:-default}"
 case "$SUBCOMMAND" in
-  default | degraded) ;;
+  default | degraded | hooks-path) ;;
   *)
-    echo "使い方: check-guard-integrity.sh [degraded]" >&2
+    echo "使い方: check-guard-integrity.sh [degraded|hooks-path]" >&2
     exit 2
     ;;
 esac
@@ -42,13 +46,78 @@ POLICY=".claude/branch-policy.json"
 FOUND=0
 note() { echo "$1"; FOUND=1; }
 
+# core.hooksPath が husky を指しているかの判定の実体。
+#
+# 呼び出し元は 2 つあり、同じ結果になることが要件(#59):
+#   - 下の D1(degraded サブコマンド)      … モード C 復帰時の検収
+#   - hooks-path サブコマンド              … delegate-codex.sh 入口検査 5-3
+# かつては 5-3 が「空 or 実在しないディレクトリ」だけを見ており、実在する無関係な
+# ディレクトリを指す core.hooksPath を素通ししていた。
+#
+# 値を .husky と決め打ちで比較しない。husky v9 が設定するのは .husky/_。
+# 空・実在しないディレクトリ・.husky 配下以外は、いずれも「git hook 層が無い」状態。
+#
+# husky を使う構成かどうかのガードは呼び出し側ではなくこの中に置く。外に出すと
+# 呼び出し元ごとに条件がずれ、このチケットが潰した分散をそのまま再生産する。
+# USES_HUSKY を参照するため、その決定より後にだけ呼ぶこと。
+#
+# 比較は前方一致で行い、絶対パスの正規化はしない。husky v9 が設定するのは常に相対パス
+# (.husky/_)で、絶対パスになる正規の経路が無い。仮に絶対パスが設定されていれば
+# 「.husky 配下以外」と報告するが、倒れる先は安全側(5-3 は exit 3 で委託を止めるだけ)。
+# realpath による正規化は可搬性とシンボリックリンクの分岐を増やすので入れない(#59)。
+check_hooks_path() {
+  [ "$USES_HUSKY" = yes ] || return 0
+
+  local _hooks_path
+  _hooks_path="$(git config --get core.hooksPath 2>/dev/null || true)"
+  if [ -z "$_hooks_path" ]; then
+    note "core.hooksPath が未設定。.husky/ のフックが一切動かない(npm ci での有効化漏れか、縮退中の書き換えを疑う)"
+  elif [ ! -d "$_hooks_path" ]; then
+    note "core.hooksPath が実在しないディレクトリ($_hooks_path)を指している。git hook 層が無効になっている"
+  else
+    case "$_hooks_path" in
+      .husky | .husky/*) ;;
+      *) note "core.hooksPath が .husky 配下以外($_hooks_path)を指している。ベンダー非依存の git hook 層が迂回されている" ;;
+    esac
+  fi
+}
+
 # --- 1) 単一ソースの空洞化 ---
 # 保護ブランチ検査の全層(PreToolUse hook / .husky/* / CI の branch-policy ジョブ)は
 # いずれも protectedBranches という同じ配列を読む。ここが空になると全層が同時に、
 # かつ「正常に動作したうえで素通し」という形で無効化される。層の数では防げない唯一の経路。
-if [ -f "$POLICY" ] && command -v jq >/dev/null 2>&1; then
-  jq -e '(.protectedBranches // []) | length > 0' "$POLICY" >/dev/null 2>&1 ||
+#
+# 「空」以外にも、全層が正常動作したまま保護が消える書き換えが 2 つある(#59)。
+# #56 で branch-policy.json を委託禁止領域に入れて委託経路は塞いだが、人間の手による
+# 誤編集には効かないため機械的に検出する。スキーマ検証一般には広げない —
+# 「保護が空洞化する」パターンだけに絞る。
+#
+# hooks-path サブコマンドでは回さない。5-3 は標準出力をそのままエラーメッセージに
+# 載せるため、ポリシーの指摘が混ざると「git hook が無効」という説明と食い違う。
+if [ "$SUBCOMMAND" != hooks-path ] && [ -f "$POLICY" ] && command -v jq >/dev/null 2>&1; then
+  if ! jq -e '(.protectedBranches // []) | length > 0' "$POLICY" >/dev/null 2>&1; then
     note "$POLICY の protectedBranches が空。保護ブランチ検査が全層(PreToolUse / .husky/* / CI)で素通しになる"
+  else
+    # 1-a) baseBranch が保護されているか。
+    # baseBranch は PR のマージ先 = 成果物が積まれる幹。ここが protectedBranches に
+    # 無いと、check-protected-branch.sh は「保護ブランチではない」と正しく判定した
+    # うえで直接コミットを通す。protectedBranches を ["develop"] に差し替える改変が
+    # 典型で、全層が緑のまま main への直コミットが解禁される。
+    # protectedBranches が空のときは上の指摘で足りるので else 側でだけ見る。
+    _base="$(jq -r '.baseBranch // "main"' "$POLICY" 2>/dev/null || echo main)"
+    jq -e --arg b "$_base" '(.protectedBranches // []) | index($b)' "$POLICY" >/dev/null 2>&1 ||
+      note "$POLICY の baseBranch($_base)が protectedBranches に含まれていない。PR のマージ先が無防備になり、全層が正常動作したまま直接コミットを通す"
+  fi
+
+  # 1-b) allowedPrefixes が保護ブランチ名そのものを許可していないか。
+  # CI の branch-policy ジョブは PR の head ブランチ名を startswith で照合するため、
+  # 保護ブランチ名に前方一致する接頭辞(例: "main"、あるいは空文字列)が 1 つでも
+  # 入ると、保護ブランチから出した PR がブランチ名検査を通過する。
+  # CI と同じ演算(startswith)で見る。完全一致だけを見ると "mai" や "" を取り逃す。
+  while IFS="$(printf '\t')" read -r _pb _ap; do
+    [ -n "$_pb" ] || continue
+    note "$POLICY の allowedPrefixes に保護ブランチ '$_pb' へ前方一致する接頭辞 '${_ap}' がある。保護ブランチから出した PR が CI の branch-policy のブランチ名検査を通過する"
+  done < <(jq -r '(.allowedPrefixes // []) as $ap | (.protectedBranches // [])[] | . as $b | $ap[] | . as $prefix | select($b | startswith($prefix)) | "\($b)\t\($prefix)"' "$POLICY" 2>/dev/null)
 fi
 
 # --- 2) husky を使う構成か ---
@@ -62,6 +131,15 @@ if [ "$USES_HUSKY" = no ] && [ -f package.json ] && command -v jq >/dev/null 2>&
   jq -e '(.devDependencies.husky // .dependencies.husky) != null' package.json >/dev/null 2>&1 && USES_HUSKY=yes
 fi
 if [ "$USES_HUSKY" = no ] && [ "$SUBCOMMAND" != degraded ]; then
+  exit "$FOUND"
+fi
+
+# --- 2.5) hooks-path サブコマンドはここで終わる ---
+# 見るのは core.hooksPath だけ。呼び出し元(入口検査 5-3)は「git hook が有効か」を
+# 判定したいのであって、.husky/pre-commit の中身(検査 3・4)は関知しない。
+# 混ぜると 5-3 が本来の理由と違う指摘で exit 3 を返す。
+if [ "$SUBCOMMAND" = hooks-path ]; then
+  check_hooks_path
   exit "$FOUND"
 fi
 
@@ -103,21 +181,9 @@ fi
 
 # --- D1) core.hooksPath が husky を指しているか ---
 #
-# 値を .husky と決め打ちで比較しない。husky v9 が設定するのは .husky/_。
-# 空・実在しないディレクトリ・.husky 配下以外は、いずれも「git hook 層が無い」状態。
-if [ "$USES_HUSKY" = yes ]; then
-  HOOKS_PATH="$(git config --get core.hooksPath 2>/dev/null || true)"
-  if [ -z "$HOOKS_PATH" ]; then
-    note "core.hooksPath が未設定。.husky/ のフックが一切動かない(npm ci での有効化漏れか、縮退中の書き換えを疑う)"
-  elif [ ! -d "$HOOKS_PATH" ]; then
-    note "core.hooksPath が実在しないディレクトリ($HOOKS_PATH)を指している。git hook 層が無効になっている"
-  else
-    case "$HOOKS_PATH" in
-      .husky | .husky/*) ;;
-      *) note "core.hooksPath が .husky 配下以外($HOOKS_PATH)を指している。ベンダー非依存の git hook 層が迂回されている" ;;
-    esac
-  fi
-fi
+# 判定の実体は上の check_hooks_path()。hooks-path サブコマンド(= delegate-codex.sh
+# 入口検査 5-3)と同じ関数を通ることが要件(#59)。
+check_hooks_path
 
 # --- D2) .git/hooks/ に直書きされたフックが無いか ---
 #
