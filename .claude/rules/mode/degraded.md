@@ -19,8 +19,11 @@
    ```
 
    縮退モードは `.git` が書き込み可能な唯一の経路で、`core.hooksPath` の書き換え・
-   `.git/hooks/` への直書き・禁止領域を触った `Codex-authored` コミットを検出する。
+   `.git/hooks/` への直書き・`.git/config` のホストコマンド実行ベクタ・禁止領域を触った
+   `Codex-authored` コミットを検出する。
    **1 行でも出力されたら、その内容を人間に報告してから検収を続ける。**
+   **縮退中に人間が push するときも、push の前にこの検査を回す**(`core.sshCommand` / `credential.helper` は push の瞬間に発火するため、復帰まで待つと間に合わない。`docs/template-dev/codex-delegation-plan.md` §12.3 手順 7)。
+
 2. `git log --grep 'Codex-authored' --oneline` で縮退中のコミットを特定する
 3. `.steering/[dir]/codex-log.md` を読む。**「設計判断」欄は必ず回収する**(`design.md` に無い判断が下されている可能性がある)
 4. 通常フローの検収(`/check` + `code-reviewer`)を回す

@@ -139,6 +139,62 @@ if [ -n "$GIT_HOOKS_DIR" ] && [ -d "$GIT_HOOKS_DIR" ]; then
   done < <(find "$GIT_HOOKS_DIR" -maxdepth 1 -type f -perm -u+x ! -name '*.sample' 2>/dev/null | LC_ALL=C sort)
 fi
 
+# --- D2.5) .git/config にホストコマンド実行ベクタが仕込まれていないか ---
+#
+# 縮退モードは .git を writable_roots に渡す = .git/config を丸ごと書ける唯一の経路。
+# D1 は core.hooksPath という 1 キーしか見ないが、config には「次に人間や Claude が git を
+# 叩いた瞬間にホストコマンドを実行する」キーが他にもある。とくに core.fsmonitor は
+# git status で発火するため、復帰検収(D1〜D3)より先に走り得る。
+#
+# 倒し方は D1/D2 と同じ「報告のみ」。対象キーには正当な用途もあるため停止はしない
+# (この検査はセキュリティ境界ではなく検出と報告。docs/template-dev/codex-delegation-plan.md §2.3)。
+#
+# 検査範囲はローカル設定のみ。縮退中の Codex が書けるのがローカルだけであることに加え、
+# devcontainer は --global / --system に credential.helper の `!` 形式を既定で置いており、
+# 混ぜると平常運用で必ず誤爆する(実測)。
+#
+# 対象キーは網羅リストではなく、.git/config 単体で完結する既知の主要ベクタに絞った閉リスト。
+# 増減は設計判断(.steering/20260831-issue58-git-config-vectors/design.md 判断4)を経由すること。
+#
+# alias.* は `!` 形式(shell 実行)だけを対象にする。git は組み込みサブコマンドを上書きする
+# エイリアスを無視するため(実測: alias.status に `!` 形式を仕込んでも git status は本来の動作)、
+# `!` の無いエイリアスは既存コマンドの乗っ取り経路にならない。
+#
+# 値は改行を含み得るので -z(NUL 区切りの key\nvalue)で読む。改行区切りだと 1 レコードが割れる。
+while IFS= read -r -d '' _rec; do
+  [ -n "$_rec" ] || continue
+  _key="${_rec%%$'\n'*}"
+  case "$_rec" in
+    *$'\n'*) _val="${_rec#*$'\n'}" ;;
+    *) _val="" ;;
+  esac
+
+  _why=""
+  case "$_key" in
+    core.fsmonitor) _why="git status 等のたびに実行される" ;;
+    core.sshcommand) _why="push / fetch のたびに実行される" ;;
+    core.pager) _why="log / diff 等のたびに実行される" ;;
+    credential.helper | credential.*.helper) _why="push / fetch の認証時に実行される" ;;
+    filter.*.clean | filter.*.smudge) _why="add / checkout のたびに実行される" ;;
+    include.path | includeif.*.path) _why="別ファイルの設定を取り込む(実行ベクタの間接注入)" ;;
+    core.editor | sequence.editor) _why="git commit(-m 無し)/ rebase -i のときに実行される" ;;
+    core.gitproxy) _why="プロキシ経由の接続時に実行される" ;;
+    url.*.insteadof | url.*.pushinsteadof) _why="fetch / push / clone の URL を書き換える(ext::sh 形式でコマンド実行になり得る)" ;;
+    diff.*.command) _why="git diff のたびに実行される(.gitattributes 経由)" ;;
+    merge.*.driver) _why="マージ解決のたびに実行される(.gitattributes 経由)" ;;
+    alias.*)
+      case "$_val" in
+        '!'*) _why="git <alias> 実行時に shell が走る" ;;
+      esac
+      ;;
+  esac
+  [ -n "$_why" ] || continue
+
+  _shown="${_val%%$'\n'*}"
+  [ "${#_shown}" -le 120 ] || _shown="${_shown:0:120}…"
+  note ".git/config(local)に $_key=$_shown が設定されている($_why)。縮退中に仕込まれたものでないか値を確認すること"
+done < <(git config --local --list -z 2>/dev/null)
+
 # --- D3) 縮退中コミットの差分が委託禁止領域に触れていないか ---
 #
 # 縮退中のコミットは Codex-authored トレーラーで自分を名乗る(.codex/skills/
