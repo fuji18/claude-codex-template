@@ -11,7 +11,8 @@ Claude の週枠を温存する運用。**モードの切替を宣言するの�
 2. **`/check` も `code-reviewer` も回さない。** 機械的検証は CI に、スペック整合は枠が戻ってからの一括レビューに委ねる
 3. 実装委託(`delegate-codex.sh impl`)は**人間がターミナルから叩く**。Claude セッションを開けたまま待たない
 4. 委託後の `/commit` → `push` → **draft PR** は、最小コンテキストの新セッションで行う
-5. **`decisions.jsonl` を書く前に `/usage` の週枠使用率をユーザーに 1 行で尋ね、`usage` に載せる**(答えが無ければ `null` のまま進む。設計: `docs/template-dev/econ-measurement.md`)
+5. **委託を挟んだら、draft PR を作る前に `git diff -- package.json` でライフサイクル系(`scripts` / `lint-staged` / `prepare`)を目視する。** このモードは検収を CI に預けるが、**CI が回す `npm test` 自体が委託成果**である以上、ここを見ないと層が 1 枚も残らない(根拠: `docs/template-dev/codex-delegation-plan.md` §9)
+6. **`decisions.jsonl` を書く前に `/usage` の週枠使用率をユーザーに 1 行で尋ね、`usage` に載せる**(答えが無ければ `null` のまま進む。設計: `docs/template-dev/econ-measurement.md`)
 
 検収を飛ばした分の担保は、ベンダー中立ガードレール(`.husky/*`)と CI(`ci.yml`)。
 

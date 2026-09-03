@@ -328,4 +328,22 @@ EOF_FORBIDDEN
   done < <(git log --grep='Codex-authored' --format='%h' "$DEGRADED_RANGE" 2>/dev/null)
 fi
 
+# --- D4) 縮退中コミットが package.json を変更していないか ---
+#
+# モード C は delegate-codex.sh を通らないため、出口検査の同種の警告
+# (scripts / lint-staged / prepare の差分)が 1 度も走らない。ここが唯一の層になる。
+#
+# 判定は「Codex-authored コミットが package.json を変更したか」までで、節の中身までは
+# 見ない。このスクリプトは jq を必須にしていないうえ、報告先の人間はどのみち
+# git diff を読む必要があるため。D1/D2/D3 と同じく報告のみで停止しない。
+#
+# git log を D3 と重複して回しているのは意図的。共有化には D3 のループ本体を書き換える
+# 必要があり、実測 0.185s / 84 コミットに対して security-critical な差分を広げる方が高い。
+while IFS= read -r _sha; do
+  [ -n "$_sha" ] || continue
+  if git show --pretty=format: --name-only "$_sha" 2>/dev/null | grep -Fxq 'package.json'; then
+    note "縮退中のコミット $_sha が package.json を変更している。scripts / lint-staged / prepare に差分が無いか git diff で確認すること(検収でホスト上・ネットワーク有効で実行される。codex-delegation-plan.md §9)"
+  fi
+done < <(git log --grep='Codex-authored' --format='%h' "$DEGRADED_RANGE" 2>/dev/null)
+
 exit "$FOUND"
