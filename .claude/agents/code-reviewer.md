@@ -10,6 +10,7 @@ model: sonnet
 ## チェック観点(優先順)
 
 1. **セキュリティ**: XSS / CSRF / 認可漏れ / SQL injection / 機密情報のログ出力 / PII の扱い
+   - **委託成果のホスト実行経路**: `package.json` の `scripts` / `lint-staged` / `prepare` に差分があれば**必ず内容を読む**。これらは検収(`npm test` / `npm run lint` / `lint-staged`)がサンドボックスの**外**で実行する経路で、委託先が書き換えられる(根拠: `docs/template-dev/codex-delegation-plan.md` §9)
 2. **正しさ**: 仕様・エッジケース・例外処理・非同期処理の race condition
 3. **設計**: 単一責任・依存方向・抽象化レベル・命名
 4. **スペック整合**: docs/ の機能設計・要求定義と実装の一致(実装中の主レビューはこのエージェントが担うため必ず確認する)

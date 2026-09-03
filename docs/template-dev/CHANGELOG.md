@@ -14,6 +14,17 @@
 
 ---
 
+## 2026-09-03
+
+**検収時のホスト実行をリスクとして明文化し、`package.json` ライフサイクル差分の警告層を足した(Issue #60)。** sandbox(ネットワーク無効 + `workspace-write`)が守るのは**委託が動いている間だけ**で、検収で回す `npm test` / `npm run lint` / `lint-staged` は「委託成果をホスト上・ネットワーク有効で実行する」行為になります。`package.json` の `scripts` は委託禁止領域の**外**(依存や scripts を触る正当な委託が多いため意図的に外してある)なので、委託先が自由に書き換えられます。**塞げないので受容し、作法と警告層だけを残す**という判断です。
+
+- **[auto]** `delegate-codex.sh` の出口検査に、impl 委託の前後で `package.json` の `scripts` / `lint-staged` に差分があれば**警告する**層を追加しました。**ブロックはしません**(正当な変更が普通にあり、止めると層が無視されるため)。`jq` があれば当該節だけを、無ければファイル全体のハッシュを比べます
+- **[auto]** `check-guard-integrity.sh degraded` に **D4** を追加しました。モード C は `delegate-codex.sh` を通らないため出口検査が効きません。`Codex-authored` コミットが `package.json` を変更していれば報告します(D1〜D3 と同じく報告のみ)
+- **[auto]** `code-reviewer` の重点範囲に「`package.json` の `scripts` / `lint-staged` / `prepare` に差分があれば必ず内容を読む」を追加しました
+- **[manual]** **200 行以上かつ重要変更のレビューは `delegate-codex.sh review` を既定とし、`/code-review ultra` は昇格先(併用しない)に決めました。** 従来は `delegation-policy.md` と `review-policy.md` が同じ発動条件に別の手段を割り当てており、両方回す余地がありました。**取り込む側の作業**: 重要変更のレビュー手段を独自に運用していた場合、どちらを既定にするか揃えてください(`/code-review ultra` はユーザー起動 + 課金で、司令塔からは起動できません)
+- **[manual]** **モード B / C を運用しているプロジェクトは、検収手順に `git diff -- package.json` の目視を追加してください。** モード B は draft PR を作る前に、モード C は復帰検収の `/check` より前に見ます(`.claude/rules/mode/econ.md` / `degraded.md` に反映済み)
+- **[auto]** `codex-delegation-plan.md` §2.3 の「Claude 復帰時の手順」は `.claude/rules/mode/degraded.md`「復帰時の検収」を単一ソースとする記述に差し替えました。手順のリストを 2 箇所に置くと乖離する(#42 / #58 / #59 / #60 で実際に発生した)ため、§2.3 側は設計意図のみを残します
+
 ## 2026-09-01
 
 **`core.hooksPath` の判定を 1 本化し、ポリシー空洞化検査を強化した(Issue #59)。** `delegate-codex.sh` 入口検査 5-3 は「空 or 実在しないディレクトリ」だけを見ており、`check-guard-integrity.sh` の D1(モード C 復帰検収)より緩い判定でした。実在する無関係なディレクトリを指す `core.hooksPath` を 5-3 は素通しし、D1 だけが検出する食い違いがありました。

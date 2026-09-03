@@ -1144,6 +1144,32 @@ forbidden_snapshot() {
   done
 }
 
+# ---- package.json のライフサイクル系差分(警告のみ)のヘルパー ----
+#
+# sandbox が守るのは委託の実行中だけで、検収で回す npm test / npm run lint /
+# lint-staged は「委託成果をホスト上・ネットワーク有効で実行する」経路になる
+# (codex-delegation-plan.md §9)。package.json は委託禁止領域に入れない判断なので
+# (依存や scripts を触る正当な委託が多い)、ここは警告だけを出す層にする。
+#
+# ブロックしない理由: 正当な scripts 変更が普通にあり、止めると層そのものが無視される。
+#
+# jq があるときはライフサイクル節だけを抜き出して比べる(prepare は scripts の中の
+# キーなので scripts を見れば覆う)。jq が無いときはファイル全体のハッシュに落ちるため
+# 依存追加でも鳴るが、警告しか出さない層なので過検出側に倒す。jq を必須化しないのは
+# 入口検査0 の必須コマンド一覧に無いため(必須化は Issue #63 の担当)。
+#
+# 空振り条件: package.json が無いプロジェクトでは常に空文字列になり、前後が一致して
+# 何も出ない(Node 以外のスタックでは正しい挙動)。
+lifecycle_snapshot() {
+  [ -f package.json ] || return 0
+  if command -v jq >/dev/null 2>&1; then
+    jq -S '{scripts: .scripts, "lint-staged": ."lint-staged"}' package.json 2>/dev/null ||
+      git hash-object -- package.json 2>/dev/null || true
+  else
+    git hash-object -- package.json 2>/dev/null || true
+  fi
+}
+
 # ---- 事前スナップショット(exit 0 の裏取りに使う。impl 以外では取らない) ----
 
 # --untracked-files=all は必須。既定の -unormal は新規の未追跡ディレクトリを
@@ -1168,6 +1194,7 @@ if [ "$MODE" = "impl" ]; then
   HEAD_BEFORE="$(git rev-parse HEAD 2>/dev/null || echo none)"
   DONE_BEFORE="$(count_done)"
   FORBIDDEN_BEFORE="$(forbidden_snapshot)"
+  LIFECYCLE_BEFORE="$(lifecycle_snapshot)"
 fi
 
 # ---------- codex exec に渡す環境の組み立て(許可リスト方式) ----------
@@ -1332,6 +1359,32 @@ delegate-codex: 委託禁止領域のファイルが変更されました(出口
 MSG
     printf '%s\n' "$VIOLATIONS" | sed 's/^/  /' >&2
     exit "$EX_FAIL"
+  fi
+fi
+
+# ---------- 出口検査(警告のみ): package.json のライフサイクル系差分 ----------
+#
+# 禁止領域の検査と違い **ブロックしない**(判断 D-3 / codex-delegation-plan.md §9)。
+# 位置は禁止領域検査の直後・CODEX_EXIT の分岐より前で、上限や失敗で終わった委託でも
+# 警告が出るようにしてある。rate-limited の経路は SUMMARY を捨てる(write_record に
+# 空文字列を渡す)ので、stderr にも同じ内容を書く。
+if [ "$MODE" = "impl" ]; then
+  LIFECYCLE_AFTER="$(lifecycle_snapshot)"
+  if [ "$LIFECYCLE_AFTER" != "$LIFECYCLE_BEFORE" ]; then
+    SUMMARY="⚠️ package.json のライフサイクル系(scripts / lint-staged / prepare)に差分があります。
+/check を回す前に \`git diff -- package.json\` で内容を確認してください
+(検収は委託成果をホスト上・ネットワーク有効で実行します。codex-delegation-plan.md §9)。
+
+$SUMMARY"
+    cat >&2 <<'MSG'
+delegate-codex: 警告 — package.json のライフサイクル系(scripts / lint-staged / prepare)に
+差分があります。これらは検収(npm test / npm run lint / lint-staged)がサンドボックスの
+外で実行する経路です。/check を回す前に内容を確認してください:
+
+  git diff -- package.json
+
+これは警告です。委託は失敗にしていません。
+MSG
   fi
 fi
 
