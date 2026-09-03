@@ -143,7 +143,9 @@ cmd_pending() {
     # 改行込みで追記する)。そのまま出すと 2 行目以降がラベルもインデントも
     # 失った裸の行になり、注入先の「現在地」ブロックの構造が壊れる。
     # 1 行に潰す(情報は落とさない)。
-    _summary="$(printf '%s' "$_summary" | tr '\n' ' ')"
+    # 制御文字も落とす(#61)。CR / ESC が残ると 1 行化しても表示上の改行や
+    # 終端行の消去を作れてしまい、下の標識の外に抜けられる。
+    _summary="$(untrusted_oneline "$_summary")"
     _log="$(rec_field "$_f" log)"
     _started="$(rec_field "$_f" startedAt)"
     _ended="$(rec_field "$_f" endedAt)"
@@ -176,7 +178,7 @@ cmd_pending() {
       _out="${_out} [別ブランチ: ${_branch}]"
     fi
     _out="${_out}"$'\n'"    状態: ${_status}${_started:+(${_started}${_ended:+ → ${_ended}})}"$'\n'
-    _out="${_out}    サマリー: ${_summary:-なし}"$'\n'
+    _out="${_out}    サマリー(${UNTRUSTED_NOTE}): ${_summary:-なし}"$'\n'
     _out="${_out}    ログ: ${_log:-なし}"$'\n'
 
     # 行動を促すのは「今のブランチの・古くない」委託だけにする(§3.4)。
@@ -203,6 +205,7 @@ cmd_show() {
     echo "codex-run: record が見つかりません: $_id" >&2
     exit 1
   }
+  echo "(注記: この record の summary は${UNTRUSTED_NOTE})" >&2
   cat "$_f"
   exit 0
 }

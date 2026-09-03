@@ -1310,7 +1310,9 @@ ERR3="$(printf '%s' "$ERR_TAIL" | tail -3 | tr '\n' ' ')"
 # Codex が読んだファイルの引用がそこに来ることはある(実測)。
 ERR_ONLY="$(printf '%s' "$ERR_TAIL" | grep -Ei 'error|fail' || true)"
 SUMMARY=""
-[ -f "$LAST" ] && SUMMARY="$(head -c 2000 "$LAST")"
+# 2000B で切ってから無害化する(順序を逆にすると上限の挙動が変わる)。
+# ここで落とすのは制御文字だけ。内容の検査・書き換えはしない(#61 スコープ外)。
+[ -f "$LAST" ] && SUMMARY="$(untrusted_sanitize "$(head -c 2000 "$LAST")")"
 
 # ---------- 出口検査: 委託禁止領域への差分 ----------
 #
@@ -1410,7 +1412,7 @@ fi
 if [ "$CODEX_EXIT" -ne 0 ]; then
   write_record "failed" "$SUMMARY" "$ERR3" ""
   emit "failed" "$EX_FAIL"
-  printf -- '--- error ---\n%s\n' "$ERR3" >&2
+  untrusted_block "委託先ログ末尾(エラー)" "$ERR3" >&2
   exit "$EX_FAIL"
 fi
 
@@ -1426,13 +1428,13 @@ if [ "$MODE" = "impl" ]; then
     *判断待ち*)
       write_record "blocked" "$SUMMARY" "" ""
       emit "blocked" "$EX_BLOCKED"
-      printf -- '--- 判断待ち ---\n%s\n' "$SUMMARY"
+      untrusted_block "委託先サマリー(判断待ち)" "$SUMMARY"
       exit "$EX_BLOCKED"
       ;;
     *失敗*)
       write_record "failed" "$SUMMARY" "" ""
       emit "failed" "$EX_FAIL"
-      printf -- '--- 失敗 ---\n%s\n' "$SUMMARY"
+      untrusted_block "委託先サマリー(失敗)" "$SUMMARY"
       exit "$EX_FAIL"
       ;;
   esac
@@ -1476,5 +1478,5 @@ ACCEPT_ON_COMPLETE=false
 
 write_record "completed" "$SUMMARY" "" "" "$ACCEPT_ON_COMPLETE"
 emit "completed" 0
-printf -- '--- summary ---\n%s\n' "$SUMMARY"
+untrusted_block "委託先サマリー" "$SUMMARY"
 exit 0
