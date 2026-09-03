@@ -14,7 +14,13 @@
 # 終了コード(delegate-codex.sh の契約とは別系統。取り違えないこと):
 #   0 成功
 #   1 対象が無い・値が不正
-#   2 使い方の誤り
+#   2 使い方の誤り / jq 不在(pending を除く。#63)
+#
+# jq の扱い(#63): record の読み書きは jq 必須で sed フォールバックを持たない。
+#   - accept / set-status / prune / list … jq が無ければ exit 2 で止める(止める層)
+#   - pending                            … jq が無ければ何も出さず exit 0(SessionStart
+#                                          注入。ここを止めるとセッションが開けない)
+#   - show                               … cat のみ。jq を要求しない
 #
 # 参照: docs/template-dev/codex-delegation-plan.md §12.6
 set -uo pipefail
@@ -75,6 +81,10 @@ cmd_list() {
   local _found=0
   local _f _id _mode _status _branch _accepted _steering _target _pid _cur_branch _line
 
+  # 止める層(#63): 一覧は人間が検収判断に使う。jq が無いと全フィールドが
+  # 空欄で並び、「未検収が無い」ように見える。空欄より止める方が安全。
+  require_jq "codex-run" 2
+
   [ -d "$RUN_DIR" ] || {
     echo "未検収の Codex 委託はありません"
     exit 0
@@ -122,6 +132,11 @@ cmd_list() {
 cmd_pending() {
   local _f _id _mode _status _branch _steering _target _summary _log _pid _started _ended
   local _cur_branch _now _start_epoch _stale _out="" _count=0
+
+  # **止めない層(#63)。** ここは SessionStart hook が呼ぶ注入口で、
+  # exit 2 を返すとセッション開始そのものに影響する。jq が無ければ
+  # 注入をスキップして黙って続行する(require_jq は呼ばない)。
+  command -v jq >/dev/null 2>&1 || exit 0
 
   [ -d "$RUN_DIR" ] || exit 0
 
@@ -210,44 +225,28 @@ cmd_show() {
   exit 0
 }
 
-# $1=file $2=key $3=raw-json-value $4=trailing-comma(既定 ",")
+# $1=file $2=key $3=raw-json-value
+#
+# **jq 必須**(呼び出し元が require_jq を通していること)。sed で書き換える経路は
+# 削除した(#63)。壊れ方を後追いで検出するための独自検査(先頭 { / 末尾 } /
+# キーの実在)も、jq -e . が本物のパーサで見るので不要になった。
 write_field() {
-  local _file="$1" _key="$2" _val="$3" _comma="${4-,}"
+  local _file="$1" _key="$2" _val="$3"
   local _tmp="$_file.tmp.$$"
   local _bak="$_file.bak"
 
-  if command -v jq >/dev/null 2>&1; then
-    jq --argjson v "$_val" --arg k "$_key" '.[$k] = $v' "$_file" >"$_tmp" 2>/dev/null || {
-      rm -f "$_tmp"
-      return 1
-    }
-  else
-    sed "s|^\([[:space:]]*\"$_key\"[[:space:]]*:[[:space:]]*\).*\$|\1$_val$_comma|" "$_file" >"$_tmp" || {
-      rm -f "$_tmp"
-      return 1
-    }
-  fi
+  jq --argjson v "$_val" --arg k "$_key" '.[$k] = $v' "$_file" >"$_tmp" 2>/dev/null || {
+    rm -f "$_tmp"
+    return 1
+  }
 
   cp "$_file" "$_bak"
   mv "$_tmp" "$_file"
 
-  # 妥当性確認。jq があれば本物のパーサで見る。無い環境でも「無検査で
-  # バックアップを捨てる」のは避ける — sed 経路こそ壊れる余地が大きい。
-  # 括弧の対応までは見ないが、丸ごと空・先頭/末尾が壊れた・キーが消えた、
-  # という壊れ方はここで捕まえて復元できる。
-  if command -v jq >/dev/null 2>&1; then
-    if ! jq -e . "$_file" >/dev/null 2>&1; then
-      mv "$_bak" "$_file"
-      return 1
-    fi
-  else
-    if [ ! -s "$_file" ] ||
-      ! head -1 "$_file" | grep -q '^[[:space:]]*{' ||
-      ! tail -1 "$_file" | grep -q '^[[:space:]]*}' ||
-      ! grep -q "\"$_key\"[[:space:]]*:" "$_file"; then
-      mv "$_bak" "$_file"
-      return 1
-    fi
+  # 妥当性確認。壊れていればバックアップから戻す。
+  if ! jq -e . "$_file" >/dev/null 2>&1; then
+    mv "$_bak" "$_file"
+    return 1
   fi
   rm -f "$_bak"
   return 0
@@ -255,6 +254,8 @@ write_field() {
 
 cmd_accept() {
   local _id="${1:-}" _f
+  # 止める層(#63): 検収状態を書き換える。
+  require_jq "codex-run" 2
   if [ -z "$_id" ]; then
     echo "codex-run: accept には id が必要です" >&2
     exit 2
@@ -263,9 +264,7 @@ cmd_accept() {
     echo "codex-run: record が見つかりません: $_id" >&2
     exit 1
   }
-  # accepted は write_record が書く JSON の最後のフィールド。
-  # sed 経路は末尾カンマを常に付けるため、末尾フィールドではカンマ無しにする。
-  if ! write_field "$_f" accepted true ""; then
+  if ! write_field "$_f" accepted true; then
     echo "codex-run: record の更新に失敗しました(JSON が壊れている可能性): $_f" >&2
     exit 1
   fi
@@ -276,6 +275,9 @@ cmd_accept() {
 cmd_set_status() {
   local _id="${1:-}" _new="${2:-}" _f
   local _valid="running completed blocked failed rate-limited unavailable interrupted discarded"
+
+  # 止める層(#63): 検収状態を書き換える。
+  require_jq "codex-run" 2
 
   if [ -z "$_id" ] || [ -z "$_new" ]; then
     echo "codex-run: set-status には id と status が必要です" >&2
@@ -318,6 +320,10 @@ cmd_prune() {
   local _dry=0 _keep=20 _unaccepted=0
   local _files=() _f _id _status _accepted _pid _skip
   local _rank=0 _cand=0 _removed=0
+
+  # 止める層(#63): record を削除する。status / accepted が読めないまま
+  # 走らせると、未検収の record を「消してよい」と誤判定しうる。
+  require_jq "codex-run" 2
 
   while [ $# -gt 0 ]; do
     case "$1" in

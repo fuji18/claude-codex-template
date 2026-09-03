@@ -18,6 +18,7 @@
 
 **検収時のホスト実行をリスクとして明文化し、`package.json` ライフサイクル差分の警告層を足した(Issue #60)。** sandbox(ネットワーク無効 + `workspace-write`)が守るのは**委託が動いている間だけ**で、検収で回す `npm test` / `npm run lint` / `lint-staged` は「委託成果をホスト上・ネットワーク有効で実行する」行為になります。`package.json` の `scripts` は委託禁止領域の**外**(依存や scripts を触る正当な委託が多いため意図的に外してある)なので、委託先が自由に書き換えられます。**塞げないので受容し、作法と警告層だけを残す**という判断です。
 
+- **[manual]** **委託経路(`delegate-codex.sh` の委託モード / `codex-run.sh` の書き込み系)を `jq` 必須にし、`rec_field` / `write_field` の sed フォールバック経路を削除しました(Issue #63)。** sed 経路は「末尾カンマを飲み込んで再入防止が静かにフェイルオープン」する Critical(#29)と、壊れた JSON を検知するための独自検査を生んでおり、**失敗がエラーではなく空文字列として現れる**のが本質的な問題でした。jq が無い場合、`delegate-codex.sh` は **`exit 3`**(Codex 利用不可 = Sonnet fork へ恒久フォールバック)で止まります。**SessionStart 注入(`codex-run.sh pending`)だけはフェイルオープンのまま**で、jq が無ければ注入をスキップして黙って続行します(ここを止めるとセッションが開けません)。**取り込む側の作業**: 委託を使う環境に `jq` が入っているか確認してください(devcontainer / CI には既に入っています)。入っていない場合、委託は `exit 3` で止まり Sonnet fork に落ちます
 - **[auto]** `delegate-codex.sh` の出口検査に、impl 委託の前後で `package.json` の `scripts` / `lint-staged` に差分があれば**警告する**層を追加しました。**ブロックはしません**(正当な変更が普通にあり、止めると層が無視されるため)。`jq` があれば当該節だけを、無ければファイル全体のハッシュを比べます
 - **[auto]** `check-guard-integrity.sh degraded` に **D4** を追加しました。モード C は `delegate-codex.sh` を通らないため出口検査が効きません。`Codex-authored` コミットが `package.json` を変更していれば報告します(D1〜D3 と同じく報告のみ)
 - **[auto]** `code-reviewer` の重点範囲に「`package.json` の `scripts` / `lint-staged` / `prepare` に差分があれば必ず内容を読む」を追加しました

@@ -15,30 +15,43 @@
 # コピー側から source される。委託中に元ファイルが書き換わっても、走っている
 # プロセスが読む rec_field は変わらない(design §1)。
 
+# ---------- jq 必須の宣言(#63) ----------
+#
+# run record の読み書きは jq に一本化した。**sed フォールバックは持たない。**
+# 過去に sed 経路が 2 回バグを出しており(#29 の Critical: 末尾カンマを飲み込んで
+# 再入防止が静かにフェイルオープン / write_field の独自 JSON 検査)、
+# 「jq が無い環境でも動く」利得より「検査が空振りしても失敗として現れない」損失が
+# 大きいと判断した(#63)。devcontainer / CI は jq を保証している。
+#
+# **呼び出し元は 2 種類ある。層を取り違えないこと(#63 design §0):**
+#   - 止める層 = 委託経路(delegate-codex.sh の委託モード / codex-run.sh の書き込み系)
+#     … この関数を入口で呼び、jq が無ければ止める
+#   - 止めない層 = SessionStart 注入(codex-run.sh pending)
+#     … この関数は呼ばず、自前で `command -v jq` を見て黙って抜ける
+#
+# $1=呼び出し元の表示名(メッセージの接頭辞) $2=jq 不在時の終了コード
+require_jq() {
+  command -v jq >/dev/null 2>&1 && return 0
+  echo "${1:-lib-record}: jq が見つかりません。run record を安全に読み書きできないため中止します(jq を入れてください)。" >&2
+  exit "${2:-2}"
+}
+
 # $1=json ファイル $2=キー名。無い/null は空文字列を返す。
 #
-# sed 経路は run record が「1 行 1 キー・値が 1 行に収まる」形式であることに依存する。
-# #29 の検収で Minor として挙がったが、この形式で record を書いているのは
-# delegate-codex.sh だけなので、既存の性質として受け入れている。
-#
-# sed フォールバックの既知の癖(検収で実測): クォートされていない値(pid / accepted など)
-# では `[^"]*` が末尾のカンマまで飲み込む。"pid": 82711, → 82711, が返り、
-# kill -0 "82711," が引数エラーで必ず失敗する = 再入防止(入口検査5-5)が jq 不在環境で
-# 静かにフェイルオープンしていた。捕獲後に末尾のカンマと空白を必ず剥がす。
-# クォートされた値は `[^"]*` が閉じ引用符で止まるためもともと影響を受けない。
+# **jq 必須。** 呼び出し元は入口で require_jq を通していること(止めない層は
+# 自前で jq の有無を見てから呼ぶこと)。ここでの検査は二次層でしかない —
+# rec_field はコマンド置換で呼ばれるので、この中の exit はサブシェルしか
+# 殺せず、呼び出し元を止められない(#63 design §1)。
 rec_field() {
   local _out=""
-  if command -v jq >/dev/null 2>&1; then
-    # `// empty` は使わない。jq の // は false も falsy として捨てるため、
-    # "accepted": false が「キーが無い」と区別できなくなり、sed 経路と
-    # 結果が食い違う(実測)。null のときだけ空を返す形にする。
-    _out="$(jq -r --arg k "$2" '.[$k] | if . == null then empty else . end' "$1" 2>/dev/null)"
-  else
-    _out="$(sed -n "s/^[[:space:]]*\"$2\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([^\"]*\)\"\{0,1\},\{0,1\}[[:space:]]*$/\1/p" "$1" | head -1)"
-    _out="${_out%"${_out##*[![:space:]]}"}"
-    _out="${_out%,}"
-    _out="${_out%"${_out##*[![:space:]]}"}"
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "lib-record: jq が見つかりません(rec_field は jq 必須。呼び出し元が require_jq を通していません)" >&2
+    return 1
   fi
+  # `// empty` は使わない。jq の // は false も falsy として捨てるため、
+  # "accepted": false が「キーが無い」と区別できなくなる。
+  # null のときだけ空を返す形にする。
+  _out="$(jq -r --arg k "$2" '.[$k] | if . == null then empty else . end' "$1" 2>/dev/null)"
   [ "$_out" = "null" ] && _out=""
   printf '%s' "$_out"
 }
