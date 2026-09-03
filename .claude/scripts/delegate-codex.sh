@@ -1291,8 +1291,12 @@ ENDED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 #     完走してサマリーが出ている以上、上限では終わっていない。
 #     仮に本文が上限に触れていても、そのサマリーは標準出力に出るので
 #     人間・司令塔の目に入る = 見逃しても静かではない。
-#   - 失敗(exit 非ゼロ)したときだけ判定する。構造化識別子はログ全体に
-#     当ててよいが、緩い文言パターンは末尾 20 行のうち "error" / "fail"
+#   - 失敗(exit 非ゼロ)したときだけ判定する。ただし構造化識別子も
+#     ログ全体には当てない — 委託先が読んだファイルの引用がイベントの中に
+#     入るため、このリポジトリ自身(識別子を本文に含む)を読んだ委託が
+#     タスク起因で失敗すると exit 4 に化ける(#62)。トップレベルの
+#     エラーイベント行(error / turn.failed)だけに当てる。
+#     緩い文言パターンはさらに狭く、末尾 20 行のうち "error" / "fail"
 #     を含む行だけに当てる。末尾に絞るだけでは足りない — 失敗した委託の
 #     末尾にも、Codex が読んだファイルの引用は来る。
 #
@@ -1300,6 +1304,25 @@ ENDED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # 起きることを前提にしていた。成功時はそうではないので前提が成り立たない。
 
 RATE_ID_RE='rate_limit_reached|usage_limit_reached|credits_depleted'
+# 構造化識別子を当てる範囲。トップレベルのエラーイベント行だけに限定する。
+# codex exec --json のイベントのうち、ファイル引用(aggregated_output / text)を
+# 運ぶのは item.* だけで、error / turn.failed はエラーメッセージしか運ばない
+# (v0.149.0 実測。design.md §1.2)。引用されたファイル内容は JSON 文字列の中で
+# \" にエスケープされ行頭にも来ないため、行頭アンカーで確実に外れる。
+# 外した側の失敗方向は「見逃し = exit 2」で安全側。生エラーは run record に残る。
+RATE_EVENT_RE='^\{"type":"(error|turn\.failed)"'
+# 検収指摘への回答(design.md §6。ロジックは変更していない):
+# - item.completed にネストされた type:"error" は許可リストに入れない。判定は
+#   CODEX_EXIT != 0 のとき、つまりターン失敗時だけに入るため、致命的な理由は
+#   必ずトップレベルの turn.failed に載る(実測。item 内の type:"error" は
+#   非致命の通知だった)。item.completed は aggregated_output でファイル引用も
+#   運ぶため、足すとキー並び順に依存した脆い正規表現になる
+# - RATE_TEXT_RE に識別子(アンダースコア表記)は足さない。RATE_TEXT_RE が当たる
+#   ERR_ONLY(末尾 20 行の error/fail 行)にはファイル引用が来るため、識別子を
+#   足すと #62 と同じ誤検知を窓を狭めただけで作り直すことになる
+# - workspace_owner_* / workspace_member_* の変種は RATE_ID_RE に個別追加不要。
+#   RATE_ID_RE はアンカーなしの部分一致なので、既に credits_depleted /
+#   usage_limit_reached にそれぞれ一致する(v0.149.0 の実バイナリ文字列で確認済み)
 RATE_TEXT_RE='rate limit|usage limit|quota|429'
 AUTH_RE='unauthorized|not logged in|invalid_api_key|authentication_error|401'
 
@@ -1391,7 +1414,7 @@ MSG
 fi
 
 if [ "$CODEX_EXIT" -ne 0 ]; then
-  if grep -Eqi "$RATE_ID_RE" "$LOG" 2>/dev/null ||
+  if grep -Eqi "$RATE_EVENT_RE.*($RATE_ID_RE)" "$LOG" 2>/dev/null ||
     printf '%s' "$ERR_ONLY" | grep -Eqi "$RATE_TEXT_RE"; then
     RESET_AT="$(grep -Eo '"reset[_a-zA-Z]*"[[:space:]]*:[[:space:]]*"[^"]*"' "$LOG" 2>/dev/null | head -1 | sed 's/.*: *"\(.*\)"/\1/')"
     write_record "rate-limited" "" "$ERR3" "$RESET_AT"
