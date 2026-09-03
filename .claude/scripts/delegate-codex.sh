@@ -327,6 +327,20 @@ if [ "$MODE" = "--print-forbidden" ]; then
   exit 0
 fi
 
+# ---------- 入口検査0-2: jq(委託モードのみ) ----------
+#
+# run record の読み書きは jq に一本化してある(#63 / lib-record.sh)。
+# sed フォールバックを持たないので、jq が無い状態で先へ進むと入口検査5-5
+# (impl の再入防止)が空文字列を受けて静かに素通しする。**ここで止める。**
+#
+# exit 3(Codex 利用不可)を返すのは、これが環境の欠落であってタスクの失敗では
+# ないため。司令塔は恒久フォールバック(Sonnet fork)へ落ちる。
+#
+# **--print-forbidden より後に置くこと。** あちらは jq を 1 行も使わず、
+# check-guard-integrity.sh degraded が禁止領域の単一ソースとして読む read-only
+# 経路なので、jq 不在で巻き添えにしてはならない(#42 / #63 design §3-1)。
+require_jq "delegate-codex" "$EX_UNAVAIL"
+
 # ---------- 入口検査1: 機密ファイル ----------
 #
 # Codex の sandbox は「書き込み」の制限であり、読み取りの deny-list は
@@ -676,18 +690,17 @@ fi
 RUN_DIR=".harness/codex-runs"
 
 json_str() {
-  # jq が使えれば任せる。ただし空を返させないこと — record は状態の正なので、
-  # ここが空文字列を返すと `"summary": ,` のような壊れた JSON になり、
-  # 「委託を挟んで /clear できる」という前提ごと崩れる。
+  # jq に任せる(入口検査0-2 で存在は保証済み)。ただし空を返させないこと —
+  # record は状態の正なので、ここが空文字列を返すと `"summary": ,` のような
+  # 壊れた JSON になり、「委託を挟んで /clear できる」という前提ごと崩れる。
+  # 下のフォールバックは **jq 不在用ではなく jq がエラーを返したとき用**
   # (サマリーは 2000 バイトで切るため、末尾がマルチバイト文字の途中に
-  #  なりうる。jq がそれを拒む場合に備えて下のフォールバックへ落とす)
+  #  なりうる。jq がそれを拒む場合に落ちる先)。
   local _out=""
-  if command -v jq >/dev/null 2>&1; then
-    _out="$(printf '%s' "${1:-}" | jq -Rs . 2>/dev/null)"
-    if [ -n "$_out" ]; then
-      printf '%s' "$_out"
-      return
-    fi
+  _out="$(printf '%s' "${1:-}" | jq -Rs . 2>/dev/null)"
+  if [ -n "$_out" ]; then
+    printf '%s' "$_out"
+    return
   fi
   printf '"%s"' "$(printf '%s' "${1:-}" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | tr '\n\t' '  ')"
 }
@@ -1153,21 +1166,17 @@ forbidden_snapshot() {
 #
 # ブロックしない理由: 正当な scripts 変更が普通にあり、止めると層そのものが無視される。
 #
-# jq があるときはライフサイクル節だけを抜き出して比べる(prepare は scripts の中の
-# キーなので scripts を見れば覆う)。jq が無いときはファイル全体のハッシュに落ちるため
-# 依存追加でも鳴るが、警告しか出さない層なので過検出側に倒す。jq を必須化しないのは
-# 入口検査0 の必須コマンド一覧に無いため(必須化は Issue #63 の担当)。
+# ライフサイクル節だけを抜き出して比べる(prepare は scripts の中のキーなので
+# scripts を見れば覆う)。jq は入口検査0-2 で保証済み(#63)。jq が失敗した場合だけ
+# ファイル全体のハッシュに落ちる(依存追加でも鳴るが、警告しか出さない層なので
+# 過検出側に倒す)。
 #
 # 空振り条件: package.json が無いプロジェクトでは常に空文字列になり、前後が一致して
 # 何も出ない(Node 以外のスタックでは正しい挙動)。
 lifecycle_snapshot() {
   [ -f package.json ] || return 0
-  if command -v jq >/dev/null 2>&1; then
-    jq -S '{scripts: .scripts, "lint-staged": ."lint-staged"}' package.json 2>/dev/null ||
-      git hash-object -- package.json 2>/dev/null || true
-  else
+  jq -S '{scripts: .scripts, "lint-staged": ."lint-staged"}' package.json 2>/dev/null ||
     git hash-object -- package.json 2>/dev/null || true
-  fi
 }
 
 # ---- 事前スナップショット(exit 0 の裏取りに使う。impl 以外では取らない) ----
