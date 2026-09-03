@@ -752,20 +752,31 @@ MSG
   fi
 
   # ---- 5-3: git hook が有効か ----
-  # .husky/ があるのに core.hooksPath が未設定 = husky が丸ごと無効。
   # 保護ブランチへのコミットを止めるベンダー非依存の層が存在しない状態で
   # workspace-write の委託をしない。
-  # 空振り条件: .husky/ を持たないプロジェクト(Python/Go 等)ではこの検査は
-  # 何も見ない。そこでは git hook 層そのものが存在しないので、判定できない。
   #
-  # 「非空」だけでは足りない — 別ツールが core.hooksPath を実在しないパスに
-  # 設定していると husky は無効なのにこの検査は素通りする。指すディレクトリの
-  # 実在まで見る。値そのものを ".husky" と比較してはいけない: husky v9 が
-  # 設定するのは ".husky/_" であり、決め打ちすると全委託が止まる(実測)。
-  HOOKS_PATH="$(git config --get core.hooksPath 2>/dev/null || true)"
-  if [ -d .husky ] && { [ -z "$HOOKS_PATH" ] || [ ! -d "$HOOKS_PATH" ]; }; then
-    cat >&2 <<'MSG'
-delegate-codex: git hook が無効です(core.hooksPath が未設定か実在しない / Codex 利用不可)。
+  # 判定の実体はここに書かない。check-guard-integrity.sh の hooks-path サブコマンドに
+  # 委ねる(隣の 5-4 が check-protected-branch.sh に委ねているのと同じ形)。
+  # かつてここに独自の条件を書いていたため、縮退復帰検査の D1 が見ている
+  # 「.husky 配下かどうか」が抜け、実在する無関係なディレクトリを指す
+  # core.hooksPath を素通ししていた(#59)。
+  #
+  # 空振り条件:
+  #   - husky を使わない構成(Python/Go 等)ではサブコマンドが何も見ずに 0 を返す。
+  #     git hook 層そのものが存在しないので判定できない
+  #   - スクリプトが無い / hooks-path を知らない旧版(rc が 0・1 以外)のときは
+  #     警告だけ出して素通しする。同期ずれで全委託を止めないため。この欠落は
+  #     CI の harness-integrity ジョブ(同スクリプトを必ず実行する)が別途赤くする
+  GUARD_INTEGRITY=".claude/scripts/check-guard-integrity.sh"
+  if [ -f "$GUARD_INTEGRITY" ]; then
+    HOOKS_PATH_ISSUES="$(bash "$GUARD_INTEGRITY" hooks-path 2>/dev/null)"
+    case $? in
+      0) ;;
+      1)
+        cat >&2 <<MSG
+delegate-codex: git hook が無効です(Codex 利用不可)。
+
+$HOOKS_PATH_ISSUES
 
 husky が有効化されていないため、保護ブランチへのコミットを止めるベンダー非依存の
 層が存在しません。sandbox はネットワーク無効なので Codex 自身では復旧できません。
@@ -774,7 +785,12 @@ husky が有効化されていないため、保護ブランチへのコミッ�
 
 を実行してから再委託してください。当面は Sonnet fork にフォールバック。
 MSG
-    exit "$EX_UNAVAIL"
+        exit "$EX_UNAVAIL"
+        ;;
+      *)
+        echo "delegate-codex: 警告 — $GUARD_INTEGRITY hooks-path を実行できませんでした(古い版の可能性)。git hook の検査をスキップします。" >&2
+        ;;
+    esac
   fi
 
   # ---- 5-4: 保護ブランチ上で実装委託しない ----
