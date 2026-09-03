@@ -24,6 +24,7 @@
 - **[manual]** **200 行以上かつ重要変更のレビューは `delegate-codex.sh review` を既定とし、`/code-review ultra` は昇格先(併用しない)に決めました。** 従来は `delegation-policy.md` と `review-policy.md` が同じ発動条件に別の手段を割り当てており、両方回す余地がありました。**取り込む側の作業**: 重要変更のレビュー手段を独自に運用していた場合、どちらを既定にするか揃えてください(`/code-review ultra` はユーザー起動 + 課金で、司令塔からは起動できません)
 - **[manual]** **モード B / C を運用しているプロジェクトは、検収手順に `git diff -- package.json` の目視を追加してください。** モード B は draft PR を作る前に、モード C は復帰検収の `/check` より前に見ます(`.claude/rules/mode/econ.md` / `degraded.md` に反映済み)
 - **[auto]** `codex-delegation-plan.md` §2.3 の「Claude 復帰時の手順」は `.claude/rules/mode/degraded.md`「復帰時の検収」を単一ソースとする記述に差し替えました。手順のリストを 2 箇所に置くと乖離する(#42 / #58 / #59 / #60 で実際に発生した)ため、§2.3 側は設計意図のみを残します
+- **[auto]** 委託先(Codex)の summary をナンス付きの標識ブロックで囲む共有関数(`untrusted_sanitize` / `untrusted_oneline` / `untrusted_block`)を `lib-record.sh` に追加し、司令塔が委託先由来のテキストを読む 5 経路(`delegate-codex.sh` の SUMMARY 確定・エラー/判断待ち/失敗/完了の出力、`codex-run.sh` の `pending` / `show`)すべてに通しました(Issue #61)。ナンスは summary 確定後に生成するため、summary 側から終端行を偽造して司令塔への指示に見せかける経路が閉じます
 
 ## 2026-09-01
 
