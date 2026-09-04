@@ -697,6 +697,23 @@ fi
 
 RUN_DIR=".harness/codex-runs"
 
+# ホスト(このスクリプト)が生成した出口検査の警告。委託先のサマリー($SUMMARY)とは
+# 別に持つ(#72)。record では "hostNotice"、標準出力では host_notice_block で出す。
+# write_record はこのグローバルを直接読む — 終端 8 経路すべてに位置引数を足すより
+# 漏れにくいため(design §1-1)。
+HOST_NOTICE=""
+
+# $1=警告文。複数の出口検査が順に積む。空行 1 つで区切る。
+add_host_notice() {
+  if [ -n "$HOST_NOTICE" ]; then
+    HOST_NOTICE="$HOST_NOTICE
+
+$1"
+  else
+    HOST_NOTICE="$1"
+  fi
+}
+
 json_str() {
   # jq に任せる(入口検査0-2 で存在は保証済み)。ただし空を返させないこと —
   # record は状態の正なので、ここが空文字列を返すと `"summary": ,` のような
@@ -995,6 +1012,7 @@ ENDED_AT=""
 CODEX_SESSION_ID=""
 
 # $1=status $2=summary $3=error $4=resetAt $5=accepted(true/false。既定 false)
+# hostNotice はグローバル $HOST_NOTICE から読む(引数ではない。design §1-1)
 write_record() {
   # JSON にそのまま埋めるため true/false のリテラルに正規化する。
   # 呼び出し側の綴り間違いや空文字で record が壊れた JSON になるのを防ぐ。
@@ -1018,6 +1036,7 @@ write_record() {
   "endedAt": $(json_or_null "$ENDED_AT"),
   "resetAt": $(json_or_null "${4:-}"),
   "summary": $(json_or_null "${2:-}"),
+  "hostNotice": $(json_or_null "$HOST_NOTICE"),
   "error": $(json_or_null "${3:-}"),
   "log": $(json_str "$LOG"),
   "accepted": $_accepted
@@ -1026,9 +1045,14 @@ JSON
 }
 
 # $1=status $2=exit-code
+#
+# ホスト警告はここで出す。emit は終端 8 経路すべてから、かつ必ず untrusted_block より
+# 前に呼ばれるので、**「どの経路でも出る」と「必ず標識の外・先に出る」が構造的に揃う**
+# (design §1-2)。個別の出力箇所に足すと経路追加のたびに漏れる。
 emit() {
   printf '[codex:%s] status=%s id=%s exit=%s\n' "$MODE" "$1" "$RUN_ID" "$2"
   printf 'log: %s\n' "$LOG"
+  host_notice_block "$HOST_NOTICE"
 }
 
 # ---------- プロンプト構築(参照渡し。内容は貼らない) ----------
@@ -1421,9 +1445,7 @@ if [ "$MODE" = "impl" ]; then
     VIOL_ERR="委託禁止領域が変更されました: $VIOL_LINE"
     # 非ゼロ終了と重なったときは、それも記録に残す(上限・認証失敗と区別できるように)。
     [ "$CODEX_EXIT" -ne 0 ] && VIOL_ERR="$VIOL_ERR (codex exit=$CODEX_EXIT / $ERR3)"
-    SUMMARY="⚠️ 委託禁止領域が変更されました(出口検査): $VIOL_LINE
-
-$SUMMARY"
+    add_host_notice "⚠️ 委託禁止領域が変更されました(出口検査): $VIOL_LINE"
     write_record "failed" "$SUMMARY" "$VIOL_ERR" ""
     emit "failed" "$EX_FAIL"
     cat >&2 <<'MSG'
@@ -1447,16 +1469,15 @@ fi
 #
 # 禁止領域の検査と違い **ブロックしない**(判断 D-3 / codex-delegation-plan.md §9)。
 # 位置は禁止領域検査の直後・CODEX_EXIT の分岐より前で、上限や失敗で終わった委託でも
-# 警告が出るようにしてある。rate-limited の経路は SUMMARY を捨てる(write_record に
-# 空文字列を渡す)ので、stderr にも同じ内容を書く。
+# 警告が出るようにしてある。警告はグローバル $HOST_NOTICE に積むため、summary を捨てる
+# rate-limited / unavailable の経路でも record に残る(#72)。stderr への出力は
+# 端末で直接叩いたときのために残してある。
 if [ "$MODE" = "impl" ]; then
   LIFECYCLE_AFTER="$(lifecycle_snapshot)"
   if [ "$LIFECYCLE_AFTER" != "$LIFECYCLE_BEFORE" ]; then
-    SUMMARY="⚠️ package.json のライフサイクル系(scripts / lint-staged / prepare)に差分があります。
+    add_host_notice "⚠️ package.json のライフサイクル系(scripts / lint-staged / prepare)に差分があります。
 /check を回す前に \`git diff -- package.json\` で内容を確認してください
-(検収は委託成果をホスト上・ネットワーク有効で実行します。codex-delegation-plan.md §9)。
-
-$SUMMARY"
+(検収は委託成果をホスト上・ネットワーク有効で実行します。codex-delegation-plan.md §9)。"
     cat >&2 <<'MSG'
 delegate-codex: 警告 — package.json のライフサイクル系(scripts / lint-staged / prepare)に
 差分があります。これらは検収(npm test / npm run lint / lint-staged)がサンドボックスの
@@ -1541,9 +1562,7 @@ MSG
   fi
 
   if [ "$DONE_AFTER" -le "$DONE_BEFORE" ]; then
-    SUMMARY="$SUMMARY
-
-⚠️ tasklist.md の [x] が増えていません(変更はあります)。逐次更新がされていない
+    add_host_notice "⚠️ tasklist.md の [x] が増えていません(変更はあります)。逐次更新がされていない
 可能性があるため、進捗の判断は tasklist ではなく git diff --stat を根拠にしてください。"
   fi
 fi

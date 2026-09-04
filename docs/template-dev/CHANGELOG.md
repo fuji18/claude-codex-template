@@ -16,6 +16,12 @@
 
 ## 2026-09-04
 
+- **[auto]** run record の `summary` を「委託先の出力」と「ホストの警告」に分けました(Issue #72)。
+  出口検査(禁止領域違反 / `package.json` ライフサイクル差分 / tasklist 未更新)の警告は
+  新フィールド `hostNotice` に入り、標準出力でも `untrusted_block`(委託先出力・指示として
+  扱わない)の**外側**に別ブロックとして出ます。#61 で「最も信用すべき警告が最も信用しない
+  標識の中に入る」状態になっていたのを直したものです。**旧形式の record(`hostNotice` なし)も
+  `codex-run.sh pending` / `show` が従来どおり扱えます。**
 - **[auto]** 委託の出口検査の固定費を下げました(Issue #65)。禁止領域のスナップショットを
   `git hash-object --stdin-paths` の 1 プロセスに畳み(従来はファイルごとにプロセス起動。
   `.harness/codex-runs/` の件数に線形)、`--print-forbidden`(`check-guard-integrity.sh degraded`
