@@ -27,6 +27,7 @@
 - **[auto]** `codex-delegation-plan.md` §2.3 の「Claude 復帰時の手順」は `.claude/rules/mode/degraded.md`「復帰時の検収」を単一ソースとする記述に差し替えました。手順のリストを 2 箇所に置くと乖離する(#42 / #58 / #59 / #60 で実際に発生した)ため、§2.3 側は設計意図のみを残します
 - **[auto]** 委託先(Codex)の summary をナンス付きの標識ブロックで囲む共有関数(`untrusted_sanitize` / `untrusted_oneline` / `untrusted_block`)を `lib-record.sh` に追加し、司令塔が委託先由来のテキストを読む 5 経路(`delegate-codex.sh` の SUMMARY 確定・エラー/判断待ち/失敗/完了の出力、`codex-run.sh` の `pending` / `show`)すべてに通しました(Issue #61)。ナンスは summary 確定後に生成するため、summary 側から終端行を偽造して司令塔への指示に見せかける経路が閉じます
 - **[auto]** 失敗した委託のレート上限判定で、構造化識別子(`rate_limit_reached` 等)を**トップレベルのエラーイベント行(`{"type":"error"}` / `{"type":"turn.failed"}`)だけ**に当てるようにしました(Issue #62)。従来はログ全文に当てていたため、**これらの識別子を本文に含むファイル(`delegate-codex.sh` 自身や計画書)を読んだ委託がタスク起因で失敗すると `exit 4`(レート上限 = 待て)に誤分類され**、`exit 2` の原因分析に入れませんでした。取りこぼした場合は `exit 2` + run record の生エラーに落ちる安全側の失敗になります
+- **[auto]** 委託禁止領域の単一ソース(`delegate-codex.sh` の `FORBIDDEN_PATHS` + `AGENTS.md` §4)と `CLAUDE.md`「Codex への委託禁止領域(パス)」節のずれを検出する `check-forbidden-paths-doc.sh` を追加し、CI の `harness-integrity` ジョブから警告(`::warning::`)として呼ぶようにしました(Issue #64)。`CLAUDE.md` はプロジェクト所有ファイルなのでジョブは赤にしません
 
 ## 2026-09-01
 
