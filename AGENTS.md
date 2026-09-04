@@ -83,7 +83,7 @@ touch .git/.probe 2>/dev/null && rm -f .git/.probe && echo GIT_WRITABLE || echo 
 
 ## 2. 検証コマンド
 
-<!-- verify-probe: python3 --version -->
+<!-- verify-probe: npx --no-install eslint --version -->
 
 > 上の行は `delegate-codex.sh` が読む機械可読マーカーです。**依存が入っているかどうかだけ**を確かめる速いコマンドを 1 つ書いてください。`--no-install` を外さないこと(ネットワーク無効の sandbox では取得を試みた時点で失敗します)。
 >
