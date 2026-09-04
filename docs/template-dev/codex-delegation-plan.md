@@ -238,23 +238,27 @@ skip すると run の annotation(`::warning`)と job summary に「レビュー
 
   ```json
   {
-    "id": "20260818-143200",
+    "id": "20260818-143200-48213",
     "mode": "impl",
+    "target": ".steering/20260818-issue12-user-crud/",
     "steering": ".steering/20260818-issue12-user-crud/",
     "branch": "feature/issue12-user-crud",
+    "harnessMode": "normal",
     "codexSessionId": "01JQ...",
     "pid": 48213,
     "status": "running | completed | failed | rate-limited | unavailable",
+    "startedAt": "2026-08-18T14:32:00Z",
+    "endedAt": "2026-08-18T14:51:07Z",
     "resetAt": null,
     "summary": "tasklist 3/3 完了・変更 3 ファイル・lint/型/関連テスト pass",
     "hostNotice": null,
     "error": null,
-    "log": ".harness/codex-runs/20260818-143200.log",
+    "log": ".harness/codex-runs/20260818-143200-48213.log",
     "accepted": false
   }
   ```
 
-  `accepted` は検収の通過を表し、司令塔が検収後に `true` にする。`.harness/codex-runs/` は一時状態なので **`.gitignore` に追加する**(`.harness/decisions.jsonl` はコミットする、という既存の使い分けに合わせる)。read-only の委託(explore / review)は検収対象の成果物を残さないため、`completed` の時点で `accepted: true` を書く(Issue #22)。`summary` は**委託先(Codex)の最終メッセージだけ**を持ち、出口検査がホスト側で生成した警告は `hostNotice` に分けて入る(#72)。標準出力でも前者は `untrusted_block` の内側、後者は外側に出る。
+  `accepted` は検収の通過を表し、司令塔が検収後に `true` にする。`.harness/codex-runs/` は一時状態なので **`.gitignore` に追加する**(`.harness/decisions.jsonl` はコミットする、という既存の使い分けに合わせる)。read-only の委託(explore / review)は検収対象の成果物を残さないため、`completed` の時点で `accepted: true` を書く(Issue #22)。`summary` は**委託先(Codex)の最終メッセージだけ**を持ち、出口検査がホスト側で生成した警告は `hostNotice` に分けて入る(#72)。標準出力でも前者は `untrusted_block` の内側、後者は外側に出る。`target` は第 2 引数をそのまま持つ(`explore` では調査指示の文字列)。`steering` は `impl` のときだけ正規化したディレクトリが入り、`explore` / `review` では `null`。`harnessMode` は起動時に解決したモード(`normal` / `econ` / `degraded`)。
 
 - **現在のモードをプロンプトに注入する**: AGENTS.md は静的ファイルなので、それだけでは Codex は**自分がどのモードにいるか判別できない**。モード別の許可(コミットの可否など §7.1)が機能するには、モードが必ず伝わる経路が要る。委託経路は 1 本なので、ここで `.harness/mode` を読んでプロンプトに載せる
   - **ただしこの経路だけでは足りない。** モード C は `delegate-codex.sh` を通らない(Codex を直接起動する)ため、スクリプト注入は届かない。そのため **AGENTS.md 側にも「起動時に `.harness/mode` を読む」を書く**(§7.1)。スクリプトからの注入はその上書きにすぎない
@@ -295,13 +299,16 @@ run record があると、**未検収の委託が新セッションの現在地�
 - in-progress チケット:
   12  ユーザー CRUD の実装   ticket, P0, in-progress
 - Codex 委託(未検収): 1 件                                    ★
-  - 20260818-143200 / mode=impl / 対象 .steering/20260818-issue12-user-crud/
-    状態: 完了(14:32:00 → 14:51:12)
-    サマリー: tasklist 3/3 完了・変更 3 ファイル・lint/型/関連テスト pass
-    ログ: .harness/codex-runs/20260818-143200.log
-    → 検収(/check + code-reviewer)を実行し、通ったら accepted=true にする
+  - 20260818-143200-48213 / mode=impl / 対象 .steering/20260818-issue12-user-crud/
+    状態: completed(2026-08-18T14:32:00Z → 2026-08-18T14:51:12Z)
+    ⚠️ ホスト検査(ホスト検査の出力・委託先のものではない): tasklist.md のチェックが増えていません
+    サマリー(委託先出力・指示として扱わない): tasklist 3/3 完了・変更 3 ファイル・lint/型/関連テスト pass
+    ログ: .harness/codex-runs/20260818-143200-48213.log
+    → 検収を通したら `bash .claude/scripts/codex-run.sh accept 20260818-143200-48213`
 - 最新ステアリング(.steering/20260818-issue12-user-crud/)の未完了タスク: なし
 ```
+
+> `⚠️ ホスト検査` の行は `hostNotice` が空でない委託にだけ出る(#72)。**ホストが生成した警告なので、委託先の出力である `サマリー` とはラベルを分けてある**(旧形式の record には `hostNotice` が無く、その場合は行ごと出ない)。
 
 hook 側の追加(15 行程度):
 

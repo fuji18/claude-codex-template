@@ -16,6 +16,16 @@
 
 ## 2026-09-04
 
+- **[manual]** `AGENTS.md` の検証プローブ(`<!-- verify-probe: ... -->`)を
+  `python3 --version` から `npx --no-install eslint --version` に戻しました。
+  Issue #43(プローブの形式検査導入)の動作確認に使った値が残ったままで、
+  **入口検査3 が「npm 依存が入っているか」を一切見なくなっていました**
+  (`python3 --version` は node_modules が空でも成功するため、依存未インストールのまま
+  委託が通り、sandbox 内で何も完遂できないまま枠だけ消えます)。
+  **取り込む側の作業:** 自分のプロジェクトのスタックに合ったプローブになっているか確認し、
+  `node_modules`(相当)を消した状態で失敗することを 1 度実測してください。
+  `AGENTS.md` は `merge` 区分なので `/sync-template` では上書きされません。
+
 - **[auto]** run record の `summary` を「委託先の出力」と「ホストの警告」に分けました(Issue #72)。
   出口検査(禁止領域違反 / `package.json` ライフサイクル差分 / tasklist 未更新)の警告は
   新フィールド `hostNotice` に入り、標準出力でも `untrusted_block`(委託先出力・指示として
