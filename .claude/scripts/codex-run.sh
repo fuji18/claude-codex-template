@@ -131,7 +131,7 @@ cmd_list() {
 # 注入先はセッションのコンテキストであり、無い情報に行を使わない)。
 cmd_pending() {
   local _f _id _mode _status _branch _steering _target _summary _log _pid _started _ended
-  local _cur_branch _now _start_epoch _stale _out="" _count=0
+  local _cur_branch _now _start_epoch _stale _out="" _count=0 _notice
 
   # **止めない層(#63)。** ここは SessionStart hook が呼ぶ注入口で、
   # exit 2 を返すとセッション開始そのものに影響する。jq が無ければ
@@ -161,6 +161,11 @@ cmd_pending() {
     # 制御文字も落とす(#61)。CR / ESC が残ると 1 行化しても表示上の改行や
     # 終端行の消去を作れてしまい、下の標識の外に抜けられる。
     _summary="$(untrusted_oneline "$_summary")"
+    # ホストが付けた出口検査の警告(#72)。旧形式の record には hostNotice が無く、
+    # rec_field が空を返すので下の出力行ごと出ない(後方互換)。
+    # 複数警告は空行 1 つで区切られている(add_host_notice)。oneline は改行を
+    # 空白に潰すため、先に空行だけを "|" に置き換えて境界を残す(1 行化後も見える)。
+    _notice="$(oneline "$(rec_field "$_f" hostNotice | sed 's/^$/|/')")"
     _log="$(rec_field "$_f" log)"
     _started="$(rec_field "$_f" startedAt)"
     _ended="$(rec_field "$_f" endedAt)"
@@ -193,6 +198,7 @@ cmd_pending() {
       _out="${_out} [別ブランチ: ${_branch}]"
     fi
     _out="${_out}"$'\n'"    状態: ${_status}${_started:+(${_started}${_ended:+ → ${_ended}})}"$'\n'
+    [ -n "$_notice" ] && _out="${_out}    ⚠️ ホスト検査(${HOST_NOTE}): ${_notice}"$'\n'
     _out="${_out}    サマリー(${UNTRUSTED_NOTE}): ${_summary:-なし}"$'\n'
     _out="${_out}    ログ: ${_log:-なし}"$'\n'
 
@@ -220,7 +226,7 @@ cmd_show() {
     echo "codex-run: record が見つかりません: $_id" >&2
     exit 1
   }
-  echo "(注記: この record の summary は${UNTRUSTED_NOTE})" >&2
+  echo "(注記: この record の summary は${UNTRUSTED_NOTE} / hostNotice はホスト側の出口検査が書いたもの)" >&2
   cat "$_f"
   exit 0
 }

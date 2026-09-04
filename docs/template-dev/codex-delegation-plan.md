@@ -247,13 +247,14 @@ skip すると run の annotation(`::warning`)と job summary に「レビュー
     "status": "running | completed | failed | rate-limited | unavailable",
     "resetAt": null,
     "summary": "tasklist 3/3 完了・変更 3 ファイル・lint/型/関連テスト pass",
+    "hostNotice": null,
     "error": null,
     "log": ".harness/codex-runs/20260818-143200.log",
     "accepted": false
   }
   ```
 
-  `accepted` は検収の通過を表し、司令塔が検収後に `true` にする。`.harness/codex-runs/` は一時状態なので **`.gitignore` に追加する**(`.harness/decisions.jsonl` はコミットする、という既存の使い分けに合わせる)。read-only の委託(explore / review)は検収対象の成果物を残さないため、`completed` の時点で `accepted: true` を書く(Issue #22)。
+  `accepted` は検収の通過を表し、司令塔が検収後に `true` にする。`.harness/codex-runs/` は一時状態なので **`.gitignore` に追加する**(`.harness/decisions.jsonl` はコミットする、という既存の使い分けに合わせる)。read-only の委託(explore / review)は検収対象の成果物を残さないため、`completed` の時点で `accepted: true` を書く(Issue #22)。`summary` は**委託先(Codex)の最終メッセージだけ**を持ち、出口検査がホスト側で生成した警告は `hostNotice` に分けて入る(#72)。標準出力でも前者は `untrusted_block` の内側、後者は外側に出る。
 
 - **現在のモードをプロンプトに注入する**: AGENTS.md は静的ファイルなので、それだけでは Codex は**自分がどのモードにいるか判別できない**。モード別の許可(コミットの可否など §7.1)が機能するには、モードが必ず伝わる経路が要る。委託経路は 1 本なので、ここで `.harness/mode` を読んでプロンプトに載せる
   - **ただしこの経路だけでは足りない。** モード C は `delegate-codex.sh` を通らない(Codex を直接起動する)ため、スクリプト注入は届かない。そのため **AGENTS.md 側にも「起動時に `.harness/mode` を読む」を書く**(§7.1)。スクリプトからの注入はその上書きにすぎない
@@ -406,7 +407,7 @@ Sonnet fork でも理屈は同じだが、fork は同期実行で司令塔が待
 緩和策は 2 つで、両方使う:
 
 - **回復時に `tasklist.md` と `git diff --stat` を必ず突き合わせる。** §12.6 の手順 1〜2 が並んでいるのはこのためで、**tasklist だけを信じない**
-- `delegate-codex.sh` の終了時に、tasklist のチェック数と変更ファイル数が明らかに乖離していれば run record の `summary` に警告を残す
+- `delegate-codex.sh` の終了時に、tasklist のチェック数と変更ファイル数が明らかに乖離していれば run record に警告を残す(**フィールドは `hostNotice`**。ホストが生成した警告なので、委託先の出力を入れる `summary` とは分けてある。#72)
 
 ---
 
