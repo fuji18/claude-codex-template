@@ -53,7 +53,15 @@ set -uo pipefail
 # ここはフェイルオープンにする。機密送信やガードレールと違い、これは堅牢化の層であって
 # 安全検査ではない。コピーに失敗しただけで委託を丸ごと止めるのは、通したコストより
 # 止めたコストの方が大きい(入口検査群とは非対称の判断)。
-if [ "${CODEX_DELEGATE_NO_SELF_COPY:-}" = "1" ]; then
+if [ "${1:-}" = "--print-forbidden" ]; then
+  # 短絡(#65): --print-forbidden は配列を出力して exit 0 するだけの read-only 経路で、
+  # codex exec を起動しない = 実行中に自身が書き換わる窓が無い。自己コピー + mktemp -d の
+  # 固定費を掛ける理由がないので飛ばす。CODEX_DELEGATE_NO_SELF_COPY の警告より前に
+  # 置いているのは、ここが「他スクリプトが読む一覧出力口」であり、無関係な警告で
+  # stderr を汚さないため(保護を切っているわけではないので、記録すべき事実も無い)。
+  # **短絡するのはコピーだけ。** 以降の引数検査・配列定義・抽出は共通経路をそのまま通る。
+  :
+elif [ "${CODEX_DELEGATE_NO_SELF_COPY:-}" = "1" ]; then
   # 保護を切ったことは必ずログに残す。コピー失敗時は警告が出るのに、明示的な無効化だけが
   # 黙って通るのは非対称で危うい(シェルプロファイルや CI の環境変数に残っていても気づけない)。
   echo "delegate-codex: 警告 — CODEX_DELEGATE_NO_SELF_COPY=1 のため自己コピー保護を無効にしています(再現テスト以外では設定しないでください)。" >&2
@@ -966,9 +974,11 @@ RUN_ID="$(date +%Y%m%d-%H%M%S)-$$"
 mkdir -p "$RUN_DIR" || exit "$EX_FAIL"
 
 # run record は自動削除しない(§12.8)。溜まるほど出口検査の forbidden_snapshot() が
-# .harness/codex-runs/ 配下を前後 2 回ハッシュするコストが線形に増えるため、閾値を
-# 超えたら警告だけ出す。削除の判断は人間が行う(未検収の record は検収キューであり、
-# 勝手に消えると検収漏れが静かに発生する)。
+# 前後 2 回ハッシュするファイル数が増えるため、閾値を超えたら警告だけ出す。
+# プロセス起動は git hash-object --stdin-paths の 1 本に畳んであるが(#65)、
+# ハッシュ計算そのものはファイル数に比例するので、この閾値の意味は変わらない。
+# 削除の判断は人間が行う(未検収の record は検収キューであり、勝手に消えると
+# 検収漏れが静かに発生する)。
 RUN_WARN_THRESHOLD=50
 REC_COUNT="$(find "$RUN_DIR" -maxdepth 1 -type f -name '*.json' 2>/dev/null | wc -l | tr -d ' ')"
 if [ "${REC_COUNT:-0}" -gt "$RUN_WARN_THRESHOLD" ]; then
@@ -1143,15 +1153,52 @@ forbidden_files() {
 #     その状態で改ざんが残っていると、次回委託の BEFORE スナップショットが改ざん後の内容を
 #     基準に取るため以後検出できない。run record が status=running のまま残ることが唯一の
 #     手掛かりになる(回復手順は codex-delegation-plan.md §12.6)
-#   - .harness/codex-runs/ が溜まるほど前後 2 回のハッシュ計算コストが線形に増える。委託 1 本の
-#     所要時間に対しては十分小さいため検査対象は絞り込まず、元を断つ側(手動の
-#     `codex-run.sh prune`)で抑える。自動削除はしない(Issue #29 / §12.8)
+#   - .harness/codex-runs/ が溜まるほど対象ファイル数は増えるが、ハッシュ計算は
+#     git hash-object --stdin-paths の 1 プロセスに畳んである(#65)。元を断つ側
+#     (手動の `codex-run.sh prune`)は従来どおり。自動削除はしない(Issue #29 / §12.8)
 forbidden_snapshot() {
-  local _f _h
+  local _f _h _i _batch_ok
+  local -a _files=() _hashes=()
+
   # sort -u なのは重複を畳むため(汎用項目とマーカー内の項目は重なる。ディレクトリ指定と
   # その配下ファイルの二重指定も起こりうる)。重複行が残ると、出口検査の違反抽出
   # (sort | uniq -u)が「2 回現れる行」として違反パスを取りこぼす。
-  forbidden_files | LC_ALL=C sort -u | while IFS= read -r _f; do
+  while IFS= read -r _f; do
+    _files+=("$_f")
+  done < <(forbidden_files | LC_ALL=C sort -u)
+  [ "${#_files[@]}" -gt 0 ] || return 0
+
+  # バッチ化(#65): git hash-object --stdin-paths なら全ファイルを 1 プロセスで畳める。
+  # 委託の前後 2 回走り、.harness/codex-runs/ の件数に線形だったプロセス起動が消える。
+  #
+  # **フォールバックを必ず残す。** --stdin-paths は 1 ファイルでも失敗すると
+  # そこで die して残りを処理しない = 現行の「1 ファイルずつ握りつぶして UNREADABLE」
+  # と挙動が変わる。挙動が変わると「改ざんが差分ゼロで通る」側に倒れうるので、
+  # **出力行数が入力行数と一致したときだけバッチ結果を採用**し、それ以外は
+  # 従来どおり 1 ファイルずつ回す。速い経路は最適化、正しさは従来経路が持つ。
+  #
+  # 先頭が " のパスをバッチに乗せないのは、git hash-object --stdin-paths が
+  # `"` で始まる行を C クォート文字列として unquote するため(別のパスをハッシュしうる)。
+  # 該当があればバッチ自体を諦めて 1 ファイルずつに落とす。
+  _batch_ok=1
+  for _f in "${_files[@]}"; do
+    case "$_f" in '"'*) _batch_ok=0; break ;; esac
+  done
+
+  if [ "$_batch_ok" = 1 ]; then
+    while IFS= read -r _h; do
+      _hashes+=("$_h")
+    done < <(printf '%s\n' "${_files[@]}" | git hash-object --stdin-paths 2>/dev/null)
+    if [ "${#_hashes[@]}" -eq "${#_files[@]}" ]; then
+      for _i in "${!_files[@]}"; do
+        printf '%s %s\n' "${_hashes[$_i]}" "${_files[$_i]}"
+      done
+      return 0
+    fi
+  fi
+
+  # フォールバック: 1 ファイルずつ。失敗は握りつぶして UNREADABLE(前後で同じ扱いになる)。
+  for _f in "${_files[@]}"; do
     _h="$(git hash-object -- "$_f" 2>/dev/null)"
     printf '%s %s\n' "${_h:-UNREADABLE}" "$_f"
   done
