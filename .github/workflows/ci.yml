@@ -128,6 +128,32 @@ jobs:
             exit 1
           fi
 
+      # 委託禁止領域の単一ソース(delegate-codex.sh の FORBIDDEN_PATHS + AGENTS.md §4)と
+      # CLAUDE.md の説明節のずれを検出する。CLAUDE.md はプロジェクト所有ファイルで説明文の
+      # 自由度があるため、**警告に留めてジョブは赤にしない**(#64)。continue-on-error を
+      # 使わないのは、ステップ自体が失敗扱いになって UI に赤が出るため。
+      #
+      # 末尾の exit 0 は飾りではない。Actions の既定シェルは bash -e で、
+      # while ループは最後に実行したコマンドの終了コードを返す。出力が空のまま
+      # 検査が非ゼロで終わると(スクリプトの欠落・実行時エラー)ループ本体が
+      # 1 度も走らず read の失敗が返り、**メッセージ 1 行も無いままジョブが赤くなる**
+      # (司令塔が bash -e で単体再現して確認)。異常終了そのものは、それと分かる
+      # 警告 1 行に変換してから握り潰す。
+      - name: Check forbidden-paths documentation drift
+        run: |
+          SCRIPT=.claude/scripts/check-forbidden-paths-doc.sh
+          set +e
+          DRIFT="$(bash "$SCRIPT")"
+          RC=$?
+          set -e
+          if [ "$RC" -ne 0 ] && [ -z "$DRIFT" ]; then
+            echo "::warning::$SCRIPT が出力なしで異常終了しました(rc=$RC。スクリプトの欠落か実行時エラー)。委託禁止領域の記述ずれ検査が働いていません"
+          fi
+          printf '%s\n' "$DRIFT" | while IFS= read -r line; do
+            if [ -n "$line" ]; then echo "::warning::$line"; fi
+          done
+          exit 0
+
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 10
