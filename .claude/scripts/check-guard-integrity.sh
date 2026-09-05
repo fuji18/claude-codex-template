@@ -190,8 +190,12 @@ if [ "$USES_HUSKY" = yes ]; then
   if [ -n "$WRAPPER_DIR" ] && [ "$WRAPPER_DIR" != ".husky" ] && [ -d "$WRAPPER_DIR" ]; then
     # 呼び出しとみなすのは「コメントでない行」からの source(`.` または `source`)で、
     # 対象が /h で終わるもの。単なる文字列一致だと、source 行をコメントアウトしても
-    # 通ってしまう(検査 4 の INVOKE_RE と同じ考え方)。
-    WRAPPER_RE='^[^#]*(source|\.)[[:space:]]+[^#]*/h"?[[:space:]]*$'
+    # 通ってしまう(検査 4 の INVOKE_RE と同じ考え方)。ただし検査 4 の INVOKE_RE に
+    # 行末アンカーが無いのは「どこかで呼んでいれば良い」検査だから。こちらは「source の
+    # 対象が h **である**こと」を見る検査なので行末アンカー `$` は外さない。外すと
+    # `. "$(dirname "$0")/helper"` の /h にも一致して偽陰性(壊れているのに緑)に倒れる
+    # (危険な向きが逆)。`(#.*)?` は行末インラインコメントを許容するために足す。
+    WRAPPER_RE='^[^#]*(source|\.)[[:space:]]+[^#]*/h"?[[:space:]]*(#.*)?$'
     for _wh in pre-commit prepare-commit-msg; do
       case "$_wh" in
         pre-commit) covers="git commit / git commit --amend" ;;

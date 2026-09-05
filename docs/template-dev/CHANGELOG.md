@@ -24,7 +24,9 @@
   見る検査を追加しています。
   **取り込む側の作業:** `AGENTS.md` §4(`<!-- kickoff:delegation-forbidden-paths -->`)を
   手動で統合しているプロジェクトは、`.husky/pre-commit` / `.husky/prepare-commit-msg` の
-  個別記述が残っていないか確認し、`.husky/` の 1 行に置き換えてください。
+  個別記述が残っていないか確認し、`.husky/` の 1 行に置き換えてください。あわせて
+  `.claude/settings.local.json` の行の追記漏れにも注意してください。`.husky/` の行だけ
+  直して見落とす経路があります。
 
 ## 2026-09-04
 

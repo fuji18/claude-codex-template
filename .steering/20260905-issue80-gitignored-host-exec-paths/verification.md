@@ -30,7 +30,17 @@ AGENTS.md 由来の抽出からも消えている。
 説明文の意味を変えずに「配下のフック」という表現に変更し、リテラルな
 `.husky/pre-commit` のバックティック引用を避けることで解消した(design 自身の
 V1 の受け入れ条件と、design 2-3(b) の例示的な文言が両立しない状態だったため、
-文言側を調整した。委託禁止領域の実体・挙動は変えていない)。
+文言側を調整した)。
+
+**訂正(T17)**: 上記直後に「委託禁止領域の実体・挙動は変えていない」と記載したが、
+これは不正確だった。マーカー内のバックティック抽出は「コメントでない行から `h` を
+source しているか」のような散文中の引用も無検証で拾うため、`settings.local.json`
+(単体語)や `.husky/_/` がこの時点で `PROJECT_FORBIDDEN_PATHS` の生の抽出結果に
+実際に混入していた(V1b 追加前は気づけなかった)。実害が無かったのは
+`.husky/_/` が `.husky/` の部分集合であることと、裸の `settings.local.json` が
+`[ -e ]` の実在検査で無視されることに支えられていたためで、**偶然機能していた**に近い。
+T13 でマーカー内の表記規約(禁止領域そのものだけをバックティックで囲む)を明文化し、
+該当箇所を地の文に修正して抽出結果を意図した集合に一致させた(T16 の V1b で確認)。
 
 ## V2: ラッパが列挙対象に入ったか
 
@@ -122,6 +132,95 @@ RESULT_EXIT=2
 `.claude/settings.local.json` の禁止領域化の両方が、出口検査で `exit=2` として
 機能することを確認)。この修正は検証用スタブ(自作の再現スクリプト)の作り直しであり、
 `delegate-codex.sh` 本体・`check-guard-integrity.sh` 本体には一切手を入れていない。
+
+## 検収の指摘反映(code-reviewer 1 巡目: T13〜T18)
+
+### T13: AGENTS.md §4 マーカー内の意図しないバックティック断片を除去
+
+- 150 行目の `` `settings.local.json` ``(単体語)を地の文の `settings.local.json` に変更。
+- 153 行目の 2 箇所の `` `.husky/_/` `` を地の文の `.husky/_/` に変更し、行末に
+  「この節のバックティックは禁止領域そのもののパスにだけ使い、説明のための例示は
+  地の文で書きます」という表記規約の 1 文を追記した。
+- 行頭の項目名 `` `.claude/settings.local.json` `` / `` `.husky/` `` は変更していない。
+
+### T14: `WRAPPER_RE` の行末インラインコメント許容
+
+`WRAPPER_RE` を `'^[^#]*(source|\.)[[:space:]]+[^#]*/h"?[[:space:]]*(#.*)?$'` に変更
+(`(#.*)?` を追加。行末アンカー `$` は維持)。あわせて、アンカーを外さない理由
+(検査 4 の INVOKE_RE との違い)をコメントに追記した。
+
+```
+$ cp .husky/_/pre-commit /tmp/_pc.bak2
+$ printf '#!/usr/bin/env sh\n. "$(dirname "$0")/h" # husky dispatcher\n' > .husky/_/pre-commit
+$ bash .claude/scripts/check-guard-integrity.sh; echo "exit=$?"
+exit=0
+$ cp /tmp/_pc.bak2 .husky/_/pre-commit && rm /tmp/_pc.bak2
+$ bash .claude/scripts/check-guard-integrity.sh; echo "exit=$?"
+exit=0
+```
+
+→ **PASS**。行末にインラインコメントが付いたラッパは偽陽性を出さなくなった。
+無効化されたラッパ(exit 0 の 2 行)を検出する挙動(V3 と同じ)は変わらず維持されている
+(下記 T18 再実行で確認)。
+
+### T15: CHANGELOG.md の追記漏れ注意を追記
+
+`docs/template-dev/CHANGELOG.md` の 2026-09-05 エントリの「取り込む側の作業」に、
+`.claude/settings.local.json` 行の追記漏れに注意する 1 文を追加した。
+
+### T16: V1 の穴を塞ぐ完全一致検証(V1b)
+
+```
+$ bash .claude/scripts/delegate-codex.sh --print-forbidden | LC_ALL=C sort -u | diff - /tmp/expected-forbidden.txt && echo "V1b PASS"
+V1b PASS
+```
+
+→ **PASS**。期待した 17 エントリとの完全一致を確認し、T13 で除去した意図しない断片
+(単体語 `settings.local.json` / `.husky/_/`)が抽出結果に残っていないことを確認した。
+
+### T17: V1 の記述訂正
+
+V1 セクションに **訂正(T17)** の段落を追記し、「委託禁止領域の実体・挙動は変えていない」
+という当初の記述を訂正した(詳細は当該段落を参照。要点: マーカー内の生の抽出結果は
+実際に変化しており、T13 の修正はその変化を意図した集合に一致させるものだった)。
+
+### T18: 再検証(V3 再実行 + 静的検査)
+
+```
+$ bash -n .claude/scripts/delegate-codex.sh
+delegate-codex.sh OK
+$ bash -n .claude/scripts/check-guard-integrity.sh
+check-guard-integrity.sh OK
+$ bash .claude/scripts/check-forbidden-paths-doc.sh; echo "exit=$?"
+exit=0
+$ npx prettier --check CLAUDE.md AGENTS.md docs/template-dev/CHANGELOG.md
+All matched files use Prettier code style!
+```
+
+V3(無音化検出 → 復元)を pre-commit / prepare-commit-msg の両方で再実行:
+
+```
+$ bash .claude/scripts/check-guard-integrity.sh; echo "baseline exit=$?"
+baseline exit=0
+$ printf '#!/usr/bin/env sh\nexit 0\n' > .husky/_/pre-commit
+$ bash .claude/scripts/check-guard-integrity.sh; echo "exit=$?"
+(指摘 1 行) exit=1
+$ cp /tmp/_pc.bak .husky/_/pre-commit && rm /tmp/_pc.bak
+$ bash .claude/scripts/check-guard-integrity.sh; echo "exit=$?"
+exit=0
+$ printf '#!/usr/bin/env sh\nexit 0\n' > .husky/_/prepare-commit-msg
+$ bash .claude/scripts/check-guard-integrity.sh; echo "exit=$?"
+(指摘 1 行) exit=1
+$ cp /tmp/_pcm.bak .husky/_/prepare-commit-msg && rm /tmp/_pcm.bak
+$ bash .claude/scripts/check-guard-integrity.sh; echo "exit=$?"
+exit=0
+```
+
+`git status --porcelain --ignored=matching -- .husky/_` で `.husky/_` 配下が
+すべて `!!`(gitignore 済み・追跡外)のままであることを確認し、復元漏れが無いことを確認した。
+
+→ **PASS**(全項目)。T13〜T18 の変更後も検査 5 の検出・復元後の無音化がいずれも
+design の期待どおりに機能している。
 
 ## 補足: 検証中に混入した無関係な差分
 
