@@ -123,3 +123,64 @@ impl を誤って `failed` にする経路は再現テストで消えたこと�
 `accepted` の書き換え・`status` の詐称・record の削除は引き続き違反として検出される(V5)。
 `codex-run.sh` の書き込み系は impl 実行中のみ拒否され、`CODEX_RUN_FORCE=1` で強行可能、
 読み取り系(`pending`)は影響を受けない(V6)。
+
+## 検収の指摘反映(code-reviewer 1 巡目 Minor 4件)の再検証(T24〜T29)
+
+T20〜T23(`cmd_prune --dry-run` の実行中ロック除外 / `record_state_snapshot()` の識別子から
+`.json` を落とす / `delegation-policy.md` の句点 / `RECSTATE_BEFORE` の窓についてのコメント)
+を反映した後、design §5 を回し直した。
+
+### T24: V1 相当(構文・整形)
+
+```bash
+bash -n .claude/scripts/delegate-codex.sh && bash -n .claude/scripts/codex-run.sh && echo "SYNTAX PASS"
+npx prettier --check .steering/20260905-issue81-exit-check-false-positive/*.md .claude/rules/lead/delegation-policy.md docs/template-dev/CHANGELOG.md
+```
+
+結果: `SYNTAX PASS`、`All matched files use Prettier code style!`
+
+### T25: `cmd_prune --dry-run` は実行中ロックの対象外であること
+
+自分の pid を使った `status=running / mode=impl` の偽装 record を置いて確認した:
+
+```bash
+bash .claude/scripts/codex-run.sh prune --dry-run   # → exit=0(通る)
+bash .claude/scripts/codex-run.sh prune             # → exit=1(拒否)
+bash .claude/scripts/codex-run.sh accept t25-test   # → exit=1(拒否)
+bash .claude/scripts/codex-run.sh set-status t25-test completed  # → exit=1(拒否)
+```
+
+結果: `prune --dry-run` のみ通り(`残す: t25-test (直近 20 本)` / `削除対象の record はありません`
+/ `exit=0`)、フラグなしの `prune` と `accept` / `set-status` は同じ拒否メッセージで `exit=1`。
+後始末(`rm -f .harness/codex-runs/t25-test.json`)実施済み、`git status --porcelain` で
+`.harness/codex-runs/` 配下に変更なしを確認。
+
+### T26: `record_state_snapshot()` の識別子が `.json` なしになること
+
+`record_state_snapshot()` の本体を切り出して単体実行し、出力の 1 列目が
+`20260905-999999-12345`(`.json` なし)になることを確認した。加えて、実際の
+`.harness/codex-runs/` に偽装 record(`t26-test.json`)を置いて
+`bash .claude/scripts/codex-run.sh show t26-test`(`.json` を付けない ID)を実行し、
+`exit=0` で record が引けることを確認した。後始末実施済み。
+
+### T27: V5 の再実行(識別子の形を変えた後)
+
+比較ロジック(BEFORE/AFTER の突き合わせ)をそのままシェル関数として再現し、
+`.json` なしの識別子で 3 ケースを実行した:
+
+| ケース | BEFORE | AFTER | 結果 |
+| --- | --- | --- | --- |
+| accepted の書き換え | `a completed false` | `a completed true` | `VIOLATIONS: a(accepted: false → true)` |
+| status 詐称 | `a failed false` | `a completed false` | `VIOLATIONS: a(status: failed → completed)` |
+| record の削除 | `a completed false` | (行なし) | `VIOLATIONS: a(削除された)` |
+| 並行 explore 正常終了(比較用) | `a running false` / `b completed true` | `a completed false` / `b completed true` / `c running false` | `VIOLATIONS: []`(違反なし) |
+
+3 ケースとも期待どおり違反として拾われ、並行 run の正常な状態遷移は引き続き違反にならないことを確認した。
+
+### T28: ガードレールの健全性
+
+```bash
+bash .claude/scripts/check-guard-integrity.sh; echo "exit=$?"
+```
+
+結果: 無出力・`exit=0`。

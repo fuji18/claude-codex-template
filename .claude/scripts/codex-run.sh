@@ -378,7 +378,6 @@ cmd_prune() {
   # 止める層(#63): record を削除する。status / accepted が読めないまま
   # 走らせると、未検収の record を「消してよい」と誤判定しうる。
   require_jq "codex-run" 2
-  require_no_running_impl
 
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -397,6 +396,10 @@ cmd_prune() {
     esac
     shift
   done
+
+  # --dry-run は何も書かないので止めない(#81)。位置がオプション解析より後なのは、
+  # --dry-run かどうかがここまで読まないと分からないため。
+  [ "$_dry" -eq 1 ] || require_no_running_impl
 
   case "$_keep" in
     '' | *[!0-9]*)

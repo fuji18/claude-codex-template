@@ -1287,7 +1287,7 @@ forbidden_snapshot() {
 #     (impl 経路では入口検査0-2 が jq を保証している)
 #   - 割り込みで出口検査に到達しなかった場合は forbidden_snapshot() と同じ限界を持つ
 record_state_snapshot() {
-  local _f _line
+  local _f _base _line
   [ -d "$RUN_DIR" ] || return 0
   for _f in "$RUN_DIR"/*.json; do
     [ -f "$_f" ] || continue
@@ -1296,7 +1296,11 @@ record_state_snapshot() {
     # (rec_field の「null は空文字列」と違い、空行にすると読み戻しでフィールドがずれる)。
     _line="$(jq -r '[(.status // "MISSING"), (if .accepted == null then "MISSING" else (.accepted | tostring) end)] | join(" ")' "$_f" 2>/dev/null)"
     [ -n "$_line" ] || _line="UNREADABLE UNREADABLE"
-    printf '%s %s\n' "${_f##*/}" "$_line"
+    # 識別子は .json を落として codex-run.sh show <id> にそのまま渡せる形にする(#81)。
+    # find_record() は $RUN_DIR/$_id.json を組み立てるため、.json 付きだと外れる。
+    _base="${_f##*/}"
+    _base="${_base%.json}"
+    printf '%s %s\n' "$_base" "$_line"
   done | LC_ALL=C sort
 }
 
@@ -1346,6 +1350,10 @@ if [ "$MODE" = "impl" ]; then
   HEAD_BEFORE="$(git rev-parse HEAD 2>/dev/null || echo none)"
   DONE_BEFORE="$(count_done)"
   FORBIDDEN_BEFORE="$(forbidden_snapshot)"
+  # 既知の限界(#81): この時点では自分の $REC はまだ存在しない(write_record "running" は
+  # この後に走る)。そのため require_no_running_impl() のロックはまだ効かず、この窓で
+  # 人間が accept 等を叩くと出口検査が鳴る。窓の中では委託先がまだ起動しておらず敵対的な
+  # 書き換え経路にはならないため、実害は小さいとみて塞がない。
   RECSTATE_BEFORE="$(record_state_snapshot)"
   LIFECYCLE_BEFORE="$(lifecycle_snapshot)"
 fi
