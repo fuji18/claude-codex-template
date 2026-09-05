@@ -13,7 +13,7 @@
 #
 # 終了コード(delegate-codex.sh の契約とは別系統。取り違えないこと):
 #   0 成功
-#   1 対象が無い・値が不正
+#   1 対象が無い・値が不正・impl 委託の実行中(#81)
 #   2 使い方の誤り / jq 不在(pending を除く。#63)
 #
 # jq の扱い(#63): record の読み書きは jq 必須で sed フォールバックを持たない。
@@ -21,6 +21,9 @@
 #   - pending                            … jq が無ければ何も出さず exit 0(SessionStart
 #                                          注入。ここを止めるとセッションが開けない)
 #   - show                               … cat のみ。jq を要求しない
+#
+# 環境変数:
+#   CODEX_RUN_FORCE=1  impl 委託の実行中でも書き込み系(accept / set-status / prune)を強行する(#81)
 #
 # 参照: docs/template-dev/codex-delegation-plan.md §12.6
 set -uo pipefail
@@ -50,6 +53,9 @@ usage() {
                           --keep N               新しい順に N 本は残す(既定 20)
                           --include-unaccepted   未検収(accepted != true)も対象にする
                         実行中(status=running かつ pid 生存)は常に残す
+
+環境変数:
+  CODEX_RUN_FORCE=1     impl 委託の実行中でも書き込み系(accept / set-status / prune)を強行する(#81)
 USAGE
 }
 
@@ -231,6 +237,46 @@ cmd_show() {
   exit 0
 }
 
+# impl 委託が実行中なら書き込み系サブコマンドを拒否する(#81)。
+#
+# **セキュリティ層ではない。** 委託先はサンドボックス内から同じ書き換えができる
+# (それは delegate-codex.sh の出口検査が検出する)。ここで止める理由は信号の純度:
+# 出口検査は「BEFORE 時点にあった record の status / accepted が変わっていないか」を
+# 見るが、ファイルの内容からは「人間が叩いた accept」と「委託先の書き換え」を
+# 区別できない。人間側を実行中だけ止めることで、検査が鳴ったときに本物だと言える。
+#
+# 判定軸は delegate-codex.sh の入口検査5-5 と同じ(mode=impl / status=running / pid 生存)。
+# **ロジックは共有化しない** — スクリプトをまたぐ source を増やすより 20 行の重複のほうが
+# 安い(lib-*.sh への切り出しは #86 の範囲)。
+#
+# 逃げ道: CODEX_RUN_FORCE=1。強行した書き換えは実行中の impl の出口検査で検出され、
+# その委託は failed / exit 2 になる。
+#
+# 空振り条件: jq が無ければ何も判定せず通す(呼び出し元は require_jq を通しているので
+# 実際には到達しない)。pid が数字でない record と、プロセスが居ない running 残置 record は
+# 実行中とみなさない(5-5 と同じ扱い)。
+require_no_running_impl() {
+  local _f _pid _rid
+  [ "${CODEX_RUN_FORCE:-}" = "1" ] && return 0
+  [ -d "$RUN_DIR" ] || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+  for _f in "$RUN_DIR"/*.json; do
+    [ -f "$_f" ] || continue
+    [ "$(rec_field "$_f" mode)" = "impl" ] || continue
+    [ "$(rec_field "$_f" status)" = "running" ] || continue
+    _pid="$(rec_field "$_f" pid)"
+    case "$_pid" in
+      '' | *[!0-9]*) continue ;;
+    esac
+    kill -0 "$_pid" 2>/dev/null || continue
+    _rid="$(rec_field "$_f" id)"
+    echo "codex-run: impl 委託が実行中です(id=$_rid pid=$_pid)。実行中は record の書き換えを受け付けません。" >&2
+    echo "  委託の終了を待ってから再実行してください。実行中の record 書き換えは、その委託の出口検査で「検収状態が書き換えられた」として failed / exit 2 になります(#81)。" >&2
+    echo "  どうしても今書き換える場合は CODEX_RUN_FORCE=1 を付けてください(実行中の委託は失敗します)。" >&2
+    exit 1
+  done
+}
+
 # $1=file $2=key $3=raw-json-value
 #
 # **jq 必須**(呼び出し元が require_jq を通していること)。sed で書き換える経路は
@@ -262,6 +308,7 @@ cmd_accept() {
   local _id="${1:-}" _f
   # 止める層(#63): 検収状態を書き換える。
   require_jq "codex-run" 2
+  require_no_running_impl
   if [ -z "$_id" ]; then
     echo "codex-run: accept には id が必要です" >&2
     exit 2
@@ -284,6 +331,7 @@ cmd_set_status() {
 
   # 止める層(#63): 検収状態を書き換える。
   require_jq "codex-run" 2
+  require_no_running_impl
 
   if [ -z "$_id" ] || [ -z "$_new" ]; then
     echo "codex-run: set-status には id と status が必要です" >&2
@@ -330,6 +378,7 @@ cmd_prune() {
   # 止める層(#63): record を削除する。status / accepted が読めないまま
   # 走らせると、未検収の record を「消してよい」と誤判定しうる。
   require_jq "codex-run" 2
+  require_no_running_impl
 
   while [ $# -gt 0 ]; do
     case "$1" in

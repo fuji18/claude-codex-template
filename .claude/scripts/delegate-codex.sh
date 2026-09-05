@@ -271,6 +271,10 @@ done
 # 開始時にホストで走る)なので、settings.json と対で持つ。
 #
 # 末尾が / のものはディレクトリ配下すべてが対象。
+#
+# 配列末尾の .harness/codex-runs/ は列挙は残すが、出口検査の内容ハッシュ比較
+# (forbidden_snapshot() / forbidden_files())の対象からは外してある。検収状態
+# (record の accepted / status)は出口検査の record_state_snapshot() が別に見る(#81)。
 FORBIDDEN_PATHS=(
   ".claude/scripts/"
   ".claude/hooks/"
@@ -914,7 +918,8 @@ MSG
   #
   # 検査対象外: .harness/mode と .harness/codex-runs/ 配下。どちらも .gitignore 済みで、
   # git diff にも git ls-files --others --exclude-standard にも出ない(git 追跡外)。
-  # ここでは見られないため、出口検査の内容ハッシュ比較だけが見る層として残る。
+  # ここでは見られないため、.harness/mode は出口検査の内容ハッシュ比較(forbidden_snapshot())
+  # が、.harness/codex-runs/ は record_state_snapshot() が見る(#81)。
   #
   # 空振り条件: コミットが 1 つも無いリポジトリ(HEAD が無い)と、git 側が失敗した場合は
   # 確認できないため警告だけ出して通す。検査対象パスが空(正規化後に 1 件も残らない)場合も
@@ -999,10 +1004,10 @@ fi
 RUN_ID="$(date +%Y%m%d-%H%M%S)-$$"
 mkdir -p "$RUN_DIR" || exit "$EX_FAIL"
 
-# run record は自動削除しない(§12.8)。溜まるほど出口検査の forbidden_snapshot() が
-# 前後 2 回ハッシュするファイル数が増えるため、閾値を超えたら警告だけ出す。
-# プロセス起動は git hash-object --stdin-paths の 1 本に畳んであるが(#65)、
-# ハッシュ計算そのものはファイル数に比例するので、この閾値の意味は変わらない。
+# run record は自動削除しない(§12.8)。.harness/codex-runs/ は出口検査の
+# forbidden_snapshot() のハッシュ比較対象からは外れた(#81)ので、溜まっても委託ごとの
+# ハッシュコストは増えない。閾値の意味は「検収キューとしての可読性」と、出口検査の
+# record_state_snapshot() が record 数に比例して jq を呼ぶコストに変わった。
 # 削除の判断は人間が行う(未検収の record は検収キューであり、勝手に消えると
 # 検収漏れが静かに発生する)。
 RUN_WARN_THRESHOLD=50
@@ -1141,8 +1146,25 @@ SANDBOX="read-only"
 # 判定対象の配列(FORBIDDEN_PATHS / PROJECT_FORBIDDEN_PATHS)はスクリプト冒頭で定義済み。
 # ここにはそれを使う関数だけを置く。
 
-# 禁止領域の実ファイルを列挙する。今回の委託自身が書く 3 ファイル(run record・生ログ・
-# last message)は当然変わるので除外する。除外しないと全ての impl 委託が必ず違反になる。
+# 禁止領域の実ファイルを列挙する(内容ハッシュ比較 forbidden_snapshot() が使う)。
+#
+# .harness/codex-runs/ はここでは**列挙しない**(#81)。守りたいのは「委託先が既存
+# record の accepted / status を書き換えないこと」= 検収状態であって、ディレクトリが
+# 1 バイトも変わらないことではない。内容ハッシュ方式はこの目的に対して過剰で、
+# 意図された並行運用(read-only の explore / review は入口検査5 を通らず並行できる)と
+# 衝突していた。並行 explore / review が起動時に status=running の record を書き、
+# 終了時に record 全体を書き直すだけで、正常に完了した impl がここで「委託禁止領域が
+# 変更されました」として failed / exit 2 になっていた(Issue #81 / B1)。
+# 検収状態は record_state_snapshot() が別に見る(層が消えたのではなく移った)。
+# FORBIDDEN_PATHS の配列自体からは外していない(--print-forbidden の出力・
+# CLAUDE.md / AGENTS.md の記述・check-forbidden-paths-doc.sh の照合・5-5b の
+# pathspec は現状のまま)。
+#
+# 今回の委託自身が書く 3 ファイル(run record・生ログ・last message)は当然変わるので
+# 除外する。除外しないと全ての impl 委託が必ず違反になる。この除外は末尾の
+# grep -Fxv で行っており、上の case の RUN_DIR 除外(第 1 層)を通り抜けて拾われた
+# 場合(固有パスに .harness/ のような親ディレクトリが書かれ、find が配下を辿った場合)
+# の第 2 層として意味を持つので残す。
 forbidden_files() {
   local _p _d
   # 汎用項目(FORBIDDEN_PATHS)と AGENTS.md から抽出したプロジェクト固有パスの両方を見る。
@@ -1150,6 +1172,12 @@ forbidden_files() {
   # (set -u の下で空配列を安全に展開する)であって、配列の並び順ではない。順序は
   # 読みやすさのために「汎用が先」にしてあるだけで、入れ替えても結果は変わらない。
   for _p in "${FORBIDDEN_PATHS[@]}" ${PROJECT_FORBIDDEN_PATHS[@]+"${PROJECT_FORBIDDEN_PATHS[@]}"}; do
+    # #81: run record ディレクトリだけはハッシュ比較の対象外(関数上のコメント参照)。
+    # 末尾スラッシュの有無を吸収して比較する。AGENTS.md 由来の固有パスに
+    # 同じディレクトリが書かれていた場合もここで落ちる。
+    case "${_p%/}" in
+      "$RUN_DIR") continue ;;
+    esac
     case "$_p" in
       # /kickoff の記入例は dir/** 形式(.claude/commands/kickoff.md)。dir/ と同じく
       # 配下すべてとして扱う。受けるのは末尾が /** または /* のものだけで、それ以外の
@@ -1169,8 +1197,10 @@ forbidden_files() {
 
 # `<hash> <path>` を path 順に並べたスナップショット。git status 系ではなく内容ハッシュで
 # 比べる理由は 3 つ:
-#   1. .harness/mode と .harness/codex-runs/ は .gitignore 済みで git diff にも
+#   1. .harness/mode は .gitignore 済みで git diff にも
 #      git ls-files --others --exclude-standard にも出ない
+#      (.harness/codex-runs/ も同様に git 追跡外だが、ここでは対象外なので別層
+#      record_state_snapshot() が見る。#81)
 #   2. モード C では Codex がコミットするため、作業ツリー比較だけでは取りこぼす
 #   3. 委託前から dirty だったファイルを誤検出しない(内容が同じなら差分ゼロ)
 #
@@ -1186,9 +1216,7 @@ forbidden_files() {
 #     その状態で改ざんが残っていると、次回委託の BEFORE スナップショットが改ざん後の内容を
 #     基準に取るため以後検出できない。run record が status=running のまま残ることが唯一の
 #     手掛かりになる(回復手順は codex-delegation-plan.md §12.6)
-#   - .harness/codex-runs/ が溜まるほど対象ファイル数は増えるが、ハッシュ計算は
-#     git hash-object --stdin-paths の 1 プロセスに畳んである(#65)。元を断つ側
-#     (手動の `codex-run.sh prune`)は従来どおり。自動削除はしない(Issue #29 / §12.8)
+#   - .harness/codex-runs/ は対象外(#81)。検収状態は record_state_snapshot() が見る
 forbidden_snapshot() {
   local _f _h _i _batch_ok
   local -a _files=() _hashes=()
@@ -1203,6 +1231,7 @@ forbidden_snapshot() {
 
   # バッチ化(#65): git hash-object --stdin-paths なら全ファイルを 1 プロセスで畳める。
   # 委託の前後 2 回走り、.harness/codex-runs/ の件数に線形だったプロセス起動が消える。
+  # (このディレクトリ自体は #81 で対象外になった。ここの記述は #65 当時の経緯)
   #
   # **フォールバックを必ず残す。** --stdin-paths は 1 ファイルでも失敗すると
   # そこで die して残りを処理しない = 現行の「1 ファイルずつ握りつぶして UNREADABLE」
@@ -1235,6 +1264,40 @@ forbidden_snapshot() {
     _h="$(git hash-object -- "$_f" 2>/dev/null)"
     printf '%s %s\n' "${_h:-UNREADABLE}" "$_f"
   done
+}
+
+# ---- run record の検収状態(委託前後で突き合わせる)のヘルパー ----
+#
+# .harness/codex-runs/ を内容ハッシュ比較から外した代わりの層(#81)。守りたいのは
+# 「委託先が既存 record の accepted / status を書き換えないこと」であって、ディレクトリが
+# 1 バイトも変わらないことではない。ハッシュ方式は意図された並行運用(read-only の
+# explore / review は入口検査5 を通らず並行できる)と衝突し、正常に完了した impl を
+# 「委託禁止領域が変更されました」で failed にしていた(B1)。
+#
+# 1 行 = `<record のファイル名> <status> <accepted>`。自分の record($REC)は除く。
+#
+# **バッチ化しない(#81 design 1-4)。** forbidden_snapshot() は #65 で
+# git hash-object --stdin-paths の 1 プロセスに畳んだが、ここで同じことをすると
+# バッチ経路とフォールバック経路の表現差(null の扱い・壊れた record での打ち切り)が
+# そのまま「BEFORE と AFTER の不一致」= 改ざんの偽陽性になる。潰したい失敗そのものなので、
+# jq は 1 record につき 1 回でよい(prune の既定で 20 本前後、警告閾値でも 50 本)。
+#
+# 空振り条件:
+#   - jq が無ければ全 record が UNREADABLE になる。前後で同じ扱いなので差分は出ない
+#     (impl 経路では入口検査0-2 が jq を保証している)
+#   - 割り込みで出口検査に到達しなかった場合は forbidden_snapshot() と同じ限界を持つ
+record_state_snapshot() {
+  local _f _line
+  [ -d "$RUN_DIR" ] || return 0
+  for _f in "$RUN_DIR"/*.json; do
+    [ -f "$_f" ] || continue
+    [ "$_f" = "$REC" ] && continue
+    # status / accepted を 1 回の jq で取る。キーが無い/null は MISSING に正規化する
+    # (rec_field の「null は空文字列」と違い、空行にすると読み戻しでフィールドがずれる)。
+    _line="$(jq -r '[(.status // "MISSING"), (if .accepted == null then "MISSING" else (.accepted | tostring) end)] | join(" ")' "$_f" 2>/dev/null)"
+    [ -n "$_line" ] || _line="UNREADABLE UNREADABLE"
+    printf '%s %s\n' "${_f##*/}" "$_line"
+  done | LC_ALL=C sort
 }
 
 # ---- package.json のライフサイクル系差分(警告のみ)のヘルパー ----
@@ -1283,6 +1346,7 @@ if [ "$MODE" = "impl" ]; then
   HEAD_BEFORE="$(git rev-parse HEAD 2>/dev/null || echo none)"
   DONE_BEFORE="$(count_done)"
   FORBIDDEN_BEFORE="$(forbidden_snapshot)"
+  RECSTATE_BEFORE="$(record_state_snapshot)"
   LIFECYCLE_BEFORE="$(lifecycle_snapshot)"
 fi
 
@@ -1461,7 +1525,7 @@ if [ "$MODE" = "impl" ]; then
 delegate-codex: 委託禁止領域のファイルが変更されました(出口検査)。
 
 これらはサンドボックスの外で実行される層(AGENTS.md の verify-probe / .husky/* /
-.github/workflows/* / run record)です。委託の成果をそのまま採用しないでください。
+.github/workflows/*)です。委託の成果をそのまま採用しないでください。
 
   git diff -- <該当パス>
 
@@ -1470,6 +1534,64 @@ delegate-codex: 委託禁止領域のファイルが変更されました(出口
 該当:
 MSG
     printf '%s\n' "$VIOLATIONS" | sed 's/^/  /' >&2
+    exit "$EX_FAIL"
+  fi
+fi
+
+# ---------- 出口検査: run record の検収状態 ----------
+#
+# .harness/codex-runs/ を内容ハッシュ比較から外した代わりの層(#81)。位置の理由は
+# 直前の禁止領域検査と同じ(判定行より前・CODEX_EXIT の分岐より前)。
+#
+# 違反の定義(design 1-2):
+#   - BEFORE にあった record が消えている
+#   - accepted が変化した(false→true も true→false も)
+#   - status が変化し、かつ BEFORE の status が running でない
+# BEFORE で running だった record の status 変化は、並行する explore / review 自身の
+# 正常終了なので違反にしない。AFTER にしか無い record(並行 run の新規作成)は無視する。
+if [ "$MODE" = "impl" ]; then
+  RECSTATE_AFTER="$(record_state_snapshot)"
+  REC_VIOLATIONS=""
+  while read -r _rid _rst _racc; do
+    [ -n "${_rid:-}" ] || continue
+    _aline="$(printf '%s\n' "$RECSTATE_AFTER" | awk -v id="$_rid" '$1 == id { print; exit }')"
+    if [ -z "$_aline" ]; then
+      REC_VIOLATIONS="${REC_VIOLATIONS}${REC_VIOLATIONS:+ }${_rid}(削除された)"
+      continue
+    fi
+    _aacc="$(printf '%s\n' "$_aline" | awk '{ print $3 }')"
+    if [ "$_aacc" != "$_racc" ]; then
+      REC_VIOLATIONS="${REC_VIOLATIONS}${REC_VIOLATIONS:+ }${_rid}(accepted: $_racc → $_aacc)"
+      continue
+    fi
+    _ast="$(printf '%s\n' "$_aline" | awk '{ print $2 }')"
+    if [ "$_ast" != "$_rst" ] && [ "$_rst" != "running" ]; then
+      REC_VIOLATIONS="${REC_VIOLATIONS}${REC_VIOLATIONS:+ }${_rid}(status: $_rst → $_ast)"
+    fi
+  done <<<"$RECSTATE_BEFORE"
+
+  if [ -n "$REC_VIOLATIONS" ]; then
+    REC_ERR="run record の検収状態が書き換えられました: $REC_VIOLATIONS"
+    [ "$CODEX_EXIT" -ne 0 ] && REC_ERR="$REC_ERR (codex exit=$CODEX_EXIT / $ERR3)"
+    add_host_notice "⚠️ run record の検収状態が書き換えられました(出口検査): $REC_VIOLATIONS"
+    write_record "failed" "$SUMMARY" "$REC_ERR" ""
+    emit "failed" "$EX_FAIL"
+    cat >&2 <<'MSG'
+delegate-codex: 既存 run record の検収状態(status / accepted)が変更されました(出口検査)。
+
+run record は「会話に依存しない状態の正」で、accepted は検収の通過を表します。
+委託先がこれを書き換えると、未検収の成果が検収済みに見えます。委託の成果をそのまま
+採用しないでください。
+
+  bash .claude/scripts/codex-run.sh show <id>
+
+で内容を確認してください。人間が委託の実行中に codex-run.sh accept / set-status /
+prune を叩いた場合も同じ検出になります(その経路は実行中は拒否されます。
+CODEX_RUN_FORCE=1 で強行した場合はここで鳴ります)。
+
+該当:
+MSG
+    printf '%s\n' "$REC_VIOLATIONS" | tr ' ' '\n' | sed 's/^/  /' >&2
     exit "$EX_FAIL"
   fi
 fi
