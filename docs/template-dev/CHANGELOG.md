@@ -14,6 +14,20 @@
 
 ---
 
+## 2026-09-05
+
+- **[manual]** 委託禁止領域(`FORBIDDEN_PATHS`)に `.husky/`(ディレクトリ単位。従来は
+  `pre-commit` / `prepare-commit-msg` の 2 ファイル個別列挙)と `.claude/settings.local.json`
+  を追加しました(Issue #80)。`.husky/_/`(git が実際に起動する入口。husky v9)は
+  git 追跡外のためこれまで内容ハッシュ照合の対象外で、無効化されても検出できませんでした。
+  `check-guard-integrity.sh` にも、`core.hooksPath` 配下のラッパが `h` を source しているかを
+  見る検査を追加しています。
+  **取り込む側の作業:** `AGENTS.md` §4(`<!-- kickoff:delegation-forbidden-paths -->`)を
+  手動で統合しているプロジェクトは、`.husky/pre-commit` / `.husky/prepare-commit-msg` の
+  個別記述が残っていないか確認し、`.husky/` の 1 行に置き換えてください。あわせて
+  `.claude/settings.local.json` の行の追記漏れにも注意してください。`.husky/` の行だけ
+  直して見落とす経路があります。
+
 ## 2026-09-04
 
 - **[manual]** `AGENTS.md` の検証プローブ(`<!-- verify-probe: ... -->`)を
