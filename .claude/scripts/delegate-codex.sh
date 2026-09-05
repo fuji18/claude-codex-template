@@ -253,7 +253,7 @@ done
 # 書くだけで全 PR の記録漏れ検査を無効化できる状態のまま守られていなかった。
 # .claude/ 全体をディレクトリごと禁止にはしない。skills/ commands/ agents/ docs/ の
 # 定型追記まで止めると委託の余地が過剰に狭まる。対象は次の 3 系統に限る(Issue #56):
-#   1. 実行される実体      … scripts/ hooks/ settings.json .husky/* .github/workflows/
+#   1. 実行される実体      … scripts/ hooks/ settings.json settings.local.json .husky/ .github/workflows/
 #   2. 注入される実体      … rules/ CLAUDE.md AGENTS.md .mcp.json
 #   3. 全層が読む判定データ … branch-policy.json
 # rules/ をディレクトリ単位にしたのは scripts/ と同じ理由。lead/ と mode/ だけを個別列挙すると
@@ -261,15 +261,24 @@ done
 # 同じ漏れを繰り返す。rules/ への正当な追記はもともと司令塔の仕事(context-management.md
 # 「ルールを追記するときの置き場所」)なので、委託の余地はほぼ狭まらない。
 #
+# .husky/ をディレクトリ単位にしたのも同じ理由(Issue #80)。core.hooksPath が指すのは
+# .husky/_ で、git が実際に起動するのは .husky/_/pre-commit → .husky/_/h → sh -e
+# ".husky/pre-commit" の順。守られていた .husky/pre-commit はチェーンの末端でしかなく、
+# 入口側の .husky/_/ は .husky/_/.gitignore = "*" で git 追跡外のため、内容ハッシュ方式の
+# この検査以外に見る層が無かった。.husky/_/h は人間や Claude が git commit を叩くたびに
+# ホスト上・サンドボックス外で走るので、性質は package.json のライフサイクルと同じ。
+# .claude/settings.local.json も同系統(gitignore 済み・hooks を定義できる・次のセッション
+# 開始時にホストで走る)なので、settings.json と対で持つ。
+#
 # 末尾が / のものはディレクトリ配下すべてが対象。
 FORBIDDEN_PATHS=(
   ".claude/scripts/"
   ".claude/hooks/"
   ".claude/settings.json"
+  ".claude/settings.local.json"
   ".claude/branch-policy.json"
   ".claude/rules/"
-  ".husky/pre-commit"
-  ".husky/prepare-commit-msg"
+  ".husky/"
   ".claude/codex-denylist.txt"
   "AGENTS.md"
   "CLAUDE.md"

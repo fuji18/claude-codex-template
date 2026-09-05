@@ -167,6 +167,43 @@ if [ "$USES_HUSKY" = yes ]; then
       note ".husky/$h が $GUARD を呼んでいない(呼び出しがコメントアウトされている可能性)。保護ブランチ上の $covers が素通しになる"
     fi
   done
+
+  # --- 5) git が実際に起動するラッパが生きているか ---
+  # 検査 3・4 が見る .husky/<name> はチェーンの**末端**。git が起動するのは core.hooksPath
+  # (husky v9 では .husky/_)配下の同名ファイルで、それが h を source し、h が最後に
+  # sh -e ".husky/<name>" を呼ぶ。.husky/_/ は .husky/_/.gitignore = "*" で git 追跡外の
+  # ため、ここを exit 0 の 2 行に潰しても検査 3・4 は緑のまま通っていた(#80 / S1)。
+  #
+  # h の中身は検証しない。husky のバージョン更新で毎回落ちるため(#80 スコープ外)。
+  # 見るのは「ラッパが存在し、コメントでない行から h を source しているか」だけ。
+  #
+  # 検査しない構成が 2 つある:
+  #   - core.hooksPath が未設定 / 実在しない … CI の harness-integrity は checkout だけで
+  #     npm ci を回さないため .husky/_ が無いのが正常。必須にすると恒常的に赤くなる
+  #     (この状態自体を見るのは degraded の D1 の担当)
+  #   - core.hooksPath が .husky そのもの … husky v8 以前はラッパが無く .husky/<name> が
+  #     直接の入口 = 検査 3・4 がすでに入口を見ている。二重に見ない
+  #
+  # hooks-path サブコマンドはここへ来ない(2.5 で早期 return する)。5-3 は標準出力を
+  # そのままエラーメッセージに載せるため、ラッパの指摘が混ざると本来の理由と食い違う。
+  WRAPPER_DIR="$(git config --get core.hooksPath 2>/dev/null || true)"
+  if [ -n "$WRAPPER_DIR" ] && [ "$WRAPPER_DIR" != ".husky" ] && [ -d "$WRAPPER_DIR" ]; then
+    # 呼び出しとみなすのは「コメントでない行」からの source(`.` または `source`)で、
+    # 対象が /h で終わるもの。単なる文字列一致だと、source 行をコメントアウトしても
+    # 通ってしまう(検査 4 の INVOKE_RE と同じ考え方)。
+    WRAPPER_RE='^[^#]*(source|\.)[[:space:]]+[^#]*/h"?[[:space:]]*$'
+    for _wh in pre-commit prepare-commit-msg; do
+      case "$_wh" in
+        pre-commit) covers="git commit / git commit --amend" ;;
+        *)          covers="git revert / git cherry-pick" ;;
+      esac
+      if [ ! -f "$WRAPPER_DIR/$_wh" ]; then
+        note "$WRAPPER_DIR/$_wh が存在しない。git が起動する入口が無いため .husky/$_wh は一度も呼ばれず、保護ブランチ上の $covers が素通しになる"
+      elif ! grep -qE "$WRAPPER_RE" "$WRAPPER_DIR/$_wh"; then
+        note "$WRAPPER_DIR/$_wh が husky のディスパッチャ(h)を source していない。.husky/$_wh が呼ばれないまま保護ブランチ上の $covers が通る($WRAPPER_DIR は git 追跡外なので git diff にも出ない)"
+      fi
+    done
+  fi
 fi
 
 [ "$SUBCOMMAND" = degraded ] || exit "$FOUND"

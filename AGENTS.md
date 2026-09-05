@@ -147,10 +147,10 @@ touch .git/.probe 2>/dev/null && rm -f .git/.probe && echo GIT_WRITABLE || echo 
 
 <!-- kickoff:delegation-forbidden-paths -->
 - `.claude/scripts/` — 委託の入口(`delegate-codex.sh`)・保護ブランチ判定・CI が呼ぶ判定スクリプトの実体が置かれる場所です。実行中のあなた自身の起動元も含みます(プロセス自体は自己コピーで保護済み)。`delegate-codex.sh` を壊れた状態でコミットすると以後すべての委託が不能になりますし、判定スクリプトはここが 1 行書き換わるだけで CI の検査やガードレールの自壊検知が静かに無効化されます
-- `.claude/hooks/` / `.claude/settings.json` — Claude 側のフック定義とその実体です。司令塔のコンテキストへ注入される内容の出所でもあります
+- `.claude/hooks/` / `.claude/settings.json` / `.claude/settings.local.json` — Claude 側のフック定義とその実体です。司令塔のコンテキストへ注入される内容の出所でもあります。`settings.local.json` は git 追跡外ですが、新規作成すると次に人間が Claude を起動した時点でホスト側のコマンドが走ります
 - `.claude/branch-policy.json` — 保護ブランチ判定の単一ソースです。ここを書き換えると、判定の全層が正常に動いたまま保護を素通しします
 - `.claude/rules/` — 司令塔とすべてのサブエージェントのコンテキストへ本文がそのまま注入される場所です。1 段落の追記が恒久的な指示になります
-- `.husky/pre-commit` / `.husky/prepare-commit-msg` — ベンダー非依存のガードレール本体
+- `.husky/` — ベンダー非依存のガードレール本体です。git が実際に起動するのは `.husky/_/` 配下のラッパで、そこから配下のフックが呼ばれます。`.husky/_/` は git 追跡外ですが、内容ハッシュで照合されるため書き換えれば検出されます
 - `.claude/codex-denylist.txt` — 委託先が自分の送信禁止リストを書き換えることはできません
 - `AGENTS.md` — このファイル自身。冒頭の `<!-- verify-probe: ... -->` は次回の委託時にホスト側で実行されるため、あなたが書き換えるとサンドボックスの外へ影響が出ます。形式検査が入っていますが、**検査を通る範囲でも書き換えないでください**
 - `CLAUDE.md` — プロジェクトメモリ。全エージェントに毎回読み込まれます
