@@ -158,7 +158,8 @@ usage() {
   explore <調査指示 | ファイルパス>   広域コード探索(read-only)
   review  <base-ref>                 敵対的レビュー(read-only)
   impl <.steering/[dir]>             実装フェーズの委託(workspace-write)
-  --print-forbidden                  委託禁止領域の一覧を 1 行 1 パスで出力(read-only)
+  --print-forbidden [generic]        委託禁止領域の一覧を 1 行 1 パスで出力(read-only)。
+                                     generic を付けると汎用項目(スクリプト内の配列)だけを出す
 
 環境変数:
   CODEX_HARNESS_MODE          ハーネスモードの上書き(既定は .harness/mode)
@@ -181,6 +182,14 @@ esac
 
 if [ "$MODE" != "--print-forbidden" ] && [ -z "$TARGET" ]; then
   echo "delegate-codex: target が空です" >&2
+  usage
+  exit "$EX_FAIL"
+fi
+
+# --print-forbidden の第 2 引数は generic のみ。黙って無視すると
+# 「指定したのに効いていない」に気づけない(下の余剰オプション検査と同じ方針)。
+if [ "$MODE" = "--print-forbidden" ] && [ -n "$TARGET" ] && [ "$TARGET" != "generic" ]; then
+  echo "delegate-codex: --print-forbidden の引数は 'generic' のみです: $TARGET" >&2
   usage
   exit "$EX_FAIL"
 fi
@@ -342,7 +351,9 @@ unset _fp_start _fp_end
 # 出力は 1 行 1 パス(末尾 / はディレクトリ配下すべて)。
 if [ "$MODE" = "--print-forbidden" ]; then
   printf '%s\n' "${FORBIDDEN_PATHS[@]}"
-  if [ "${#PROJECT_FORBIDDEN_PATHS[@]}" -gt 0 ]; then
+  # generic は汎用項目(この配列)だけを返す。delegation-policy.md の表が汎用項目のみの
+  # 写しであるため、双方向の乖離検査はマージ前の一覧と突き合わせる必要がある(#83)。
+  if [ "$TARGET" != "generic" ] && [ "${#PROJECT_FORBIDDEN_PATHS[@]}" -gt 0 ]; then
     printf '%s\n' "${PROJECT_FORBIDDEN_PATHS[@]}"
   fi
   exit 0

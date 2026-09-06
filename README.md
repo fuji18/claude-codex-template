@@ -222,7 +222,7 @@ Claude の週枠を守るため、実装・調査・レビューの一部を **C
 
 ### 委託禁止領域
 
-認証・決済・データ移行・ガードレールなど、事故のコストが高い領域は**パスで**列挙して委託対象から外す。判断ルールは `CLAUDE.md`「プロジェクト固有ルール」、Codex 側への指示は `AGENTS.md` §4。`/kickoff` フェーズ4 が、アーキテクチャ確定後にプロジェクトの実パスへ書き換える。
+認証・決済・データ移行・ガードレールなど、事故のコストが高い領域は**パスで**列挙して委託対象から外す。判断材料(パス一覧と理由)は `.claude/rules/lead/delegation-policy.md`、Codex 側への指示は `AGENTS.md` §4、根拠は `docs/template-dev/codex-delegation-plan.md` §9.1。一覧は `bash .claude/scripts/delegate-codex.sh --print-forbidden` で出る。`/kickoff` フェーズ4 が、アーキテクチャ確定後にプロジェクトの実パスへ書き換える。
 
 **`.claude/codex-denylist.txt`(機密の送信禁止)とは別の層。** denylist は該当ファイルが存在するだけで委託を止めるフェイルクローズ検査で、モジュールパスを入れると全委託が止まる。
 

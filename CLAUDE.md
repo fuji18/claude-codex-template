@@ -26,30 +26,12 @@
 
 ### Codex への委託禁止領域(パス)
 
-以下は Codex に委託しない(司令塔または `implement-ticket` の fork が直接書く)。振り分けの判断基準は `.claude/rules/lead/delegation-policy.md`。
+事故のコストが高い領域は Codex に委託せず、**司令塔または `implement-ticket` の fork が直接書く**。対象は 3 系統 —— (1) 実行される実体、(2) コンテキストへ注入される実体、(3) 全層が読む判定データ。
 
-- `.claude/scripts/` — 委託の唯一の入口(`delegate-codex.sh`)、保護ブランチ判定、CI が `bash` で呼ぶ判定の実体(`check-record-hygiene.sh` / `check-guard-integrity.sh`)、検収状態を書き換える `codex-run.sh` がすべてここにある。`.github/workflows/` を守っても、そのワークフローが実行する実体が書き換え可能なら防御は成立しない。個別列挙はスクリプトが増えるたびに漏れるのでディレクトリ単位で禁止する(実行中プロセスの保護は #15 の自己コピー exec で別途実装済み。`docs/template-dev/codex-delegation-plan.md` §9)
-- `.claude/hooks/` / `.claude/settings.json` / `.claude/settings.local.json` — PreToolUse hook の定義そのものと、司令塔コンテキストへの注入元(プロンプトインジェクションの経路になり得る)。`settings.local.json` は `.gitignore` 済みで `git diff` に出ないが、hooks を定義できる点は同じで、**次に人間が Claude セッションを開いた瞬間に SessionStart hook としてホストコマンドが走る**。denylist は「次の委託」を止めるが、時間順ではセッション開始のほうが先に来る(#80 / S3)
-- `.claude/branch-policy.json` — 保護ブランチ検査の全 3 層(PreToolUse hook / `.husky/*` / CI の `branch-policy` ジョブ)が読む**判定データ**。判定ロジックは `check-protected-branch.sh` に一本化して守ってあるが、データが書き換われば全層が「正常に動作したうえで素通し」する。`check-guard-integrity.sh` の検査1 も `protectedBranches` が空かどうかしか見ないため、`["develop"]` への差し替えは緑のまま通る(#56 / S1)
-- `.claude/rules/` — SessionStart hook(`lead/` / `mode/`)と `CLAUDE.md` 経由(`spec-driven.md`)で、司令塔と全サブエージェントのコンテキストへ**本文がそのまま注入される**。1 段落の追記が恒久的な指示注入の足場になる。`lead/` と `mode/` だけの個別列挙にしないのは、最も広く読まれる `spec-driven.md` が漏れるため
-- `.husky/` — ベンダー中立ガードレールの本体(`pre-commit` / `prepare-commit-msg`)と、**git が実際に起動する入口**である `.husky/_/`。`core.hooksPath` は `.husky/_` を指し、`.husky/_/pre-commit` → `.husky/_/h` → `sh -e ".husky/pre-commit"` の順で呼ばれる。守られていた 2 ファイルはチェーンの末端でしかなく、入口側は `.husky/_/.gitignore` = `*` で git 追跡外のため全層が同時に素通ししていた。`.husky/_/h` は `git commit` のたびにホスト上・サンドボックス外で走る(#80 / S1)
-- `.claude/codex-denylist.txt` — 委託先が自分の送信禁止リストを編集できてはならない
-- `AGENTS.md` — 委託先の憲法。入口検査3 の `<!-- verify-probe: ... -->` は次回委託時にホスト上の `bash -c` へそのまま渡されるため、書き換えを許すとサンドボックス外でのコマンド実行経路になる(入口検査3 に許可リスト形式の機械検査と `env -i` 実行を入れてあるが、**多層防御であって置き換えではない**。禁止領域からは外さない)
-- `CLAUDE.md` — プロジェクトメモリ。司令塔と全サブエージェントに毎回ロードされるため、`rules/` と同じ注入経路になる
-- `.mcp.json` — MCP サーバ定義 = セッション開始時のローカルプロセス起動指示(新規サーバは承認プロンプトが挟まるぶん緩和されるが、経路としては同種)
-- `.github/workflows/` — 非 fork PR で `CLAUDE_CODE_OAUTH_TOKEN` にアクセスできるワークフロー定義そのもの
-- `.codex/` — Codex 側の設定(`network_access` 等)とモード C の手順書(`degraded-mode-ticket`)。「Codex 自身は `.codex/` に書けない」は codex-cli v0.149.0 の実測に依存した前提で、CLI 更新で崩れうる。多層防御として入れる(#56 / S6)
-- `.harness/mode` / `.harness/codex-runs/` — ハーネスモードと run record。委託先が自分の結果を `accepted` に書き換えたりモードを詐称したりできてはならない
-
-`.claude/` 配下でも `skills/` / `commands/` / `agents/` / `docs/` は禁止領域に含めない。対象は次の 3 系統に限る(#56):
-
-1. **実行される実体** — `.claude/scripts/` / `.claude/hooks/` / `.claude/settings.json` / `.claude/settings.local.json` / `.husky/` / `.github/workflows/`
-2. **コンテキストへ注入される実体** — `.claude/rules/` / `CLAUDE.md` / `AGENTS.md` / `.mcp.json`
-3. **全層が読む判定データ** — `.claude/branch-policy.json`
-
-**機密の送信禁止(`.claude/codex-denylist.txt`)とは別の層。** denylist は該当ファイルが存在するだけで委託を止めるフェイルクローズ検査、こちらは司令塔が「どのチケットを渡すか」を決める振り分け判断。
-
-**単一ソースは 2 系統に分かれる。** 上に挙げた**汎用項目**は `delegate-codex.sh` の `FORBIDDEN_PATHS` 配列が正。`/kickoff` フェーズ4 が書く**プロジェクト固有パス**(認証・決済・データ移行などの実パス)は `AGENTS.md` §4 の `<!-- kickoff:delegation-forbidden-paths -->` マーカー内が正で、出口検査が委託の開始時に抽出して配列とマージする。impl 委託の実行後に前後の内容ハッシュを突き合わせ、差分があれば `status=failed` / `exit 2` で止める。ここの記述はその説明であり、汎用項目を変えるときはスクリプト側の配列と `AGENTS.md` §4 を同時に直す。
+- **一覧を出す**: `bash .claude/scripts/delegate-codex.sh --print-forbidden`(プロジェクト固有パスを含む全量)
+- **単一ソースは 2 系統**: 汎用項目 = `delegate-codex.sh` の `FORBIDDEN_PATHS` / プロジェクト固有パス = `AGENTS.md` §4 の `<!-- kickoff:delegation-forbidden-paths -->` マーカー内。**追加・変更はこの 2 箇所だけを直す**(出口検査が委託の開始時に両方を抽出してマージし、前後の内容ハッシュ差分を `status=failed` / `exit 2` で止める)
+- **振り分けの判断材料**(パス一覧と 1 行の理由)は `.claude/rules/lead/delegation-policy.md`、**なぜそのパスなのか**の詳細は `docs/template-dev/codex-delegation-plan.md` §9.1
+- **機密の送信禁止(`.claude/codex-denylist.txt`)とは別の層。** denylist は該当ファイルが存在するだけで委託を止めるフェイルクローズ検査、こちらは司令塔が「どのチケットを渡すか」を決める振り分け判断
 
 ## ディレクトリ構造(要点)
 

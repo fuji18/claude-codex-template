@@ -128,9 +128,10 @@ jobs:
             exit 1
           fi
 
-      # 委託禁止領域の単一ソース(delegate-codex.sh の FORBIDDEN_PATHS + AGENTS.md §4)と
-      # CLAUDE.md の説明節のずれを検出する。CLAUDE.md はプロジェクト所有ファイルで説明文の
-      # 自由度があるため、**警告に留めてジョブは赤にしない**(#64)。continue-on-error を
+      # 委託禁止領域の単一ソース(delegate-codex.sh の FORBIDDEN_PATHS)と
+      # .claude/rules/lead/delegation-policy.md の一覧のずれを**双方向**で検出する。
+      # マーカーを持たない旧版の delegation-policy.md を抱えた下流プロジェクトで
+      # ジョブが赤くならないよう、**警告に留める**(#64 / #83)。continue-on-error を
       # 使わないのは、ステップ自体が失敗扱いになって UI に赤が出るため。
       #
       # 末尾の exit 0 は飾りではない。Actions の既定シェルは bash -e で、

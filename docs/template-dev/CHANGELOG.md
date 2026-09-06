@@ -16,6 +16,11 @@
 
 ## 2026-09-06
 
+- 委託禁止領域の一覧を `CLAUDE.md` から `.claude/rules/lead/delegation-policy.md` へ移し、
+  `CLAUDE.md` は一覧・出口検査・根拠へのポインタのみに縮小しました。乖離検査
+  (`check-forbidden-paths-doc.sh`)は照合先を `delegation-policy.md` に変え、**双方向・完全一致**
+  に改めました(旧実装の `grep -qF` 部分一致バグを解消)。`delegate-codex.sh --print-forbidden`
+  に汎用項目だけを返す `generic` オプションを追加しました(Issue #83)。
 - **[manual]** 検証プローブに `exists <リポジトリ相対パス>` 形式を追加し、テンプレート既定の
   マーカーを `npx --no-install eslint --version` から `exists node_modules/.bin/eslint` に
   変更しました(Issue #82)。従来の既定は `node_modules/.bin/eslint` をホスト上で実行しており、

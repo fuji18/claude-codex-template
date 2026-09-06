@@ -11,11 +11,43 @@
 | **チケット 1 枚**(1 Issue = 1 PR) | 同上 + **`delegate:codex` ラベル** | 依存なし(`depends:` 全 closed)・受け入れ条件が Issue に完結・想定差分 300 行以下・**委託禁止領域に触れない**定型機能 | Issue を読んだ第三者が質問なしで実装できると司令塔が判断したとき |
 | **行き詰まり調査** | `delegate-codex.sh explore` | 根本原因不明のバグで 2 回連続で修正に失敗したもの | 仮説を書き出してから委譲する |
 | **重要変更のレビュー** | `delegate-codex.sh review` | 200 行以上かつ認証・決済・データ移行・アーキテクチャ変更 | **この条件の既定はこちら。**`/code-review ultra` は昇格先で、併用しない(下記) |
-| **委託しない** | — | **委託禁止領域**(`CLAUDE.md` にパスで列挙)/ **新規依存の追加**(sandbox はネットワーク無効)/ **`.git` を書き換えるタスク**(`workspace-write` では index 操作が必ず失敗する) | ユーザー承認や設計判断の往復が予想されるなら粒度を下げるか fork に残す |
+| **委託しない** | — | **委託禁止領域**(下の一覧)/ **新規依存の追加**(sandbox はネットワーク無効)/ **`.git` を書き換えるタスク**(`workspace-write` では index 操作が必ず失敗する) | ユーザー承認や設計判断の往復が予想されるなら粒度を下げるか fork に残す |
 
 - **最小は「tasklist 1 項目」より下げない。** 関数単位の委託は起動 + 検収コストが生成コストを上回る
 - **最大は「1 Issue」で止める。** 複数チケットの一括委託は検収単位が PR 1 本を超え、レビュー精度もマージ判断も破綻する
 - 並行数は **1 本まで**(同一ワーキングツリーを共有するため)。impl は入口検査5-5 が機械的に止める(別ステアリングへの並行委託も `exit 2`)。read-only の explore / review はこの検査を通らず並行できる。**並行しても impl の出口検査は誤爆しない**(run record は内容ハッシュ比較の対象外で、既存 record の `accepted` / `status` だけを突き合わせる。#81)。ただし impl の実行中は `codex-run.sh` の書き込み系(`accept` / `set-status` / `prune`)が拒否される。
+
+### 委託禁止領域(パス一覧)
+
+事故のコストが高い領域は委託しない。**単一ソースはここではない** —— 汎用項目は
+`delegate-codex.sh` の `FORBIDDEN_PATHS`、プロジェクト固有パス(認証・決済・データ移行などの実パス)は
+`AGENTS.md` §4 のマーカー内が正で、`/kickoff` フェーズ4 が書く。下の表は**汎用項目だけ**の写しで、
+司令塔が振り分けを判断するために置いてある(CI の `harness-integrity` ジョブが双方向で照合する)。
+プロジェクト固有パスを含む全量は `bash .claude/scripts/delegate-codex.sh --print-forbidden` で出る。
+**なぜそのパスなのか**の詳細は `docs/template-dev/codex-delegation-plan.md` §9.1。
+
+<!-- forbidden-paths -->
+| パス | 渡さない理由(1 行) |
+| --- | --- |
+| `.claude/scripts/` | 委託の唯一の入口・保護ブランチ判定・CI が `bash` で呼ぶ判定の実体。1 行の書き換えで検査が静かに無効化される |
+| `.claude/hooks/` | PreToolUse / SessionStart hook の実体。司令塔コンテキストへの注入元でもある |
+| `.claude/settings.json` | hook の定義そのもの(どのコマンドを止めるかの宣言) |
+| `.claude/settings.local.json` | 同上。gitignore 済みで `git diff` に出ないが、次に人間がセッションを開いた瞬間にホストで走る |
+| `.claude/branch-policy.json` | 保護ブランチ検査の全 3 層が読む判定データ。書き換われば全層が「正常に動作したうえで素通し」する |
+| `.claude/rules/` | 司令塔と全サブエージェントのコンテキストへ本文がそのまま注入される |
+| `.husky/` | ベンダー中立ガードレールの本体と、git が実際に起動する入口(`.husky/_/`。git 追跡外) |
+| `.claude/codex-denylist.txt` | 委託先が自分の送信禁止リストを編集できてはならない |
+| `AGENTS.md` | 委託先の憲法。冒頭の verify-probe は次回委託時にホスト上で読まれる |
+| `CLAUDE.md` | 全エージェントに毎回ロードされる = `rules/` と同じ注入経路 |
+| `.mcp.json` | MCP サーバ定義 = セッション開始時のローカルプロセス起動指示 |
+| `.github/workflows/` | 非 fork PR で `CLAUDE_CODE_OAUTH_TOKEN` にアクセスできる定義そのもの |
+| `.codex/` | Codex 側の設定(`network_access` 等)とモード C の手順書 |
+| `.harness/mode` | 委託先がハーネスモードを詐称できてはならない |
+| `.harness/codex-runs/` | 委託先が自分の結果を `accepted` に書き換えられてはならない |
+<!-- /forbidden-paths -->
+
+**機密の送信禁止(`.claude/codex-denylist.txt`)とは別の層。** denylist は該当ファイルが存在するだけで
+委託を止めるフェイルクローズ検査、こちらは司令塔が「どのチケットを渡すか」を決める振り分け判断。
 
 ### 重要変更のレビューは `delegate-codex.sh review` が既定(`/code-review ultra` は昇格先)
 
