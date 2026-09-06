@@ -58,7 +58,7 @@ gh issue edit [番号] --add-label in-progress
 | **ラベルあり** | `design.md` を書き切ったら、**tasklist を分割せず 1 回の `delegate-codex.sh impl` で全体を委託する**(バッチに割らない)。検収は PR 単位で 1 回 |
 | ラベルなし | 機械的な項目が 3 つ以上連続する部分を 3 項目前後のバッチで委託し、**各バッチの検収を通してから**次を委託する。機械的な項目が 2 つ以下なら Codex に渡さず `Skill('implement-ticket')` に渡す |
 
-- **計画中(steering)に委託の前提が崩れたらラベルを外す**: 委託禁止領域(`CLAUDE.md`「プロジェクト固有ルール」)に触れる / 新規依存の追加が要る / `design.md` に書き切れない設計判断が残る、のいずれかに当たったら `gh issue edit [番号] --remove-label delegate:codex` を実行し、理由を 1 行でユーザーに伝えてから通常経路に落とす
+- **計画中(steering)に委託の前提が崩れたらラベルを外す**: 委託禁止領域(`.claude/rules/lead/delegation-policy.md` の一覧 / 全量は `--print-forbidden`)に触れる / 新規依存の追加が要る / `design.md` に書き切れない設計判断が残る、のいずれかに当たったら `gh issue edit [番号] --remove-label delegate:codex` を実行し、理由を 1 行でユーザーに伝えてから通常経路に落とす
 - **`exit 3`(Codex 利用不可)ではラベルを外さない。** 環境の欠落でありチケットの属性ではないため、Sonnet fork にフォールバックするだけでよい
 - ラベルが付いていないチケットを委託候補だと判断した場合は、`gh issue edit [番号] --add-label delegate:codex` を実行してから流す(判断の記録が Issue に残る)
 

@@ -91,7 +91,6 @@ description: initial-requirements.mdを起点にプロジェクト開始フロ�
    - フェーズ1で TS 以外のスタックに置換した場合は、`package-ecosystem` と `ignore` の依存名を実態に合わせて調整する(不要なエコシステム節は削除する)
 3. **委託禁止領域をパスで具体化する**(Codex 併用時。フェーズ2 で `docs/architecture.md` / `docs/repository-structure.md` が確定した後だからここで行う):
    - 認証・決済・データ移行・ガードレールに相当するモジュールを**実際のパス**で洗い出す(例: `src/auth/**`・`src/billing/**`・`db/migrations/**`)
-   - `CLAUDE.md`「プロジェクト固有ルール」節に「Codex への委託禁止領域(パス)」として列挙する(判断ルールの正)
    - `AGENTS.md` の `<!-- kickoff:delegation-forbidden-paths -->` 〜 `<!-- /kickoff:delegation-forbidden-paths -->` の中に**追記する**(実装者への指示)。**既存の汎用項目(`delegate-codex.sh`・`.husky/` 等)は消さない** — これらはテンプレートからすべてのプロジェクトに配布されるため、どのプロジェクトでも成立する。マーカーの行自体も消さない。**この節のパスは出口検査が委託開始時に抽出して機械的に検査する**ため、実在するパスをバックティックで囲んで書く(ディレクトリは `src/auth/` または `src/auth/**`)
    - **`.claude/codex-denylist.txt` には書かない。** あちらは「該当ファイルが存在するだけで委託を止める」機密送信のフェイルクローズ検査で、そこにモジュールパスを入れると全委託が常に止まる
 
@@ -135,6 +134,6 @@ description: initial-requirements.mdを起点にプロジェクト開始フロ�
 - フェーズ1の置換(必要な場合)が完了し、検証コマンドが実行可能
 - `docs/` に 6 つの永続ドキュメントが存在し、チケット Issue が発行されている(ハブ&スポーク構成の場合は `docs/playbook/spoke-development-standards.md` がチケット発行より前に作成されている)
 - ハーネス層(hooks / permissions / subagents)が設定済み。Dependabot がプロダクト向け(monthly)に再チューニング済み
-- ブランチ保護の可否が確認済み(不可の場合は 3 択の選択結果が記録されている)。Codex 併用時は委託禁止領域が `CLAUDE.md` と `AGENTS.md` にパスで書かれている
+- ブランチ保護の可否が確認済み(不可の場合は 3 択の選択結果が記録されている)。Codex 併用時は委託禁止領域のプロジェクト固有パスが `AGENTS.md` §4 のマーカー内に書かれている
 - README・package.json・devcontainer 名・ライセンスがプロダクト用になっている
 - 次の一手(最初のチケット)と Step 0 の残課題(あれば)が提示されている
