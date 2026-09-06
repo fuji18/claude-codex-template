@@ -16,6 +16,15 @@
 
 ## 2026-09-05
 
+- **[auto]** 出口検査の `.harness/codex-runs/`(run record)誤爆を止めました(Issue #81)。
+  従来は内容ハッシュ比較の対象に含めていたため、read-only の explore / review を並行
+  させると、正常に完了した impl が「委託禁止領域が変更されました」で `failed` /
+  `exit 2` になっていました。`.harness/codex-runs/` はハッシュ比較の対象から外し、
+  代わりに BEFORE 時点に存在した record の `status` / `accepted` だけを突き合わせる
+  専用の出口検査(`record_state_snapshot()`)を追加しています。`codex-run.sh` の
+  書き込み系(`accept` / `set-status` / `prune`)は impl 委託の実行中は拒否します
+  (`CODEX_RUN_FORCE=1` で強行可能)。`FORBIDDEN_PATHS` の配列自体は変えていません
+  (`--print-forbidden` の出力・`CLAUDE.md` / `AGENTS.md` の記述は現状のまま)。
 - **[manual]** 委託禁止領域(`FORBIDDEN_PATHS`)に `.husky/`(ディレクトリ単位。従来は
   `pre-commit` / `prepare-commit-msg` の 2 ファイル個別列挙)と `.claude/settings.local.json`
   を追加しました(Issue #80)。`.husky/_/`(git が実際に起動する入口。husky v9)は
