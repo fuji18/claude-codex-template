@@ -22,6 +22,8 @@
    `.git/hooks/` への直書き・`.git/config` のホストコマンド実行ベクタ・禁止領域を触った
    `Codex-authored` コミット・**`Codex-authored` コミットによる `package.json` の変更**
    を検出する。
+   **`Codex-authored` を名乗らないコミットが範囲に紛れていないか**も併せて見る(縮退中は
+   Claude がコミットしない設計のため、名乗らないコミットは他の検査の対象外になっている)。
    **1 行でも出力されたら、その内容を人間に報告してから検収を続ける。**
    **縮退中に人間が push するときも、push の前にこの検査を回す**(`core.sshCommand` / `credential.helper` は push の瞬間に発火するため、復帰まで待つと間に合わない。`docs/template-dev/codex-delegation-plan.md` §12.3 手順 7)。
 
