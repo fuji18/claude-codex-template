@@ -16,6 +16,10 @@
 
 ## 2026-09-06
 
+- **[auto]** `check-guard-integrity.sh degraded` に **D0(名乗らないコミットの検出)** を追加しました。
+  縮退中の範囲に `Codex-authored` トレーラーを持たないコミットがあれば報告します(マージ
+  コミットは除外、ベースが解決できないときはスキップして理由を報告)。既定サブコマンドの
+  挙動は変えていないため CI の `harness-integrity` に影響はありません(Issue #84)。
 - 委託禁止領域の一覧を `CLAUDE.md` から `.claude/rules/lead/delegation-policy.md` へ移し、
   `CLAUDE.md` は一覧・出口検査・根拠へのポインタのみに縮小しました。乖離検査
   (`check-forbidden-paths-doc.sh`)は照合先を `delegation-policy.md` に変え、**双方向・完全一致**
