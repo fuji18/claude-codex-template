@@ -14,6 +14,20 @@
 
 ---
 
+## 2026-09-06
+
+- **[manual]** 検証プローブに `exists <リポジトリ相対パス>` 形式を追加し、テンプレート既定の
+  マーカーを `npx --no-install eslint --version` から `exists node_modules/.bin/eslint` に
+  変更しました(Issue #82)。従来の既定は `node_modules/.bin/eslint` をホスト上で実行しており、
+  その `node_modules/` はワークツリーの委託先が書き換えられました。守る層(出口ハッシュ検査 /
+  degraded 検査)は実在しませんでした。既存の 3 形式(`<cmd> --version` /
+  `npx --no-install <pkg> --version` / `python3 -I -m <module> --version`)は**後方互換として
+  動作を変えていません**。
+  **取り込む側の作業:** 自分の `AGENTS.md` の `<!-- verify-probe: ... -->` を
+  `exists <相対パス>` 形式に書き換えてください。Node 系なら
+  `exists node_modules/.bin/<ツール名>`、Python 系なら `exists .venv/bin/<ツール名>` です。
+  書き換えなくても従来形式は動きますが、ホスト実行の経路が残ります。
+
 ## 2026-09-05
 
 - **[auto]** 出口検査の `.harness/codex-runs/`(run record)誤爆を止めました(Issue #81)。

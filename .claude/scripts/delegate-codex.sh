@@ -494,13 +494,23 @@ PROBE_ALLOWED_CMDS="node npm npx python3 ruby java rake gradle"
 # `java -version` を下の完全一致特例で通す。
 PROBE_VERIFY_TOKENS="--version"
 
-# **形式検査で閉じられない残りのリスク**: プローブは cd "$ROOT" した状態で実行される。
+# **P1〜P3(exec を伴う形)に残るリスク**: プローブは cd "$ROOT" した状態で実行される。
 # npx --no-install <pkg> は node_modules/.bin/<pkg> を解決するため、ワークツリーに
 # 実行ファイルを置ける相手には、AGENTS.md を 1 文字も変えなくてもホスト実行の経路が
-# 残る。これはプローブの正当な仕事(このプロジェクトのローカル依存の導通確認)と
-# 表裏一体で、形式検査では原理的に閉じられない。空ディレクトリでの実行は
-# npx --no-install が常に失敗するため採れない(実測)。ワークツリーの完全性は
-# 出口ハッシュ検査・check-guard-integrity.sh degraded が受け持つ別の層。
+# 残る(sandbox 内で書く → 次回委託の入口検査でサンドボックス外実行)。これは
+# プローブの正当な仕事(このプロジェクトのローカル依存の導通確認)と表裏一体で、
+# 形式検査では原理的に閉じられない。空ディレクトリでの実行は npx --no-install が
+# 常に失敗するため採れない(実測)。
+#
+# **この経路を受け持つ層は存在しない(#82)。** かつてここには「ワークツリーの完全性は
+# 出口ハッシュ検査・check-guard-integrity.sh degraded が受け持つ別の層」と書いてあったが、
+# 出口ハッシュ検査は FORBIDDEN_PATHS に列挙したパスだけを走査して node_modules/ を見ず
+# (数万ファイルのハッシュは現実的でない)、degraded 検査は git log 起点で node_modules/ は
+# gitignore 済み。**前提だけが書かれていて、その層は実在しなかった。**
+#
+# そのため既定形式を P0(exists <相対パス>)に移した。P0 はプロセスを 1 つも起動しない
+# ので、この経路そのものが無い。P1〜P3 は他スタックのプロジェクト向けの後方互換として
+# 残すが、選んだ場合は上のリスクを受容することになる(#60 の「受容するなら明文化する」)。
 
 # パッケージ名 / モジュール名の検査。正規表現に一致し、かつ `..` を含まないこと。
 # 正規表現だけに頼らず `..` を独立に弾くのは多重防御 — 文字クラスの見落としが
@@ -553,6 +563,7 @@ probe_format_reason() {
   #     リモートモジュール取得を経由してホスト上で任意コードが走る(実測)。
   #     env -i はネットワークを塞がないので、これは実害のある経路。
   #
+  #       P0  exists <相対パス>                          exists node_modules/.bin/eslint(exec しない)
   #       P1  <cmd> <verify>                          node --version / java -version
   #       P2  npx --no-install <pkg> <verify>         npx --no-install eslint --version
   #       P3  python|python3 -I -m <module> <verify>  python3 -I -m pytest --version
@@ -561,6 +572,24 @@ probe_format_reason() {
   IFS=' ' read -r -a parts <<<"$probe"
   n="${#parts[@]}"
   last="${parts[$((n - 1))]}"
+
+  # P0: exists <相対パス> — **ホスト上でプロセスを 1 つも起動しない**存在確認。
+  #     テンプレート既定はこの形。P1〜P3(exec を伴う形)は他スタック向けの
+  #     後方互換として残すが、上の「残るリスク」をそのまま引き受けることになる。
+  #     末尾が導通確認トークンではないため、下のトークン検査より手前で分岐する。
+  if [ "${parts[0]}" = "exists" ]; then
+    if [ "$n" != 2 ]; then
+      echo "exists 形式は exists <相対パス> の 2 トークンである必要があります"
+      return 1
+    fi
+    # 先頭 1 文字の文字クラスで絶対パス(/)と - 始まりを弾き、
+    # .. は _probe_name_ok の独立検査が弾く(P2 / P3 と同じ多重防御)。
+    if _probe_name_ok "${parts[1]}" '^[A-Za-z0-9._@+][A-Za-z0-9._/@=:+-]*$'; then
+      return 0
+    fi
+    echo "exists のパスが不正です(リポジトリ相対のみ。.. と絶対パスは不可): ${parts[1]}"
+    return 1
+  fi
 
   # java だけは従来形の `java -version` も通す(実測で版を出して終わる)。
   # 他の処理系は -version を -v + -e に分解するため PROBE_VERIFY_TOKENS には入れない。
@@ -620,7 +649,7 @@ probe_format_reason() {
     fi
   fi
 
-  echo "許可された形に一致しません(<cmd> <verify> / npx --no-install <pkg> <verify> / python -I -m <module> <verify> のいずれか)"
+  echo "許可された形に一致しません(exists <相対パス> / <cmd> <verify> / npx --no-install <pkg> <verify> / python -I -m <module> <verify> のいずれか)"
   return 1
 }
 
@@ -659,6 +688,24 @@ AGENTS.md の <!-- verify-probe: ... --> を許可形式に直してください
 意図しない書き換えの可能性がある場合は、委託を続ける前に git diff で AGENTS.md を確認してください。
 依存の導通確認はスキップします(委託自体は続行します)。
 MSG
+elif [ "${PROBE%% *}" = "exists" ]; then
+  # P0: プロセスを 1 つも起動しない。cd "$ROOT" 済みなのでリポジトリルート相対で解決する。
+  # -e はシンボリックリンクを辿るが、ここで起きるのは stat だけで実行は無い
+  # (ワークツリー内のリンクがワークツリー外を指していても、漏れるのは存在の有無だけ)。
+  _probe_path="${PROBE#exists }"
+  echo "delegate-codex: 検証プローブ(存在確認・プロセス起動なし): $_probe_path" >&2
+  if [ ! -e "$_probe_path" ]; then
+    cat >&2 <<MSG
+delegate-codex: 検証プローブの対象が存在しません: $_probe_path
+
+依存が未インストールの可能性があります。Codex の sandbox はネットワーク
+無効のため、この状態で委託すると何も完遂できないまま枠だけを消費します。
+先に依存をインストールしてから再実行してください。
+
+(このプローブはリポジトリルート相対の存在確認で、ホスト上でプロセスを起動しません。)
+MSG
+    exit "$EX_UNAVAIL"
+  fi
 else
   # 何が実行されるかを毎回目に見える形にする。ここを黙らせない。
   echo "delegate-codex: 検証プローブを実行します: $PROBE" >&2
@@ -676,7 +723,7 @@ MSG
     exit "$EX_UNAVAIL"
   fi
 fi
-unset _probe_reason
+unset _probe_reason _probe_path
 
 # ---------- 入口検査4: Codex CLI ----------
 
