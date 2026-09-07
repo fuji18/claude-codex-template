@@ -41,7 +41,7 @@ set -uo pipefail
 # 触るのはテンプレート開発では常態なので、起動直後に自身を一時ディレクトリへコピーし、
 # そちらを exec して走る。以降どれだけ元ファイルが書き換わっても、読んでいるのは
 # コピーなので影響がない(根拠: docs/template-dev/codex-delegation-plan.md §9)。
-# 共有ファイル(lib-record.sh)も同じディレクトリへ一緒にコピーし、コピー側から source する。
+# 共有ファイル(lib-*.sh)も同じディレクトリへ一緒にコピーし、コピー側から source する。
 #
 # exec は PID もカレントディレクトリも変えないため、$$ を使う RUN_ID / run record の
 # pid、および git rev-parse --show-toplevel 以下の相対パス参照は従来どおり成立する。
@@ -70,13 +70,22 @@ elif [ -z "${CODEX_DELEGATE_SELF_COPY:-}" ]; then
   _copy_dir="$(mktemp -d 2>/dev/null || true)"
   if [ -n "$_copy_dir" ] && [ -d "$_copy_dir" ] &&
     cp "$_self" "$_copy_dir/delegate-codex.sh" 2>/dev/null; then
-    # source する共有ファイル(lib-record.sh)も一緒に運ぶ。運ばないと、コピーを exec
+    # source する共有ファイル(lib-*.sh)も一緒に運ぶ。運ばないと、コピーを exec
     # しているのに実行中に読むファイルがリポジトリ側に残り、自己編集ハザード対策に
     # 穴が開く(委託先が実行中に書き換えられる)。
+    # **ファイル名を列挙せずグロブで運ぶ**(#86)。列挙にすると source するライブラリが
+    # 1 本増えるたびに同じ漏れを繰り返す。しかも漏れても出るのは警告だけで委託は成功する
+    # ため、気づく機会が無い。lib-*.sh は「source 専用」を CI(harness-integrity)と
+    # SessionStart hook が機械検査する規約なので(#45)、この名前で運ぶ対象を決めてよい。
+    # マッチが 0 件のときはグロブ文字列そのものが残るが、[ -f ] で落ちる(nullglob 不要)。
     # **ここはフェイルオープン**: 失敗しても委託は止めない。下の解決順が $ROOT へ
     # フォールバックし、警告を出す(design §1)。
     _self_dir="$(cd "$(dirname "$_self")" 2>/dev/null && pwd || true)"
-    [ -n "$_self_dir" ] && cp "$_self_dir/lib-record.sh" "$_copy_dir/lib-record.sh" 2>/dev/null
+    if [ -n "$_self_dir" ]; then
+      for _lib in "$_self_dir"/lib-*.sh; do
+        [ -f "$_lib" ] && cp "$_lib" "$_copy_dir/" 2>/dev/null
+      done
+    fi
     export CODEX_DELEGATE_SELF_COPY="$_copy_dir"
     # exec が失敗した場合、非対話シェルはその場で終了する(execfail 未設定。実測 exit 127)。
     # したがってマーカーを export したまま下のブロックへ抜ける経路は存在しない。
@@ -111,7 +120,7 @@ if [ -z "$ROOT" ]; then
 fi
 cd "$ROOT" || exit "$EX_FAIL"
 
-# ---------- run record 読み出しの共有関数 ----------
+# ---------- 共有ライブラリの解決と読み込み ----------
 #
 # rec_field() は codex-run.sh と共有する(#45)。過去に sed フォールバックの同じバグ
 # (末尾カンマ)を 2 箇所で直した実績があり、複製を続けるコストの方が高いと判断した。
@@ -125,24 +134,39 @@ cd "$ROOT" || exit "$EX_FAIL"
 # **見つからなければ止める(フェイルクローズ)。** rec_field は入口検査5-5(impl の
 # 再入防止)が使う。未定義のまま進むと空文字列が返って検査が素通しするだけで、
 # 失敗として現れない(design §1)。
-_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
-LIB_RECORD=""
-for _cand in "${_lib_dir:+$_lib_dir/lib-record.sh}" "$ROOT/.claude/scripts/lib-record.sh"; do
-  [ -n "$_cand" ] && [ -f "$_cand" ] && {
-    LIB_RECORD="$_cand"
-    break
-  }
-done
-if [ -z "$LIB_RECORD" ]; then
+#
+# 解決順・警告・フェイルクローズの形は 3 ファイル(lib-record / lib-forbidden / lib-probe)で
+# 共通なので、resolve_lib() と warn_if_not_self_copy() に畳んである(#86)。
+LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
+
+# 解決したパスを標準出力に返す。見つからなければ 1(呼び出し側がフェイルクローズする)。
+resolve_lib() {
+  local _name="$1" _cand
+  for _cand in "${LIB_DIR:+$LIB_DIR/$_name}" "$ROOT/.claude/scripts/$_name"; do
+    [ -n "$_cand" ] && [ -f "$_cand" ] && {
+      printf '%s' "$_cand"
+      return 0
+    }
+  done
+  return 1
+}
+
+# 一時コピーではなくリポジトリ側から source してしまったときに警告する。
+# $1 = 解決したパス / $2 = ファイル名。
+warn_if_not_self_copy() {
+  if [ -n "${SELF_COPY_DIR:-}" ] && [ "$1" != "$SELF_COPY_DIR/$2" ]; then
+    echo "delegate-codex: 警告 — $2 の一時コピーを使えていません。委託中にこのファイルが書き換わると異常終了します。" >&2
+  fi
+  return 0
+}
+
+LIB_RECORD="$(resolve_lib lib-record.sh)" || {
   echo "delegate-codex: .claude/scripts/lib-record.sh が見つかりません(run record を読めないため中止します)。" >&2
   exit "$EX_FAIL"
-fi
+}
 # shellcheck source=lib-record.sh
 . "$LIB_RECORD"
-if [ -n "${SELF_COPY_DIR:-}" ] && [ "$LIB_RECORD" != "$SELF_COPY_DIR/lib-record.sh" ]; then
-  echo "delegate-codex: 警告 — lib-record.sh の一時コピーを使えていません。委託中にこのファイルが書き換わると異常終了します。" >&2
-fi
-unset _lib_dir _cand
+warn_if_not_self_copy "$LIB_RECORD" lib-record.sh
 
 # ---------- 引数 ----------
 
@@ -221,128 +245,31 @@ for _cmd in find grep sed head tail tr sort uniq; do
   fi
 done
 
-# ---------- 委託禁止領域の定義(単一ソース) ----------
-#
-# 出口検査(§末尾)と --print-forbidden の両方がここを読む。入口検査より前に置くのは、
-# --print-forbidden が codex CLI 不在でも応答できる必要があるため(入口検査4 に到達しない)。
-#
-# 入口検査が 5 系統あるのに出口が素通しだった穴を塞ぐ層。--sandbox workspace-write の
-# Codex はワークツリー内なら禁止領域も書けてしまい、書かれた先の一部は**後でサンドボックスの
-# 外で実行される**:
-#   - AGENTS.md の <!-- verify-probe: ... --> は、次回委託時に入口検査3 がホスト上の
-#     bash -c にそのまま渡す(サンドボックス内で 1 行書く → 次回起動でホスト実行)
-#     形式検査(入口検査3)で「ホスト上で任意コマンドが走る」ことは防いでいるが、
-#     AGENTS.md の規約本文の改ざんは依然この経路で検出できない。
-#   - .husky/* / .claude/scripts/* / .claude/hooks/* はホストの git・Claude セッションが実行する
-#   - .claude/settings.json は PreToolUse hook の定義そのもの(どのコマンドを止めるかの宣言)
-#   - .github/workflows/* は非 fork PR で CLAUDE_CODE_OAUTH_TOKEN に触れる定義そのもの
-#   - .claude/branch-policy.json は保護ブランチ検査の全 3 層(PreToolUse hook / .husky/* /
-#     CI の branch-policy ジョブ)が読む**判定データ**。判定ロジックは一本化して守ってあるが、
-#     データが書き換われば全層が「正常に動作したうえで素通し」する。層の数では防げない
-#     (Issue #56 / S1)
-#   - .claude/rules/* は SessionStart hook と CLAUDE.md 経由で、司令塔と全サブエージェントの
-#     コンテキストへ本文がそのまま注入される。1 段落足すだけで恒久的な指示注入の足場になる
-#   - CLAUDE.md も同じ性質(全エージェントに毎回ロードされる)
-#   - .mcp.json は MCP サーバ定義 = セッション開始時のローカルプロセス起動指示
-#   - .codex/ は Codex 側の設定(network_access 等)とモード C の手順書。「Codex 自身は
-#     .codex/ に書けない」は codex-cli v0.149.0 の実測に依存した前提で、CLI 更新で崩れうる
-#
-# ここは**汎用項目**の単一ソース(全プロジェクトに配布される層)。プロジェクト固有パスの
-# 単一ソースは AGENTS.md §4 の <!-- kickoff:delegation-forbidden-paths --> の中で、
-# 起動直後に PROJECT_FORBIDDEN_PATHS へ抽出済み(Issue #28)。CLAUDE.md の同名の節は
-# 説明に徹し、汎用項目の内容をここと一致させる。
-# 3 箇所目のリストファイルを作らないのは、そのファイル自身を守る層がまた要るため。
-# このスクリプトは起動直後に自身をコピーして exec するので、実行中のプロセスが読む
-# この配列は委託先から書き換えられない。
-#
-# .claude/scripts/ と .claude/hooks/ を個別ファイルではなくディレクトリで指定しているのは、
-# 「.github/workflows/ を守るなら、workflows が bash で呼ぶ判定の実体も同等に守る」線を
-# 一貫させるため(Issue #40)。個別列挙にすると、判定スクリプトが 1 本増えるたびに同じ
-# 漏れを繰り返す。実際 #37 で足した check-record-hygiene.sh は、冒頭に exit 0 を 1 行
-# 書くだけで全 PR の記録漏れ検査を無効化できる状態のまま守られていなかった。
-# .claude/ 全体をディレクトリごと禁止にはしない。skills/ commands/ agents/ docs/ の
-# 定型追記まで止めると委託の余地が過剰に狭まる。対象は次の 3 系統に限る(Issue #56):
-#   1. 実行される実体      … scripts/ hooks/ settings.json settings.local.json .husky/ .github/workflows/
-#   2. 注入される実体      … rules/ CLAUDE.md AGENTS.md .mcp.json
-#   3. 全層が読む判定データ … branch-policy.json
-# rules/ をディレクトリ単位にしたのは scripts/ と同じ理由。lead/ と mode/ だけを個別列挙すると
-# CLAUDE.md 経由で全サブエージェントに載る spec-driven.md が漏れ、ファイルが増えるたびに
-# 同じ漏れを繰り返す。rules/ への正当な追記はもともと司令塔の仕事(context-management.md
-# 「ルールを追記するときの置き場所」)なので、委託の余地はほぼ狭まらない。
-#
-# .husky/ をディレクトリ単位にしたのも同じ理由(Issue #80)。core.hooksPath が指すのは
-# .husky/_ で、git が実際に起動するのは .husky/_/pre-commit → .husky/_/h → sh -e
-# ".husky/pre-commit" の順。守られていた .husky/pre-commit はチェーンの末端でしかなく、
-# 入口側の .husky/_/ は .husky/_/.gitignore = "*" で git 追跡外のため、内容ハッシュ方式の
-# この検査以外に見る層が無かった。.husky/_/h は人間や Claude が git commit を叩くたびに
-# ホスト上・サンドボックス外で走るので、性質は package.json のライフサイクルと同じ。
-# .claude/settings.local.json も同系統(gitignore 済み・hooks を定義できる・次のセッション
-# 開始時にホストで走る)なので、settings.json と対で持つ。
-#
-# 末尾が / のものはディレクトリ配下すべてが対象。
-#
-# 配列末尾の .harness/codex-runs/ は列挙は残すが、出口検査の内容ハッシュ比較
-# (forbidden_snapshot() / forbidden_files())の対象からは外してある。検収状態
-# (record の accepted / status)は出口検査の record_state_snapshot() が別に見る(#81)。
-FORBIDDEN_PATHS=(
-  ".claude/scripts/"
-  ".claude/hooks/"
-  ".claude/settings.json"
-  ".claude/settings.local.json"
-  ".claude/branch-policy.json"
-  ".claude/rules/"
-  ".husky/"
-  ".claude/codex-denylist.txt"
-  "AGENTS.md"
-  "CLAUDE.md"
-  ".mcp.json"
-  ".github/workflows/"
-  ".codex/"
-  ".harness/mode"
-  ".harness/codex-runs/"
-)
-
 AGENTS="AGENTS.md"
 
-# ---------- 出口検査の対象(プロジェクト固有パス)の抽出 ----------
+# ---------- 委託禁止領域の定義(単一ソース): lib-forbidden.sh ----------
 #
-# /kickoff フェーズ4 は AGENTS.md §4 のマーカー内へ、そのプロジェクトの実際の
-# モジュールパス(認証・決済・データ移行など)を追記する。それを出口検査の対象に
-# 加える(Issue #28)。スクリプト内の FORBIDDEN_PATHS は汎用項目の単一ソースとして
-# そのまま残り、ここで抽出した分と**マージ**して使う。汎用項目は AGENTS.md から
-# マーカーごと消されても消えない。
+# 配列(FORBIDDEN_PATHS)・AGENTS.md §4 マーカーからの抽出(PROJECT_FORBIDDEN_PATHS)・
+# 出口検査のヘルパー(forbidden_files / forbidden_snapshot / lifecycle_snapshot)は
+# lib-forbidden.sh に分けてある(#86)。**source 位置を動かさないこと**。前後関係が
+# そのまま防御の一部になっている:
+#   - 入口検査0(find / grep / sed の存在確認)より後 … 抽出が grep と sed を使う
+#   - $AGENTS の代入より後                           … 抽出元のパス
+#   - --print-forbidden の分岐より前                 … あの経路は codex CLI 不在でも応答する
+#   - 入口検査5-5b より前                            … pathspec 生成が FORBIDDEN_PATHS を読む
 #
-# ここで抽出する理由(プロンプト構築より前・codex exec より前):
-#   委託先が実行中に AGENTS.md を書き換えても、その回の検査は開始時点のリストで
-#   行われる必要がある。書き換えそのものは AGENTS.md(汎用項目)の内容ハッシュ差分
-#   として別途検出される。
-#
-# 抽出はバックティック囲みの文字列すべて。実在しないもの(説明のために囲んだだけの
-# 語や <!-- verify-probe: ... --> のような断片)は forbidden_files() の実在検査で
-# 落ちるため、列挙結果に現れないだけで無害。
-#
-# フェイルオープンの条件: マーカーが片方しか無いとき。sed の範囲指定が末尾まで
-# 走り、AGENTS.md 中の無関係なバックティック語まで禁止領域に化けて全委託が常に
-# 失敗するため、警告だけ出して抽出しない(片方消しによる無効化は、AGENTS.md 自身の
-# 改ざんとしてその回に検出される)。
-PROJECT_FORBIDDEN_PATHS=()
-_fp_start=0
-_fp_end=0
-grep -q '<!-- kickoff:delegation-forbidden-paths -->' "$AGENTS" 2>/dev/null && _fp_start=1
-grep -q '<!-- /kickoff:delegation-forbidden-paths -->' "$AGENTS" 2>/dev/null && _fp_end=1
-
-if [ "$_fp_start" = 1 ] && [ "$_fp_end" = 1 ]; then
-  while IFS= read -r _fp_line; do
-    [ -n "$_fp_line" ] && PROJECT_FORBIDDEN_PATHS+=("$_fp_line")
-  done < <(
-    sed -n '/<!-- kickoff:delegation-forbidden-paths -->/,/<!-- \/kickoff:delegation-forbidden-paths -->/p' "$AGENTS" 2>/dev/null |
-      grep -o '`[^`]*`' | sed 's/^`//; s/`$//' | LC_ALL=C sort -u
-  )
-  unset _fp_line
-elif [ "$_fp_start" = 1 ] || [ "$_fp_end" = 1 ]; then
-  echo "delegate-codex: 警告 — AGENTS.md の <!-- kickoff:delegation-forbidden-paths --> マーカーが片方しかありません。プロジェクト固有パスの抽出をスキップします(汎用項目の検査は従来どおり働きます)。" >&2
-fi
-unset _fp_start _fp_end
+# **フェイルクローズ**(lib-record.sh と同じ判断)。無いまま進むと FORBIDDEN_PATHS が
+# 未定義になり、出口検査は列挙 0 件 =「差分ゼロ」= 正常終了として素通しする。同時に
+# --print-forbidden が空を返し、check-guard-integrity.sh degraded と
+# check-forbidden-paths-doc.sh の照合まで空振りする。検査が消えたことが失敗として
+# 現れない形なので、止める側に倒す。
+LIB_FORBIDDEN="$(resolve_lib lib-forbidden.sh)" || {
+  echo "delegate-codex: .claude/scripts/lib-forbidden.sh が見つかりません(委託禁止領域を判定できないため中止します)。" >&2
+  exit "$EX_FAIL"
+}
+# shellcheck source=lib-forbidden.sh
+. "$LIB_FORBIDDEN"
+warn_if_not_self_copy "$LIB_FORBIDDEN" lib-forbidden.sh
 
 # ---------- --print-forbidden: 一覧だけを出力して終了 ----------
 #
@@ -461,226 +388,26 @@ fi
 # delegate-codex.sh はテンプレート所有で全プロジェクトに配られるため、
 # node_modules のようなスタック固有のものを決め打ちで見てはいけない。
 
-# ---- 入口検査3 の許可リスト(プローブ形式) ----
+# ---- 入口検査3 の許可リスト(プローブ形式): lib-probe.sh ----
 #
-# AGENTS.md は merge 区分でプロジェクトが書き換える面であり、かつ出口ハッシュ検査が
-# 効かない経路(モード C / シグナルで出口検査に到達せず死んだ委託 / 人間の誤マージ)が
-# 残る。ここで抽出した文字列は **ホスト上の bash -c にそのまま渡る**ため、
-# 形式検査を掛けてからでないと実行しない。
+# 許可コマンド(PROBE_ALLOWED_CMDS)・導通確認トークン(PROBE_VERIFY_TOKENS)・
+# 形式検査(probe_format_reason / _probe_name_ok)・プローブ実行環境(PROBE_ENV)は
+# lib-probe.sh に分けてある(#86)。**source 位置を動かさないこと**:
+#   - 入口検査2(AGENTS.md の存在確認)より後 … 無い状態で形式検査を持っても意味がない
+#   - PROBE の抽出・実行より前               … 抽出した文字列は検査を通す前に使わない
+#   - PROBE_ENV の組み立ては親プロセスの PATH / HOME / TMPDIR を読む(source 時に確定する)
 #
-# denylist(禁止文字を弾く)にはしない。クォート・展開・多バイト表現で必ず抜ける。
-# 「許可した文字だけで構成され、許可したコマンドで始まり、導通確認トークンを含む」
-# という許可リスト方式にする。
-
-# 第 1 トークンとして許可する実行コマンド。
-#
-# **この環境で実測し「ワークツリーの設定ファイルに影響されない」ことを確認したものだけ**
-# を載せる。<cmd> --version は「版を出して終わる」と思いがちだが、実際には
-# ランチャーがカレントの設定を読んで実行するコード自体を差し替えるものがある:
-#   yarn  .yarnrc の yarn-path で任意の JS に委譲する(実測で任意コード実行)
-#   mvn   .mvn/jvm.config が JVM 起動オプションに渡る(-javaagent: で premain が走る)
-#   pnpm  package.json の packageManager で corepack が別バージョンを取得・実行する
-# この 3 つは外した。未インストールで実測できなかったもの(deno bun go cargo rustc
-# dotnet php composer swift pip uv poetry bundle)も、検証できていない以上載せない。
-#   python(python3 ではない)は外してある。実測できないうえ、Python 2 を指す環境では
-#   P3 の根拠である -I(3.4 で追加)が無く、cwd の sys.path 挿入を止められない。
-#
-# **追加するときは必ず実測すること**: 作業ディレクトリに各処理系の設定ファイルと
-# canary を書き出すスクリプトを置き、env -i PATH=... HOME=... bash -c '<cmd> --version'
-# で canary が作られないこと・出力がシステム版と一致することを確認する(design §16.2)。
-PROBE_ALLOWED_CMDS="node npm npx python3 ruby java rake gradle"
-
-# いずれか 1 つを末尾に要求する導通確認トークン。
-#
-# **裸の `version`(ダッシュなし)と `-v` / `-V` / `--help` / `-h` は入れない。**
-# 裸の version は多くの処理系で「位置引数 = 実行するスクリプトのパス / タスク名」と
-# 解釈され、cd "$ROOT" した状態のプローブがリポジトリ直下の `version` という
-# ファイルを実行してしまう(実測: node version で version というファイルの中身が走る。
-# rake / gradle はファイル名の細工すら不要で Rakefile / build.gradle を評価する)。
-# -v は多くのツールで verbose の意味になり、python3 -v は対話 REPL に落ちて委託が止まる。
-# --help / -h は導通確認としての価値が無い割に cwd の設定を読む CLI が残る。
-# `-version` はここに入れない。ruby / rake は -v + -e に分解して残り "rsion" を
-# eval しようとして落ち、python3 は Unknown option になる(実測)。
-# java だけは --version(Java 9+)も -version(従来形)も版を出して終わるので、
-# `java -version` を下の完全一致特例で通す。
-PROBE_VERIFY_TOKENS="--version"
-
-# **P1〜P3(exec を伴う形)に残るリスク**: プローブは cd "$ROOT" した状態で実行される。
-# npx --no-install <pkg> は node_modules/.bin/<pkg> を解決するため、ワークツリーに
-# 実行ファイルを置ける相手には、AGENTS.md を 1 文字も変えなくてもホスト実行の経路が
-# 残る(sandbox 内で書く → 次回委託の入口検査でサンドボックス外実行)。これは
-# プローブの正当な仕事(このプロジェクトのローカル依存の導通確認)と表裏一体で、
-# 形式検査では原理的に閉じられない。空ディレクトリでの実行は npx --no-install が
-# 常に失敗するため採れない(実測)。
-#
-# **この経路を受け持つ層は存在しない(#82)。** かつてここには「ワークツリーの完全性は
-# 出口ハッシュ検査・check-guard-integrity.sh degraded が受け持つ別の層」と書いてあったが、
-# 出口ハッシュ検査は FORBIDDEN_PATHS に列挙したパスだけを走査して node_modules/ を見ず
-# (数万ファイルのハッシュは現実的でない)、degraded 検査は git log 起点で node_modules/ は
-# gitignore 済み。**前提だけが書かれていて、その層は実在しなかった。**
-#
-# そのため既定形式を P0(exists <相対パス>)に移した。P0 はプロセスを 1 つも起動しない
-# ので、この経路そのものが無い。P1〜P3 は他スタックのプロジェクト向けの後方互換として
-# 残すが、選んだ場合は上のリスクを受容することになる(#60 の「受容するなら明文化する」)。
-
-# パッケージ名 / モジュール名の検査。正規表現に一致し、かつ `..` を含まないこと。
-# 正規表現だけに頼らず `..` を独立に弾くのは多重防御 — 文字クラスの見落としが
-# そのままパストラバーサルになった経緯(design §14)があるため。
-_probe_name_ok() {
-  case "$1" in
-    *..*) return 1 ;;
-  esac
-  LC_ALL=C printf '%s' "$1" | grep -qE "$2"
+# **フェイルクローズ**(lib-record.sh / lib-forbidden.sh と同じ判断)。無いまま進むと
+# probe_format_reason が未定義のまま呼ばれ、その 127 が下の「形式不適合」分岐に落ちる。
+# 委託は**誤った理由**の警告を出したまま続行し、形式検査という層が消えたことは
+# 失敗として現れない。
+LIB_PROBE="$(resolve_lib lib-probe.sh)" || {
+  echo "delegate-codex: .claude/scripts/lib-probe.sh が見つかりません(検証プローブの形式検査ができないため中止します)。" >&2
+  exit "$EX_FAIL"
 }
-
-# プローブ文字列が許可形式かを判定する。0 = 許可 / 1 = 不許可。
-# 不許可の理由は標準出力に 1 行返す(呼び出し側が警告に埋め込む)。
-probe_format_reason() {
-  local probe="$1"
-  local -a parts
-  local n last
-
-  # (a) 長さ上限。導通確認にこれ以上は要らない。
-  if [ "${#probe}" -gt 200 ]; then
-    echo "200 文字を超えています"
-    return 1
-  fi
-
-  # (a2) 改行を含むものは弾く。以降の grep は行単位で判定するため、複数行のうち
-  #      1 行だけが許可形式なら通過してしまう。現状の抽出は head -1 で単一行だが、
-  #      「呼び出し側が単一行を渡す」という暗黙の前提に防御を預けない。
-  case "$probe" in
-    *$'\n'*)
-      echo "改行を含んでいます"
-      return 1
-      ;;
-  esac
-
-  # (b) 文字とトークン区切りの制限。
-  #     許可文字: 英数 . _ / @ = : + -
-  #     区切りは半角スペース 1 個のみ(連続スペース・タブ・改行は不許可)。
-  #     これによりシェルのメタ文字( ; | & $ ` ' " ( ) < > * ? \ ! ~ 改行 )が
-  #     すべて構文上あらわれない = bash -c に渡してもコマンド連結・展開が起きない。
-  if ! LC_ALL=C printf '%s' "$probe" |
-    grep -qE '^[A-Za-z0-9][A-Za-z0-9._/@=:+-]*( [A-Za-z0-9._/@=:+-]+)*$'; then
-    echo "許可されない文字またはトークン区切りが含まれています(許可: 英数 . _ / @ = : + - と半角スペース 1 個区切り)"
-    return 1
-  fi
-
-  # (c) 全体が導通確認の固定形に一致すること。
-  #     トークン単位の許可(第 1 トークン + どこかに --version)では不十分だった:
-  #     npm install left-pad --version / pip install requests --version /
-  #     go run example.com/evil --version がすべて通り、postinstall・setup.py・
-  #     リモートモジュール取得を経由してホスト上で任意コードが走る(実測)。
-  #     env -i はネットワークを塞がないので、これは実害のある経路。
-  #
-  #       P0  exists <相対パス>                          exists node_modules/.bin/eslint(exec しない)
-  #       P1  <cmd> <verify>                          node --version / java -version
-  #       P2  npx --no-install <pkg> <verify>         npx --no-install eslint --version
-  #       P3  python|python3 -I -m <module> <verify>  python3 -I -m pytest --version
-  #
-  #     (b) が空白 1 個区切りを保証しているので、単語分割でトークン化してよい。
-  IFS=' ' read -r -a parts <<<"$probe"
-  n="${#parts[@]}"
-  last="${parts[$((n - 1))]}"
-
-  # P0: exists <相対パス> — **ホスト上でプロセスを 1 つも起動しない**存在確認。
-  #     テンプレート既定はこの形。P1〜P3(exec を伴う形)は他スタック向けの
-  #     後方互換として残すが、上の「残るリスク」をそのまま引き受けることになる。
-  #     末尾が導通確認トークンではないため、下のトークン検査より手前で分岐する。
-  if [ "${parts[0]}" = "exists" ]; then
-    if [ "$n" != 2 ]; then
-      echo "exists 形式は exists <相対パス> の 2 トークンである必要があります"
-      return 1
-    fi
-    # 先頭 1 文字の文字クラスで絶対パス(/)と - 始まりを弾き、
-    # .. は _probe_name_ok の独立検査が弾く(P2 / P3 と同じ多重防御)。
-    if _probe_name_ok "${parts[1]}" '^[A-Za-z0-9._@+][A-Za-z0-9._/@=:+-]*$'; then
-      return 0
-    fi
-    echo "exists のパスが不正です(リポジトリ相対のみ。.. と絶対パスは不可): ${parts[1]}"
-    return 1
-  fi
-
-  # java だけは従来形の `java -version` も通す(実測で版を出して終わる)。
-  # 他の処理系は -version を -v + -e に分解するため PROBE_VERIFY_TOKENS には入れない。
-  if [ "$probe" = "java -version" ]; then
-    return 0
-  fi
-
-  # 末尾は必ず導通確認トークン。「表示して終わる」以外を書けなくする。
-  case " $PROBE_VERIFY_TOKENS " in
-    *" $last "*) ;;
-    *)
-      echo "末尾は導通確認トークン(${PROBE_VERIFY_TOKENS// /, })である必要があります"
-      return 1
-      ;;
-  esac
-
-  if [ "$n" = 2 ]; then
-    # P1
-    case " $PROBE_ALLOWED_CMDS " in
-      *" ${parts[0]} "*) return 0 ;;
-      *)
-        echo "許可されていないコマンドです: ${parts[0]}"
-        return 1
-        ;;
-    esac
-  fi
-
-  if [ "$n" = 4 ]; then
-    # P2: npx は --no-install 必須(ホスト側にはネットワークがあるため、
-    #     外すとレジストリから取得して実行してしまう)
-    if [ "${parts[0]}" = "npx" ] && [ "${parts[1]}" = "--no-install" ]; then
-      # パッケージ名は npm の文法(@scope/name または name)に限る。
-      # 旧: ^[A-Za-z0-9@][A-Za-z0-9._/@-]*$ は . と / を無制限に許したため
-      # `docs/../../../../../../../bin/sh` が通り、ワークツリーの外の絶対パス実行ファイルを
-      # 起動できた(実測で /bin/sh に到達)。/ を @scope/ の 1 回だけに縛る。
-      if _probe_name_ok "${parts[2]}" '^(@[A-Za-z0-9][A-Za-z0-9._-]*/)?[A-Za-z0-9][A-Za-z0-9._-]*$'; then
-        return 0
-      fi
-      echo "npx のパッケージ名が不正です: ${parts[2]}"
-      return 1
-    fi
-  fi
-
-  if [ "$n" = 5 ]; then
-    # P3: python -I -m <module> <verify>
-    #     -I は必須。付けないと python は cwd を sys.path の先頭に入れるため、
-    #     リポジトリ直下に <module>.py を置くだけでホスト上の任意コード実行になる
-    #     (実測: python3 -m evilmod --version でカレントの evilmod.py が走る。
-    #      -I を付けると No module named evilmod で止まる)。
-    if [ "${parts[0]}" = "python3" ] &&
-      [ "${parts[1]}" = "-I" ] && [ "${parts[2]}" = "-m" ]; then
-      if _probe_name_ok "${parts[3]}" '^[A-Za-z0-9_][A-Za-z0-9._]*$'; then
-        return 0
-      fi
-      echo "python -I -m のモジュール名が不正です: ${parts[3]}"
-      return 1
-    fi
-  fi
-
-  echo "許可された形に一致しません(exists <相対パス> / <cmd> <verify> / npx --no-install <pkg> <verify> / python -I -m <module> <verify> のいずれか)"
-  return 1
-}
-
-# プローブに渡す環境(許可リスト方式)。#23 で codex exec に入れたものと同じ考え方だが、
-# **意図的に狭い**。プローブは「バージョンを表示して終わる」固定形のコマンドであり、
-# エージェント実行のようにロケール・プロキシ・CA を必要としない。
-#   PATH    env 自身が bash を解決するのに要る。未設定時は最小の既定値を置く
-#           (未設定のまま env -i すると bash すら見つからない)
-#   HOME    npm / cargo / go のキャッシュ・設定探索元。無くても現行プローブは通るが、
-#           他スタックのプローブが HOME 前提で落ちるのを避けるため残す
-#   TMPDIR  一時ディレクトリを既定から外している環境向け
-#   COREPACK_ENABLE_NETWORK=0  corepack が package.json の packageManager を見て
-#                              別バージョンを取得・実行するのを止める(pnpm/yarn は
-#                              許可リストから外したが、環境によっては npm/npx も
-#                              corepack の shim になりうるため入れておく)
-PROBE_ENV=("PATH=${PATH:-/usr/local/bin:/usr/bin:/bin}" "COREPACK_ENABLE_NETWORK=0")
-for _pe in HOME TMPDIR; do
-  [ -n "${!_pe+x}" ] && PROBE_ENV+=("$_pe=${!_pe}")
-done
-unset _pe
+# shellcheck source=lib-probe.sh
+. "$LIB_PROBE"
+warn_if_not_self_copy "$LIB_PROBE" lib-probe.sh
 
 PROBE="$(sed -n 's/^[[:space:]]*<!--[[:space:]]*verify-probe:[[:space:]]*\(.*[^[:space:]]\)[[:space:]]*-->[[:space:]]*$/\1/p' "$AGENTS" | head -1)"
 
@@ -1201,128 +928,10 @@ SANDBOX="read-only"
 
 # ---------- 出口検査(委託禁止領域)のヘルパー ----------
 #
-# 判定対象の配列(FORBIDDEN_PATHS / PROJECT_FORBIDDEN_PATHS)はスクリプト冒頭で定義済み。
-# ここにはそれを使う関数だけを置く。
-
-# 禁止領域の実ファイルを列挙する(内容ハッシュ比較 forbidden_snapshot() が使う)。
-#
-# .harness/codex-runs/ はここでは**列挙しない**(#81)。守りたいのは「委託先が既存
-# record の accepted / status を書き換えないこと」= 検収状態であって、ディレクトリが
-# 1 バイトも変わらないことではない。内容ハッシュ方式はこの目的に対して過剰で、
-# 意図された並行運用(read-only の explore / review は入口検査5 を通らず並行できる)と
-# 衝突していた。並行 explore / review が起動時に status=running の record を書き、
-# 終了時に record 全体を書き直すだけで、正常に完了した impl がここで「委託禁止領域が
-# 変更されました」として failed / exit 2 になっていた(Issue #81 / B1)。
-# 検収状態は record_state_snapshot() が別に見る(層が消えたのではなく移った)。
-# FORBIDDEN_PATHS の配列自体からは外していない(--print-forbidden の出力・
-# CLAUDE.md / AGENTS.md の記述・check-forbidden-paths-doc.sh の照合・5-5b の
-# pathspec は現状のまま)。
-#
-# 今回の委託自身が書く 3 ファイル(run record・生ログ・last message)は当然変わるので
-# 除外する。除外しないと全ての impl 委託が必ず違反になる。この除外は末尾の
-# grep -Fxv で行っており、上の case の RUN_DIR 除外(第 1 層)を通り抜けて拾われた
-# 場合(固有パスに .harness/ のような親ディレクトリが書かれ、find が配下を辿った場合)
-# の第 2 層として意味を持つので残す。
-forbidden_files() {
-  local _p _d
-  # 汎用項目(FORBIDDEN_PATHS)と AGENTS.md から抽出したプロジェクト固有パスの両方を見る。
-  # 抽出側が空でも汎用項目が必ず走ることを保証しているのは ${arr[@]+"${arr[@]}"} の形
-  # (set -u の下で空配列を安全に展開する)であって、配列の並び順ではない。順序は
-  # 読みやすさのために「汎用が先」にしてあるだけで、入れ替えても結果は変わらない。
-  for _p in "${FORBIDDEN_PATHS[@]}" ${PROJECT_FORBIDDEN_PATHS[@]+"${PROJECT_FORBIDDEN_PATHS[@]}"}; do
-    # #81: run record ディレクトリだけはハッシュ比較の対象外(関数上のコメント参照)。
-    # 末尾スラッシュの有無を吸収して比較する。AGENTS.md 由来の固有パスに
-    # 同じディレクトリが書かれていた場合もここで落ちる。
-    case "${_p%/}" in
-      "$RUN_DIR") continue ;;
-    esac
-    case "$_p" in
-      # /kickoff の記入例は dir/** 形式(.claude/commands/kickoff.md)。dir/ と同じく
-      # 配下すべてとして扱う。受けるのは末尾が /** または /* のものだけで、それ以外の
-      # 変則的なグロブ(**/*.ext のような先頭グロブ、src/**/*.ts、dir/*/ 等)は解釈せず、
-      # 下の catch-all で実在検査に落ちて無視される(誤検出はしないが保護もされない)。
-      */\*\* | */\*)
-        _d="${_p%/*}"
-        [ -d "$_d" ] && find "$_d" -type f -print 2>/dev/null
-        ;;
-      */) [ -d "${_p%/}" ] && find "${_p%/}" -type f -print 2>/dev/null ;;
-      *) [ -e "$_p" ] && printf '%s\n' "$_p" ;;
-    esac
-  done | grep -Fxv -e "$REC" -e "$LOG" -e "$LAST" || true
-  # 戻り値は意図的に捨てる。grep -Fxv は除外後に 1 行も残らないと exit 1 を返し、
-  # pipefail の下では関数全体が非ゼロになる。この関数は出力だけが意味を持つ。
-}
-
-# `<hash> <path>` を path 順に並べたスナップショット。git status 系ではなく内容ハッシュで
-# 比べる理由は 3 つ:
-#   1. .harness/mode は .gitignore 済みで git diff にも
-#      git ls-files --others --exclude-standard にも出ない
-#      (.harness/codex-runs/ も同様に git 追跡外だが、ここでは対象外なので別層
-#      record_state_snapshot() が見る。#81)
-#   2. モード C では Codex がコミットするため、作業ツリー比較だけでは取りこぼす
-#   3. 委託前から dirty だったファイルを誤検出しない(内容が同じなら差分ゼロ)
-#
-# ハッシュに git hash-object を使うのは、git がこのスクリプトの動作前提であり
-# (git リポジトリ外では冒頭で落とす)、追跡外・.gitignore 済みのファイルにも効くため。
-#
-# 空振り条件:
-#   - AGENTS.md のマーカーが片方しか無いプロジェクトでは、固有パスの抽出をスキップする
-#     (汎用項目の検査は働く)。また抽出結果のうち実在しないパスは列挙されない
-#   - git hash-object が前後どちらの時点でも同じように失敗した場合、差分は検出できない
-#   - explore / review は read-only なのでこの検査を行わない
-#   - 割り込み(SIGINT / SIGTERM)で codex exec の途中に死んだ場合、この検査には到達しない。
-#     その状態で改ざんが残っていると、次回委託の BEFORE スナップショットが改ざん後の内容を
-#     基準に取るため以後検出できない。run record が status=running のまま残ることが唯一の
-#     手掛かりになる(回復手順は codex-delegation-plan.md §12.6)
-#   - .harness/codex-runs/ は対象外(#81)。検収状態は record_state_snapshot() が見る
-forbidden_snapshot() {
-  local _f _h _i _batch_ok
-  local -a _files=() _hashes=()
-
-  # sort -u なのは重複を畳むため(汎用項目とマーカー内の項目は重なる。ディレクトリ指定と
-  # その配下ファイルの二重指定も起こりうる)。重複行が残ると、出口検査の違反抽出
-  # (sort | uniq -u)が「2 回現れる行」として違反パスを取りこぼす。
-  while IFS= read -r _f; do
-    _files+=("$_f")
-  done < <(forbidden_files | LC_ALL=C sort -u)
-  [ "${#_files[@]}" -gt 0 ] || return 0
-
-  # バッチ化(#65): git hash-object --stdin-paths なら全ファイルを 1 プロセスで畳める。
-  # 委託の前後 2 回走り、.harness/codex-runs/ の件数に線形だったプロセス起動が消える。
-  # (このディレクトリ自体は #81 で対象外になった。ここの記述は #65 当時の経緯)
-  #
-  # **フォールバックを必ず残す。** --stdin-paths は 1 ファイルでも失敗すると
-  # そこで die して残りを処理しない = 現行の「1 ファイルずつ握りつぶして UNREADABLE」
-  # と挙動が変わる。挙動が変わると「改ざんが差分ゼロで通る」側に倒れうるので、
-  # **出力行数が入力行数と一致したときだけバッチ結果を採用**し、それ以外は
-  # 従来どおり 1 ファイルずつ回す。速い経路は最適化、正しさは従来経路が持つ。
-  #
-  # 先頭が " のパスをバッチに乗せないのは、git hash-object --stdin-paths が
-  # `"` で始まる行を C クォート文字列として unquote するため(別のパスをハッシュしうる)。
-  # 該当があればバッチ自体を諦めて 1 ファイルずつに落とす。
-  _batch_ok=1
-  for _f in "${_files[@]}"; do
-    case "$_f" in '"'*) _batch_ok=0; break ;; esac
-  done
-
-  if [ "$_batch_ok" = 1 ]; then
-    while IFS= read -r _h; do
-      _hashes+=("$_h")
-    done < <(printf '%s\n' "${_files[@]}" | git hash-object --stdin-paths 2>/dev/null)
-    if [ "${#_hashes[@]}" -eq "${#_files[@]}" ]; then
-      for _i in "${!_files[@]}"; do
-        printf '%s %s\n' "${_hashes[$_i]}" "${_files[$_i]}"
-      done
-      return 0
-    fi
-  fi
-
-  # フォールバック: 1 ファイルずつ。失敗は握りつぶして UNREADABLE(前後で同じ扱いになる)。
-  for _f in "${_files[@]}"; do
-    _h="$(git hash-object -- "$_f" 2>/dev/null)"
-    printf '%s %s\n' "${_h:-UNREADABLE}" "$_f"
-  done
-}
+# 禁止領域そのもののヘルパー(forbidden_files / forbidden_snapshot)と
+# lifecycle_snapshot() は lib-forbidden.sh へ移した(#86)。ここに残すのは
+# record_state_snapshot() —— 禁止領域ではなく run record の**検収状態**を見る層で、
+# 内容ハッシュ比較とは目的が違う(#81)。
 
 # ---- run record の検収状態(委託前後で突き合わせる)のヘルパー ----
 #
@@ -1360,28 +969,6 @@ record_state_snapshot() {
     _base="${_base%.json}"
     printf '%s %s\n' "$_base" "$_line"
   done | LC_ALL=C sort
-}
-
-# ---- package.json のライフサイクル系差分(警告のみ)のヘルパー ----
-#
-# sandbox が守るのは委託の実行中だけで、検収で回す npm test / npm run lint /
-# lint-staged は「委託成果をホスト上・ネットワーク有効で実行する」経路になる
-# (codex-delegation-plan.md §9)。package.json は委託禁止領域に入れない判断なので
-# (依存や scripts を触る正当な委託が多い)、ここは警告だけを出す層にする。
-#
-# ブロックしない理由: 正当な scripts 変更が普通にあり、止めると層そのものが無視される。
-#
-# ライフサイクル節だけを抜き出して比べる(prepare は scripts の中のキーなので
-# scripts を見れば覆う)。jq は入口検査0-2 で保証済み(#63)。jq が失敗した場合だけ
-# ファイル全体のハッシュに落ちる(依存追加でも鳴るが、警告しか出さない層なので
-# 過検出側に倒す)。
-#
-# 空振り条件: package.json が無いプロジェクトでは常に空文字列になり、前後が一致して
-# 何も出ない(Node 以外のスタックでは正しい挙動)。
-lifecycle_snapshot() {
-  [ -f package.json ] || return 0
-  jq -S '{scripts: .scripts, "lint-staged": ."lint-staged"}' package.json 2>/dev/null ||
-    git hash-object -- package.json 2>/dev/null || true
 }
 
 # ---- 事前スナップショット(exit 0 の裏取りに使う。impl 以外では取らない) ----

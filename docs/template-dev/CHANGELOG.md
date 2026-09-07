@@ -14,6 +14,18 @@
 
 ---
 
+## 2026-09-07
+
+- **[auto]** `delegate-codex.sh`(1777 行)から `lib-forbidden.sh`(委託禁止領域の配列・
+  AGENTS.md 抽出・出口検査ヘルパー forbidden_files / forbidden_snapshot / lifecycle_snapshot、
+  289 行・新規)と `lib-probe.sh`(検証プローブの許可リスト・形式検査、243 行・新規)を
+  切り出しました。`delegate-codex.sh` は 1364 行に縮小しています。自己コピー exec が運ぶ
+  共有ファイルは `lib-record.sh` の個別列挙から `lib-*.sh` のグロブに一般化し、ライブラリの
+  解決ロジックは `resolve_lib()` / `warn_if_not_self_copy()` に共通化しました。
+  **振る舞いは変えていません**(`--print-forbidden` の出力・終了コード・検査の順序はすべて
+  前後で一致することを実測済み)。取り込む側の作業はゼロです(新規 2 ファイルは
+  `.claude/scripts/` 配下なので `/sync-template` の同期対象に含まれます。Issue #86)。
+
 ## 2026-09-06
 
 - **[auto]** 「200 行以上 かつ 重要変更のレビュー」の判断を
