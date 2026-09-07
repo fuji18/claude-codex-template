@@ -16,6 +16,13 @@
 
 ## 2026-09-06
 
+- **[auto]** 「200 行以上 かつ 重要変更のレビュー」の判断を
+  `.claude/rules/lead/review-policy.md` の 1 箇所に一本化しました。
+  `delegation-policy.md` は粒度表の 1 行ポインタだけになり、同じ結論を複製していた解説節と
+  「片方だけ直さないこと」の注記を削除しています。**司令塔の結論は変わりません**
+  (既定 = `delegate-codex.sh review` / 昇格先 = `/code-review ultra` / 併用しない)。
+  SessionStart hook が毎回注入する `lead/*.md` は 28,854 B → 27,823 B(delegation-policy.md 単体で
+  10,874 B → 9,736 B)になりました(Issue #85)。
 - **[auto]** `check-guard-integrity.sh degraded` に **D0(名乗らないコミットの検出)** を追加しました。
   縮退中の範囲に `Codex-authored` トレーラーを持たないコミットがあれば報告します(マージ
   コミットは除外、ベースが解決できないときはスキップして理由を報告)。既定サブコマンドの
