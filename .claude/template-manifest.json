@@ -19,7 +19,8 @@
     ".github/workflows/record-hygiene.yml",
     ".github/pull_request_template.md",
     "docs/ui-design-request-template.md",
-    ".codex/skills/"
+    ".codex/skills/",
+    ".claude/projects-policy.example.json"
   ],
   "merge": [
     "docs/ui-design-guidelines.md",
@@ -52,6 +53,7 @@
     "vitest.config.ts",
     "eslint.config.js",
     ".prettierrc",
-    ".harness/"
+    ".harness/",
+    ".claude/projects-policy.json"
   ]
 }

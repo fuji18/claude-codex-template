@@ -24,8 +24,12 @@ Issue: #97 / design: `design.md`(`<!-- status: ready -->`) / requirements: `requ
 
 > **この順序は必須。** フェーズ2 の散文はスクリプトの CLI 契約(design §5.1 / §5.2)を前提に書かれる。
 
-- [ ] 1-1. `gh` を実機で叩き、design §14 の 5 項目(item-list / item-add / field-list / auth status / project create の JSON キー名)を**実測**する。推定で書かない
-  - [ ] 検証用 Project の作成が必要なら**ユーザーの承認を得てから**行う(このステアリングの計画時点では作らない)
+- [ ] 1-1. **【ブロック中】**`gh` を実機で叩き、design §14 の 5 項目(item-list / item-add / field-list / auth status / project create の JSON キー名)を**実測**する。推定で書かない
+  - [ ] 検証用 Project の作成が必要なら**ユーザーの承認を得てから**行う
+  - **ブロック要因(2026-09-15 実測)**: 現行の fine-grained PAT では `gh project list --owner @me` が
+    `GraphQL: Resource not accessible by personal access token` を返す。fine-grained PAT には
+    ユーザー所有 Project の権限が存在しない(design §0 の外部仕様表)。classic PAT(`project` + `repo`)
+    か OAuth ログインへの差し替えが要る
 - [ ] 1-2. `.claude/scripts/projects-sync.sh` を新規作成する(design §5)
   - [ ] `status` / `expected` / `drift` / `set` / `reconcile` / `add` / `--print-config` の 7 経路
   - [ ] 終了コード 0/1/2/3/4 を design §5.2 のとおりに実装する
@@ -35,8 +39,8 @@ Issue: #97 / design: `design.md`(`<!-- status: ready -->`) / requirements: `requ
   - [ ] 実測したキー名をスクリプト内コメントに記録する
   - [ ] `chmod +x` する(source 専用ライブラリではない)
 - [ ] 1-3. design §12.1 の V1〜V4 を手元で実行し、無設定・無効・`gh` 不在・秘密キー混入の 4 状態を確認する
-- [ ] 1-4. `.claude/settings.json` の `permissions.allow` に `Bash(gh project:*)` と `Bash(gh api users/:*)` を追加する
-- [ ] 1-5. `.claude/template-manifest.json` に `owned: .claude/projects-policy.example.json` と `never: .claude/projects-policy.json` を追加する
+- [x] 1-4. `.claude/settings.json` の `permissions.allow` に `Bash(gh project:*)` と `Bash(gh api users/:*)` を追加する
+- [x] 1-5. `.claude/template-manifest.json` に `owned: .claude/projects-policy.example.json` と `never: .claude/projects-policy.json` を追加する
 
 ## フェーズ2: Codex への委託(1 バッチ・禁止領域を含まない)
 
