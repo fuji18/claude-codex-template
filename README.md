@@ -192,7 +192,7 @@ flowchart TD
   4. CI の `branch-policy` ジョブがクライアント(CLI / アプリ / GitHub UI)によらずマージ前に最終検証する。ただし見るのは **PR の base とブランチ名だけ**で、直接コミットされたかは見ない(そこは 2・3 が担う)
   - **アプリからセッションを作るときは、セッションのベースブランチにポリシーの `baseBranch` を選ぶ**と 1 段目から乖離しない(テンプレート既定は `main` の GitHub Flow。`develop` 統合ブランチを採るプロジェクトは `/kickoff` でポリシーファイルを更新する)
 - **チケット完了(PR 作成)ごとに `/clear`** してから次の `/next-ticket` を始める。作業状態は Issue・`.steering/`・git に永続化済みなので、コンテキストを持ち越す必要がない(トークン消費の最大の削減ポイント)
-- **`/next-ticket` → `/clear` の繰り返しを自動化するなら `/autopilot`**。判定は `.claude/scripts/autopilot-next.sh` が毎回行い、次の優先順で動く: 要対応 PR(コンフリクト / CI 失敗 / 変更要求)の修復 → 空き枠があれば依存(`depends: #N`)が解決済みのチケットに着手 → 待機。**レビュー待ちの PR は待つ(マージは人間)が、その間も `maxInFlight`(`.claude/autopilot.json`、既定 2)まで独立チケットを並行して進める**
+- **`/next-ticket` → `/clear` の繰り返しを自動化するなら `/autopilot`**(手順書: ブラウザで `.claude/docs/autopilot-guide.html` を開く)。判定は `.claude/scripts/autopilot-next.sh` が毎回行い、次の優先順で動く: 要対応 PR(コンフリクト / CI 失敗 / 変更要求)の修復 → 空き枠があれば依存(`depends: #N`)が解決済みのチケットに着手 → 待機。**レビュー待ちの PR は待つ(マージは人間)が、その間も `maxInFlight`(`.claude/autopilot.json`、既定 2)まで独立チケットを並行して進める**
   - **クラウド**: 司令塔セッションがチケットごとに子セッションを起動する(コンテナ・ブランチ・コンテキストが別 = `/clear` 不要で並列)。子は PR を購読して CI・レビューに対応し、作成・マージを親に通知する。親は待機中 `send_later` の 60 分チェックインだけを残してターンを終える
   - **ローカル**(推奨): `bash .claude/scripts/autopilot-loop.sh --background`(まず `--dry-run`、ログは `--log`、停止は `--stop`)。1 周ごとに `claude -p` を新プロセスで起動し(= `/clear` 相当)、待機中はシェルが眠るだけで枠を消費しない。作業ツリーが 1 つなので実装は直列だが、PR を開いたまま次に進める
   - **全体管理 Issue**(`autopilot` ラベル、自動作成): 全チケットの状態を一覧し、本文のチェックで一時停止・再開できる。人手が要る停止は理由がコメントされる。状態の正は各チケットのラベル・PR のままで、この Issue は表示と操作だけ

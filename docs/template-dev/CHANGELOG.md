@@ -16,6 +16,9 @@
 
 ## 2026-10-07
 
+- **[auto]** autopilot の人間向け手順書 `.claude/docs/autopilot-guide.html` を追加しました(ブラウザで開く単体の HTML。
+  早見・初回の準備・econ・全体管理 Issue の見方・停止理由ごとの対処・設定・コマンド一覧)。
+
 - **[manual]** autopilot に **全体管理 Issue**・**バックグラウンド実行**・**econ(モード B)対応**を足しました。
   - 全体管理 Issue: `autopilot` ラベルの Issue を判定のたびに自動作成・更新します(実体は新規の
     `.claude/scripts/autopilot-board.sh`)。全チケットの状態の一覧・本文のチェックでの一時停止・停止理由の

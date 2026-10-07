@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Autopilot 手順書</title>
+    <style>
+      :root {
+        --bg: #f7f7f5;
+        --surface: #ffffff;
+        --surface-2: #f0f0ec;
+        --text: #1f2328;
+        --muted: #5b616b;
+        --border: #dcdcd6;
+        --accent: #3b5bdb;
+        --accent-soft: #e7ecff;
+        --ok: #2b8a3e;
+        --ok-soft: #e6f4ea;
+        --warn: #b35c00;
+        --warn-soft: #fff1e0;
+        --danger: #c92a2a;
+        --danger-soft: #fdecec;
+        --code-bg: #f3f3ef;
+        --radius: 10px;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --bg: #15171a;
+          --surface: #1d2024;
+          --surface-2: #24282d;
+          --text: #e6e8eb;
+          --muted: #a0a7b0;
+          --border: #343a41;
+          --accent: #8ea6ff;
+          --accent-soft: #232b45;
+          --ok: #69c27f;
+          --ok-soft: #1c2e22;
+          --warn: #f0a050;
+          --warn-soft: #33271a;
+          --danger: #ff8787;
+          --danger-soft: #3a1f21;
+          --code-bg: #24282d;
+        }
+      }
+      :root[data-theme="dark"] {
+        --bg: #15171a;
+        --surface: #1d2024;
+        --surface-2: #24282d;
+        --text: #e6e8eb;
+        --muted: #a0a7b0;
+        --border: #343a41;
+        --accent: #8ea6ff;
+        --accent-soft: #232b45;
+        --ok: #69c27f;
+        --ok-soft: #1c2e22;
+        --warn: #f0a050;
+        --warn-soft: #33271a;
+        --danger: #ff8787;
+        --danger-soft: #3a1f21;
+        --code-bg: #24282d;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          15px/1.75 -apple-system,
+          BlinkMacSystemFont,
+          "Hiragino Sans",
+          "Noto Sans JP",
+          "Yu Gothic UI",
+          sans-serif;
+      }
+      .wrap {
+        display: grid;
+        grid-template-columns: 220px minmax(0, 1fr);
+        gap: 32px;
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 32px 24px 80px;
+      }
+      nav {
+        position: sticky;
+        top: 24px;
+        align-self: start;
+        font-size: 13.5px;
+      }
+      nav .title {
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+      nav a {
+        display: block;
+        color: var(--muted);
+        text-decoration: none;
+        padding: 3px 0 3px 10px;
+        border-left: 2px solid var(--border);
+      }
+      nav a:hover {
+        color: var(--accent);
+        border-left-color: var(--accent);
+      }
+      main {
+        min-width: 0;
+      }
+      header h1 {
+        margin: 0 0 4px;
+        font-size: 28px;
+        line-height: 1.3;
+      }
+      header p {
+        margin: 0 0 24px;
+        color: var(--muted);
+      }
+      section {
+        margin-top: 44px;
+      }
+      h2 {
+        font-size: 20px;
+        margin: 0 0 12px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid var(--border);
+      }
+      h3 {
+        font-size: 16px;
+        margin: 22px 0 8px;
+      }
+      p {
+        margin: 8px 0;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.9em;
+        background: var(--code-bg);
+        padding: 1px 5px;
+        border-radius: 4px;
+      }
+      .cmd {
+        position: relative;
+        background: var(--code-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px 84px 12px 14px;
+        margin: 10px 0;
+        overflow-x: auto;
+      }
+      .cmd pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-all;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 13.5px;
+        line-height: 1.6;
+      }
+      .cmd .c {
+        color: var(--muted);
+      }
+      .copy {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        font: inherit;
+        font-size: 12px;
+        padding: 3px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+      }
+      .copy:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 10px;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 14px 16px;
+      }
+      .card .k {
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 4px;
+      }
+      .card .v {
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+      .card .cmd {
+        margin: 6px 0 0;
+      }
+      .note {
+        border-radius: var(--radius);
+        padding: 10px 14px;
+        margin: 12px 0;
+        border: 1px solid var(--border);
+        background: var(--surface);
+      }
+      .note.info {
+        background: var(--accent-soft);
+        border-color: transparent;
+      }
+      .note.warn {
+        background: var(--warn-soft);
+        border-color: transparent;
+      }
+      .note.danger {
+        background: var(--danger-soft);
+        border-color: transparent;
+      }
+      .note strong:first-child {
+        margin-right: 4px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+        font-size: 14px;
+        margin: 10px 0;
+      }
+      th,
+      td {
+        text-align: left;
+        vertical-align: top;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border);
+      }
+      th {
+        background: var(--surface-2);
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      tr:last-child td {
+        border-bottom: 0;
+      }
+      .tablewrap {
+        overflow-x: auto;
+      }
+      ol.steps {
+        list-style: none;
+        counter-reset: s;
+        padding: 0;
+        margin: 10px 0;
+      }
+      ol.steps > li {
+        counter-increment: s;
+        position: relative;
+        padding: 10px 14px 10px 50px;
+        margin-bottom: 8px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+      }
+      ol.steps > li::before {
+        content: counter(s);
+        position: absolute;
+        left: 14px;
+        top: 10px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: var(--accent);
+        color: var(--surface);
+        font-size: 13px;
+        font-weight: 700;
+        text-align: center;
+        line-height: 24px;
+      }
+      .flow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 8px;
+        margin: 12px 0;
+      }
+      .flow .box {
+        flex: 1 1 150px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 10px 12px;
+        font-size: 13.5px;
+      }
+      .flow .box b {
+        display: block;
+        margin-bottom: 2px;
+      }
+      .flow .box.claude {
+        border-top: 3px solid var(--accent);
+      }
+      .flow .box.shell {
+        border-top: 3px solid var(--ok);
+      }
+      .flow .box.human {
+        border-top: 3px solid var(--warn);
+      }
+      .flow .arrow {
+        align-self: center;
+        color: var(--muted);
+      }
+      .legend {
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+      .legend span {
+        display: inline-block;
+        margin-right: 14px;
+      }
+      .legend i {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+        margin-right: 4px;
+        vertical-align: -1px;
+      }
+      details {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 8px 14px;
+        margin: 8px 0;
+      }
+      summary {
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .theme {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        font: inherit;
+        font-size: 12px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+      }
+      footer {
+        margin-top: 56px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      @media (max-width: 860px) {
+        .wrap {
+          grid-template-columns: minmax(0, 1fr);
+          padding: 20px 16px 72px;
+          gap: 0;
+        }
+        nav {
+          position: static;
+          margin-bottom: 8px;
+        }
+        nav a {
+          display: inline-block;
+          border-left: 0;
+          padding: 2px 8px 2px 0;
+        }
+        .cards {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .flow .arrow {
+          transform: rotate(90deg);
+          width: 100%;
+          text-align: center;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <nav aria-label="目次">
+        <div class="title">目次</div>
+        <a href="#quick">早見</a>
+        <a href="#setup">初回の準備</a>
+        <a href="#daily">いつもの使い方</a>
+        <a href="#econ">econ モード</a>
+        <a href="#board">全体管理 Issue</a>
+        <a href="#stopped">止まったとき</a>
+        <a href="#how">判定のしくみ</a>
+        <a href="#config">設定</a>
+        <a href="#commands">コマンド一覧</a>
+        <a href="#cloud">クラウドで使う</a>
+        <a href="#faq">よくある質問</a>
+      </nav>
+
+      <main>
+        <header>
+          <h1>Autopilot 手順書</h1>
+          <p>
+            <code>/next-ticket</code> → <code>/clear</code> の繰り返しを自動化する仕組みの使い方。迷ったらこのページの「早見」と「止まったとき」を見る。
+          </p>
+        </header>
+
+        <section id="quick">
+          <h2>早見</h2>
+          <div class="cards">
+            <div class="card">
+              <div class="k">① 始める前に確認</div>
+              <div class="v">予定だけ表示</div>
+              <div class="cmd"><pre>bash .claude/scripts/autopilot-loop.sh --dry-run</pre></div>
+            </div>
+            <div class="card">
+              <div class="k">② 起動(1 回だけ)</div>
+              <div class="v">裏で動かす</div>
+              <div class="cmd"><pre>bash .claude/scripts/autopilot-loop.sh --background</pre></div>
+            </div>
+            <div class="card">
+              <div class="k">③ 様子を見る / 止める</div>
+              <div class="v">ログ・停止</div>
+              <div class="cmd"><pre>bash .claude/scripts/autopilot-loop.sh --log
+bash .claude/scripts/autopilot-loop.sh --stop</pre></div>
+            </div>
+          </div>
+          <div class="note info">
+            <strong>起動したら、あとは GitHub の全体管理 Issue を見るだけ。</strong>
+            <code>autopilot</code> ラベルの Issue「🤖 Autopilot ダッシュボード」に全チケットの状態が出る。一時停止もそこのチェックで行う(スマホの GitHub アプリからでも可)。
+          </div>
+          <div class="note">
+            <strong>人がやること:</strong> PR のレビューとマージ(econ では <code>gh pr ready</code>)、止まったときの判断、の 2 つだけ。マージは自動ではしない。
+          </div>
+        </section>
+
+        <section id="setup">
+          <h2>初回の準備</h2>
+          <p>プロジェクトごとに 1 回だけ。リポジトリのルートで行う。</p>
+          <ol class="steps">
+            <li>
+              <b>必要なコマンドが使えるか確認する</b>(<code>gh</code> がログイン済み、<code>jq</code>、<code>claude</code>。econ で使うなら <code>codex</code> も)
+              <div class="cmd"><pre>gh auth status &amp;&amp; jq --version &amp;&amp; claude --version</pre></div>
+            </li>
+            <li>
+              <b>チケットが Issue にあることを確認する。</b> <code>/kickoff</code>(または <code>/setup-tickets</code>)で作った <code>ticket</code> ラベルの Issue が対象。依存は Issue 本文の
+              <code>depends: #12, #15</code> の形で書く(1 行に複数並べてよい)
+            </li>
+            <li>
+              <b>判定が動くか確認する</b>(GitHub は読むだけで、何も書き換えない)
+              <div class="cmd"><pre>bash .claude/scripts/autopilot-next.sh --summary</pre></div>
+            </li>
+            <li>
+              <b>無人実行の許可を確認する。</b> <code>claude -p</code> は途中で確認を求められると止まる。既定は <code>--permission-mode acceptEdits</code> で、Bash は
+              <code>.claude/settings.json</code> の <code>allow</code> にあるものだけが通る。足りなければ allow に足すか、<code>AUTOPILOT_CLAUDE_ARGS</code> で引数を変える
+            </li>
+            <li>
+              <b>(任意)停止を手元で知る方法を決める。</b> 全体管理 Issue へのコメントは<b>自分の gh アカウントで投稿されるので自分には通知が来ない</b>。気づきたいなら通知コマンドを設定する
+              <div class="cmd"><pre><span class="c"># 例1: デスクトップ通知(Linux)</span>
+export AUTOPILOT_NOTIFY_CMD='notify-send autopilot'
+<span class="c"># 例2: スマホに送る(ntfy)。理由が第 1 引数で渡るので、送る処理を小さなスクリプトにする</span>
+printf '#!/bin/sh\ncurl -s -d "$1" https://ntfy.sh/自分のトピック名 &gt;/dev/null\n' &gt; ~/autopilot-notify.sh
+chmod +x ~/autopilot-notify.sh
+export AUTOPILOT_NOTIFY_CMD="$HOME/autopilot-notify.sh"</pre></div>
+              <p>環境変数はループを起動するターミナルで設定する(常に使うなら <code>~/.bashrc</code> などに書く)。</p>
+            </li>
+            <li>
+              <b>最初の 1 回は前面で 1 周だけ見る。</b> 全体管理 Issue が作られ、1 チケット目が動き出すのを確認したら <kbd>Ctrl</kbd>+<kbd>C</kbd> で止め、<code>--background</code> で起動し直す
+              <div class="cmd"><pre>bash .claude/scripts/autopilot-loop.sh</pre></div>
+            </li>
+          </ol>
+        </section>
+
+        <section id="daily">
+          <h2>いつもの使い方(通常モード)</h2>
+          <ol class="steps">
+            <li>作業ツリーをきれいにしておく(未コミットの変更があると止まる)</li>
+            <li>
+              起動する
+              <div class="cmd"><pre>bash .claude/scripts/autopilot-loop.sh --background</pre></div>
+            </li>
+            <li>
+              あとは放置。ループが「PR の修復 → 新しいチケットに着手 → レビュー待ちなら待機」を繰り返す。1 チケットごとに新しい <code>claude -p</code> を起動するので <code>/clear</code> は不要。待機中は Claude を起動しないので枠を使わない
+            </li>
+            <li>PR が開いたらレビューしてマージする。マージで空き枠ができると、次の周で次のチケットに進む</li>
+            <li>全部終わると全体管理 Issue に「✅ 全チケットが完了」とコメントされてループが終わる</li>
+          </ol>
+          <div class="note">
+            <strong>並行の上限:</strong> 同時に進める作業は既定で 2 本(レビュー待ちの PR も数える)。PR 1 本がレビュー待ちの間に、依存が解決済みの別チケットを 1 本進める。作業ツリーは 1 つなので、実装そのものは 1 本ずつ順番に行う。
+          </div>
+        </section>
+
+        <section id="econ">
+          <h2>econ モード(Claude の枠を温存したいとき)</h2>
+          <p>
+            <code>.harness/mode</code> に <code>econ</code> と書いた状態で、同じコマンドで起動する(モードの切り替えは人が行う)。1 チケットを 3 段に分け、Claude は計画と PR 作成だけに使う。
+          </p>
+          <div class="flow">
+            <div class="box claude"><b>1. 計画</b><code>claude -p "/next-ticket N --plan-only"</code><br />design.md を書き切ってコミット</div>
+            <div class="arrow">→</div>
+            <div class="box shell"><b>2. 実装</b>ループが <code>delegate-codex.sh impl</code> を直接実行<br />Claude は起動しない</div>
+            <div class="arrow">→</div>
+            <div class="box claude"><b>3. draft PR</b><code>claude -p "/ship-ticket N"</code><br />検収なし(CI に任せる)</div>
+            <div class="arrow">→</div>
+            <div class="box human"><b>4. 枠が戻ったら</b><code>gh pr ready 番号</code><br />自動レビューが走る → マージ</div>
+          </div>
+          <div class="legend">
+            <span><i style="background: var(--accent)"></i>Claude を使う</span><span><i style="background: var(--ok)"></i>シェル / Codex(Claude を使わない)</span
+            ><span><i style="background: var(--warn)"></i>人がやる</span>
+          </div>
+          <ul>
+            <li>PR は <b>draft</b> で積まれ、マージはされない。同時進行の上限は econ 用に別にあり、既定 4 本</li>
+            <li><code>package.json</code> の <code>scripts</code> / <code>lint-staged</code> / <code>prepare</code> が変わると止まる → 目視して問題なければ <code>/ship-ticket N</code> を手で実行</li>
+            <li>Codex が使えないと止まる。Claude(Sonnet)に自動では切り替えない</li>
+            <li>draft PR の CI 失敗とコンフリクトだけは Claude で直す(<code>/fix-pr</code>)</li>
+            <li>委託に向かないチケット(ハーネスのファイルを触る・新しい依存が要る)は <code>autopilot:manual</code> ラベルが付いて飛ばされる → 通常モードで <code>/next-ticket 番号</code></li>
+          </ul>
+          <div class="note warn"><strong>degraded モード(C)では動かない。</strong> Claude が動かない前提のモードなので、起動してもすぐ止まる。</div>
+        </section>
+
+        <section id="board">
+          <h2>全体管理 Issue の見方</h2>
+          <p>
+            <code>autopilot</code> ラベルの Issue。最初の判定で自動作成され、判定のたびに書き換わる(内容が変わったときだけ)。<b>各チケットの状態はそれぞれの Issue のラベルと PR が正</b>で、この Issue は一覧表示と操作のためのもの。
+          </p>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>表示</th>
+                  <th>意味</th>
+                  <th>人がやること</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>🔧 要対応</td>
+                  <td>PR にコンフリクト / CI 失敗 / 変更要求がある。ループが次に直す</td>
+                  <td>なし(直らなければ止まって知らせる)</td>
+                </tr>
+                <tr>
+                  <td>👀 レビュー待ち</td>
+                  <td>PR が開いている。draft と表示されたら econ の積み置き</td>
+                  <td><b>レビューしてマージ</b>(draft は枠が戻ってから <code>gh pr ready</code>)</td>
+                </tr>
+                <tr>
+                  <td>🚧 実装中</td>
+                  <td>着手済みで PR がまだ無い</td>
+                  <td>なし。長く動かないなら別セッションの放置を疑う</td>
+                </tr>
+                <tr>
+                  <td>▶️ 着手可能</td>
+                  <td>依存が全部閉じている。空き枠ができたら着手される</td>
+                  <td>なし</td>
+                </tr>
+                <tr>
+                  <td>⏳ 依存待ち</td>
+                  <td>依存先のチケットがまだ閉じていない</td>
+                  <td>なし(依存先のマージで解ける)</td>
+                </tr>
+                <tr>
+                  <td>🙋 手動</td>
+                  <td><code>autopilot:manual</code> が付いていて自動では進めない</td>
+                  <td>通常モードで <code>/next-ticket 番号</code></td>
+                </tr>
+                <tr>
+                  <td>✅ 完了</td>
+                  <td>Issue が閉じている(折りたたみの中)</td>
+                  <td>なし</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>一時停止と再開</h3>
+          <p>
+            本文の <b>「一時停止」にチェック</b>を入れると、次の周から新規着手も修復もしなくなる。<b>チェックを外すと再開</b>する。ターミナルを触らなくてよい。手で書き換えてよいのはこのチェックだけで、ほかの部分は次の更新で上書きされる。
+          </p>
+          <div class="note">GitHub に繋がらず一時停止を確認できないときは、安全のため進めずに待つ。</div>
+        </section>
+
+        <section id="stopped">
+          <h2>止まったとき</h2>
+          <p>止まると、理由が全体管理 Issue にコメントされ、ログの最後にも出る。まずこれを見る:</p>
+          <div class="cmd"><pre>bash .claude/scripts/autopilot-loop.sh --log</pre></div>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>停止理由(要旨)</th>
+                  <th>対処</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>作業ツリーに未コミットの変更がある</td>
+                  <td><code>git status</code> で中身を見て、コミットするか破棄してから再起動。再開中のチケット自身のブランチ上の変更なら止まらずに続くので、これは別の作業の変更</td>
+                </tr>
+                <tr>
+                  <td>前回の実行後も状態が変わっていない</td>
+                  <td>Claude が進めなかった(設計判断が要る・同じ失敗の繰り返し)。該当チケットの <code>.steering/</code> の <code>tasklist.md</code> と <code>design.md</code> を見て、判断を design.md に書き足してから再起動。対話で <code>/next-ticket 番号</code> を回してもよい</td>
+                </tr>
+                <tr>
+                  <td>in-progress だが PR もブランチも無い</td>
+                  <td>別のセッションが実装中か確認する。中断なら、その Issue の <code>in-progress</code> ラベルを外す</td>
+                </tr>
+                <tr>
+                  <td>着手できるチケットが無い(依存が閉じない)</td>
+                  <td>全体管理 Issue の「依存待ち」を見る。依存先が閉じていない / 依存の書き間違い。ベースが <code>develop</code> の場合はマージしても Issue が自動で閉じないので手で閉じる</td>
+                </tr>
+                <tr>
+                  <td>残りは <code>autopilot:manual</code> だけ</td>
+                  <td>通常モードで <code>/next-ticket 番号</code> を対話で回す</td>
+                </tr>
+                <tr>
+                  <td>package.json の scripts 等が変わっている(econ)</td>
+                  <td><code>git diff $(git merge-base HEAD origin/main) -- package.json</code> を目視。問題なければ <code>/ship-ticket 番号</code> を実行してから再起動</td>
+                </tr>
+                <tr>
+                  <td>Codex が使えない / 委託が失敗した(econ)</td>
+                  <td>Codex の認証・インストールを確認。失敗なら <code>.harness/codex-runs/</code> のログを見る</td>
+                </tr>
+                <tr>
+                  <td>Codex のレート上限が 12 回続いた(econ)</td>
+                  <td>Codex の枠が戻るのを待って再起動</td>
+                </tr>
+                <tr>
+                  <td>起動回数の上限に達した</td>
+                  <td>暴走防止の歯止め(既定 20 回)。問題が無ければそのまま再起動</td>
+                </tr>
+                <tr>
+                  <td>対応するブランチが複数ある</td>
+                  <td>同じ Issue 番号のブランチが 2 本以上ある。不要なほうを消す</td>
+                </tr>
+                <tr>
+                  <td>判定に失敗した</td>
+                  <td><code>gh auth status</code> を確認。<code>bash .claude/scripts/autopilot-next.sh --summary</code> を直接実行してエラーを見る</td>
+                </tr>
+                <tr>
+                  <td>既に実行中</td>
+                  <td>二重起動の防止。<code>--stop</code> してから起動し直す</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note info">
+            <strong>止まらないが通知が来る場合:</strong> 変化の無い待機が約 1 時間続くと「進行中の作業が変わっていません」とコメントされる。レビュー待ちの PR が溜まっているか、別セッションが止まっている合図。
+          </div>
+          <p>対処が済んだら、また起動するだけでよい(続きから再開する):</p>
+          <div class="cmd"><pre>bash .claude/scripts/autopilot-loop.sh --background</pre></div>
+        </section>
+
+        <section id="how">
+          <h2>判定のしくみ</h2>
+          <p>毎周 <code>autopilot-next.sh</code> が GitHub の Issue と PR を読み、上から最初に当たったものを行う。</p>
+          <ol class="steps">
+            <li><b>自分の中断作業の再開</b> — この作業ツリーにブランチがあり、PR がまだ無いチケット</li>
+            <li><b>PR の修復</b>(<code>fix</code>)— コンフリクト / CI 失敗 / 最新のコミットに対する変更要求。マージを早めると後続の依存も解ける</li>
+            <li><b>着手</b>(<code>start</code>)— 空き枠があり、<code>depends:</code> が全部閉じたチケット。優先度 P0 → P1 → P2、同じなら番号の小さい順</li>
+            <li><b>待機</b>(<code>wait</code>)— 進行中の作業がある。<code>pollSeconds</code>(既定 5 分)ごとに見直す</li>
+            <li><b>終了</b> — 全部閉じた(<code>done</code>)/ 依存が閉じない(<code>blocked</code>)/ 手動のものだけ(<code>manual</code>)</li>
+          </ol>
+          <p>
+            依存先が未マージのチケットには着手しない(ブランチを積み重ねない)。依存を書いていないのに同じファイルを触るチケット同士はコンフリクトしうるが、起きたら修復で base を取り込む。頻繁に起きるなら <code>depends:</code> を足す。
+          </p>
+        </section>
+
+        <section id="config">
+          <h2>設定</h2>
+          <p><code>.claude/autopilot.json</code>(環境変数があればそちらが優先)</p>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>キー</th>
+                  <th>既定</th>
+                  <th>意味</th>
+                  <th>環境変数</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>maxInFlight</code></td>
+                  <td>2</td>
+                  <td>同時に進める作業の上限(レビュー待ちの PR も数える)</td>
+                  <td><code>AUTOPILOT_MAX_IN_FLIGHT</code></td>
+                </tr>
+                <tr>
+                  <td><code>econ.maxInFlight</code></td>
+                  <td>4</td>
+                  <td>econ での上限(draft を積む)</td>
+                  <td>同上</td>
+                </tr>
+                <tr>
+                  <td><code>pollSeconds</code></td>
+                  <td>300</td>
+                  <td>待機中に見直す間隔(秒)</td>
+                  <td><code>AUTOPILOT_POLL_SECONDS</code></td>
+                </tr>
+                <tr>
+                  <td><code>maxRuns</code></td>
+                  <td>20</td>
+                  <td>1 回の起動で Claude / Codex を起動する回数の上限</td>
+                  <td><code>AUTOPILOT_MAX_RUNS</code></td>
+                </tr>
+                <tr>
+                  <td><code>board</code></td>
+                  <td>true</td>
+                  <td>全体管理 Issue を作る・更新するか</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td>—</td>
+                  <td><code>--permission-mode acceptEdits</code></td>
+                  <td><code>claude -p</code> に渡す引数</td>
+                  <td><code>AUTOPILOT_CLAUDE_ARGS</code></td>
+                </tr>
+                <tr>
+                  <td>—</td>
+                  <td>なし</td>
+                  <td>停止・長い待機のときに理由を引数にして実行するコマンド</td>
+                  <td><code>AUTOPILOT_NOTIFY_CMD</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>ファイルの置き場所: ログ <code>.harness/autopilot.log</code>、実行中の pid <code>.harness/autopilot.pid</code>(どちらも git 管理外)。</p>
+        </section>
+
+        <section id="commands">
+          <h2>コマンド一覧</h2>
+          <h3>ターミナル</h3>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>コマンド</th>
+                  <th>用途</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>bash .claude/scripts/autopilot-loop.sh --dry-run</code></td>
+                  <td>次に何をするかだけ表示して終わる</td>
+                </tr>
+                <tr>
+                  <td><code>bash .claude/scripts/autopilot-loop.sh --background</code></td>
+                  <td>裏で起動(ターミナルを閉じてよい)</td>
+                </tr>
+                <tr>
+                  <td><code>bash .claude/scripts/autopilot-loop.sh</code></td>
+                  <td>前面で起動(<kbd>Ctrl</kbd>+<kbd>C</kbd> で止まる)</td>
+                </tr>
+                <tr>
+                  <td><code>bash .claude/scripts/autopilot-loop.sh --log</code></td>
+                  <td>ログを追う(<kbd>Ctrl</kbd>+<kbd>C</kbd> で表示だけ終わる)</td>
+                </tr>
+                <tr>
+                  <td><code>bash .claude/scripts/autopilot-loop.sh --stop</code></td>
+                  <td>裏の実行を止める(実行中の Claude / Codex も止まる)</td>
+                </tr>
+                <tr>
+                  <td><code>bash .claude/scripts/autopilot-next.sh --summary</code></td>
+                  <td>現在地の要約(GitHub は読むだけ)</td>
+                </tr>
+                <tr>
+                  <td><code>bash .claude/scripts/autopilot-board.sh url</code></td>
+                  <td>全体管理 Issue の URL を出す</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>Claude Code のスラッシュコマンド</h3>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>コマンド</th>
+                  <th>用途</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>/autopilot</code></td>
+                  <td>現在地を表示し、ローカルなら上のコマンドを案内する(クラウドでは子セッションを起動して回す)</td>
+                </tr>
+                <tr>
+                  <td><code>/next-ticket [番号]</code></td>
+                  <td>1 チケットだけ手で進める。空き枠があれば、レビュー待ちの PR があっても着手する</td>
+                </tr>
+                <tr>
+                  <td><code>/fix-pr 番号</code></td>
+                  <td>PR のコンフリクト・CI 失敗・レビュー指摘を直す(マージはしない)</td>
+                </tr>
+                <tr>
+                  <td><code>/ship-ticket 番号</code></td>
+                  <td>econ 用。Codex の成果をコミットして draft PR にする</td>
+                </tr>
+                <tr>
+                  <td><code>/status</code></td>
+                  <td>現在地と次の一手</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="cloud">
+          <h2>クラウド(Claude Code on the web)で使う</h2>
+          <p>
+            Web のセッションで <code>/autopilot</code> を実行すると、チケットごとに子セッションが起動して並列に進む(コンテナもブランチも別)。子は自分の PR を見張って CI・レビューに対応し、PR の作成とマージを親に知らせる。親は 60 分ごとの見直しを予約して待つ。
+          </p>
+          <ul>
+            <li>通常モード専用(econ では子セッションを起動しない)</li>
+            <li>変化の無い見直しが 6 回(約 6 時間)続くと親は終了する。再開は <code>/autopilot</code></li>
+            <li>全体管理 Issue はローカルと共通</li>
+          </ul>
+        </section>
+
+        <section id="faq">
+          <h2>よくある質問</h2>
+          <details>
+            <summary>PC をスリープ・シャットダウンしたら?</summary>
+            <p>ループも止まる。復帰後に <code>--background</code> で起動し直せば、GitHub の状態から続きを判定する(状態はループの中に持っていない)。</p>
+          </details>
+          <details>
+            <summary>途中で普通に Claude Code を使って作業してもいい?</summary>
+            <p>
+              同じ作業ツリーで触ると未コミット変更やブランチ切り替えがぶつかる。触る前に全体管理 Issue で一時停止するか <code>--stop</code> する。別のディレクトリ(<code>git worktree</code>)で作業するなら止めなくてよい。
+            </p>
+          </details>
+          <details>
+            <summary>特定のチケットを自動で進めたくない</summary>
+            <p>その Issue に <code>autopilot:manual</code> ラベルを付ける。候補から外れる。</p>
+          </details>
+          <details>
+            <summary>同時進行を一時的に増やしたい / 減らしたい</summary>
+            <p><code>AUTOPILOT_MAX_IN_FLIGHT=3 bash .claude/scripts/autopilot-loop.sh --background</code> のように環境変数で上書きする。恒久的に変えるなら <code>.claude/autopilot.json</code>。</p>
+          </details>
+          <details>
+            <summary>全体管理 Issue が要らない</summary>
+            <p><code>.claude/autopilot.json</code> の <code>board</code> を <code>false</code> にする。一時停止は <code>--stop</code> で代用する。</p>
+          </details>
+          <details>
+            <summary>コメントだけのレビュー指摘は拾われる?</summary>
+            <p>
+              ローカルでは拾わない。直してほしい指摘は GitHub で <b>Request changes</b> にする(🔧 要対応になる)か、PR で <code>@claude</code> にメンションする。クラウドの子セッションは PR のイベントで拾う。
+            </p>
+          </details>
+        </section>
+
+        <footer>
+          実体: <code>.claude/scripts/autopilot-loop.sh</code>(ループ)/ <code>autopilot-next.sh</code>(判定)/ <code>autopilot-board.sh</code>(全体管理 Issue)。詳しい手順は
+          <code>.claude/commands/autopilot.md</code>、econ の規則は <code>.claude/rules/mode/econ.md</code>。
+        </footer>
+      </main>
+    </div>
+
+    <button class="theme" type="button" id="theme">表示: 自動</button>
+
+    <script>
+      // コマンド枠にコピーボタンを付ける(コメント行 # ... は除いてコピーする)
+      document.querySelectorAll(".cmd").forEach(function (box) {
+        var pre = box.querySelector("pre");
+        if (!pre) return;
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "copy";
+        btn.textContent = "コピー";
+        btn.addEventListener("click", function () {
+          var text = pre.innerText
+            .split("\n")
+            .filter(function (l) {
+              return !/^\s*#/.test(l);
+            })
+            .map(function (l) {
+              return l.replace(/\s+#\s.*$/, "");
+            })
+            .join("\n")
+            .trim();
+          var done = function () {
+            btn.textContent = "コピーした";
+            setTimeout(function () {
+              btn.textContent = "コピー";
+            }, 1400);
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done, function () {
+              btn.textContent = "選択してコピー";
+            });
+          } else {
+            btn.textContent = "選択してコピー";
+          }
+        });
+        box.appendChild(btn);
+      });
+
+      // 表示テーマの切り替え(自動 → ライト → ダーク)
+      (function () {
+        var order = ["auto", "light", "dark"];
+        var label = { auto: "表示: 自動", light: "表示: ライト", dark: "表示: ダーク" };
+        var btn = document.getElementById("theme");
+        var cur = "auto";
+        try {
+          cur = localStorage.getItem("autopilot-guide-theme") || "auto";
+        } catch (e) {}
+        function apply(t) {
+          if (t === "auto") document.documentElement.removeAttribute("data-theme");
+          else document.documentElement.setAttribute("data-theme", t);
+          btn.textContent = label[t];
+        }
+        apply(cur);
+        btn.addEventListener("click", function () {
+          cur = order[(order.indexOf(cur) + 1) % order.length];
+          apply(cur);
+          try {
+            localStorage.setItem("autopilot-guide-theme", cur);
+          } catch (e) {}
+        });
+      })();
+    </script>
+  </body>
+</html>
