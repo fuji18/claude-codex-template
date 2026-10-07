@@ -16,6 +16,13 @@
 
 ## 2026-10-07
 
+- **[manual]** autopilot の**事前チェック**を追加しました。`/autopilot` は `.claude/scripts/autopilot-preflight.sh`(新規・読み取り専用)を
+  実行し、全部 ✅ なら確認なしで裏で起動、⚠️ なら確認、❌ なら直し方を示して起動しません。`/autopilot check` / `status` / `stop` を足し、
+  `autopilot-loop.sh` も起動時に同じチェックを通します(`--background` は `setsid` で呼び出し元から切り離し、Claude Code から起動しても
+  セッション終了後に動き続けます)。チケットを無人で回すのに要る操作を `.claude/settings.json` の allow に足しました
+  (`Skill(commit)` / `harness-mode.sh` / `delegate-codex.sh` / `codex-run.sh list|show` / `autopilot-preflight.sh` / `autopilot-loop.sh`)。
+  **取り込む側の作業**: `.claude/settings.json`(merge 対象)の allow に上の項目を足してください(足さないとチェックが ⚠️ で知らせます)。
+
 - **[auto]** autopilot の人間向け手順書 `.claude/docs/autopilot-guide.html` を追加しました(ブラウザで開く単体の HTML。
   早見・初回の準備・econ・全体管理 Issue の見方・停止理由ごとの対処・設定・コマンド一覧)。
 

@@ -6,15 +6,32 @@ description: チケット消化を自動進行する。レビュー待ちの PR 
 
 `/next-ticket` → `/clear` を人手で繰り返す代わりに使う司令塔コマンドです。人間向けの手順書は `.claude/docs/autopilot-guide.html`(ブラウザで開く。使い方を聞かれたらこのパスを案内する)。**次に何をするかは毎回 `autopilot-next.sh` が決める**(選定規則を散文で持たない)。マージ・approve は人間が行い、ここでは**しない**。
 
-**引数:** なし
+**引数:** なし(= 事前チェック → 問題なければ開始)/ `check`(事前チェックだけ)/ `status`(現在地)/ `stop`(止める)
+
+| 引数 | 動き |
+| --- | --- |
+| なし | ステップ0 → 環境ごとの開始(ローカルはステップ2) |
+| `check` | ステップ0 の 1〜2 だけ行い、結果を示して終わる(何も起動しない) |
+| `status` | `bash .claude/scripts/autopilot-next.sh --summary` と `bash .claude/scripts/autopilot-board.sh url`、実行中なら `tail -n 15 .harness/autopilot.log` を示して終わる |
+| `stop` | `bash .claude/scripts/autopilot-loop.sh --stop` を実行し、結果を 1 行で伝えて終わる |
 
 ---
 
-## ステップ0: 前提検査
+## ステップ0: 事前チェック
 
-1. `bash .claude/scripts/harness-mode.sh` を確認する。`degraded`(モード C)なら**止まる**(Claude が動かない前提のモード)。`econ`(モード B)は**ローカルのみ**可(ステップ2。計画と PR だけ Claude、実装はシェルから Codex)。クラウドの子セッション起動は枠を使うので econ では行わない
-2. `bash .claude/scripts/autopilot-next.sh --summary` で現在地を出し、1〜3 行でユーザーに示す。終了コード 2 なら原因(gh の認証等)を報告して止まる
-3. 実行環境で分岐する:
+1. `bash .claude/scripts/autopilot-preflight.sh` を実行する(読み取り専用。GitHub にもファイルにも書かない)。出力の ✅ / ⚠️ / ❌ / ℹ️ の行は**そのままユーザーに見せる**(要約で ❌ を落とさない)
+2. 終了コードで分岐する:
+
+| exit | 意味 | 動き |
+| --- | --- | --- |
+| `0` | 問題なし | **確認を挟まず**、そのまま 3 へ進んで開始する(ユーザーは `/autopilot` で開始を指示済み) |
+| `1` | 警告あり | `AskUserQuestion` で「⚠️ を承知で開始する(推奨は内容次第)/ 中止して直す」を尋ねる。開始が選ばれたら 3 へ、中止なら ⚠️ の → を並べて終わる |
+| `2` | 致命的 | **開始しない。** ❌ の項目と → の直し方を並べて終わる(直せるものでも勝手に直さない。たとえば未コミット変更をコミット・退避しない) |
+| `3` | 既に実行中 | 開始しない。`status` と同じものを示して終わる |
+
+   ⚠️ と ❌ はチェックスクリプトが決める。司令塔が独自に格上げ・格下げしない。
+
+3. 実行環境で分岐する(モードの扱い: `degraded` はチェックが ❌ にする。`econ` はローカルのみ。クラウドの子セッション起動は枠を使うので econ では行わない):
    - **ローカル**(既定)→ ステップ2
    - **クラウド**(`CLAUDE_CODE_REMOTE=true` かつ `mcp__claude-code-remote__create_session` が使える、かつ normal)→ ステップ1
 
@@ -54,26 +71,35 @@ autopilot の子セッションとして動く。親セッション: [親のセ�
 
 **子からのメッセージを受けたら**、内容をユーザーに 1 行で伝えてからステップ1-2 の判定に戻る(マージで枠が空けば次のチケットが起動される)。
 
-## ステップ2: ローカル(ターミナルのループに任せる)
+## ステップ2: ローカル(ループを裏で起動して、このセッションは手を離す)
 
-このセッションの中でチケットを回し続けない。1 セッションで複数チケットを回すと、前のチケットの調査・実装ログが毎ターン再送され続ける。
+このセッションの中でチケットを回し続けない。1 セッションで複数チケットを回すと、前のチケットの調査・実装ログが毎ターン再送され続ける。**起動はこのセッションから行い、以降はループ(シェル)が `claude -p` をチケットごとに新しく起動する。**
 
-ユーザーに次をターミナルで実行するよう案内して終わる(**起動は 1 回だけ。あとは GitHub の全体管理 Issue を見ればよい**):
+1. 開始する:
 
-```bash
-bash .claude/scripts/autopilot-loop.sh --dry-run      # まず判定と起動予定だけ確認
-bash .claude/scripts/autopilot-loop.sh --background   # 裏で起動(ターミナルを閉じてもよい)
-bash .claude/scripts/autopilot-loop.sh --log          # 進行を見る / --stop で止める
-```
+   ```bash
+   bash .claude/scripts/autopilot-loop.sh --background
+   ```
+
+   起動前に同じ事前チェックがもう一度走る(❌ なら起動しない)。「裏で起動した(pid …)」が出れば成功。出なければログ(`tail -n 30 .harness/autopilot.log`)を見せて止まる
+
+2. 数秒待ってから `bash .claude/scripts/autopilot-board.sh url` で全体管理 Issue の URL を取り(初回は最初の判定で作られる。まだ無ければ「最初の判定の後に作られる」と伝える)、次をまとめて伝える:
+   - 全体管理 Issue の URL(状態の確認・一時停止はここ。スマホからでも操作できる)
+   - 様子を見る: `bash .claude/scripts/autopilot-loop.sh --log` / 止める: `/autopilot stop` か `--stop`
+   - 人がやることは「PR のレビューとマージ(econ では `gh pr ready`)」と「止まったときの判断」だけ。止まると理由が全体管理 Issue にコメントされる
+   - 手順書: `.claude/docs/autopilot-guide.html`
+   - **このセッションはここで閉じてよい**(`/clear` 推奨)。ループはセッションと無関係に動き続ける
+
+補足(手順書にも同じことを書いてある):
 
 - 1 周ごとに `claude -p` を新しいプロセスで起動する(= チケットごとの `/clear` 相当)
 - レビュー・CI 待ちの間はシェルが `pollSeconds` 眠るだけで、Claude の枠を消費しない
 - 作業ツリーは 1 つなので**実装は直列**。ただし WIP 上限まで PR を開いたままにできるので、PR 1 本のレビュー待ちの間に次のチケットを進められる
-- **全体管理 Issue**(`autopilot` ラベル、初回の判定で自動作成): 全チケットの状態(🔧 要対応 / 👀 レビュー待ち / 🚧 実装中 / ▶️ 着手可能 / ⏳ 依存待ち / 🙋 手動 / ✅ 完了)を判定のたびに書き出す。本文の「一時停止」にチェックを入れると次の周から止まり、外すと再開する(スマホの GitHub アプリからでも操作できる)。人手が要る停止は理由がコメントされる。**状態の正は各チケットのラベルと PR のまま**で、この Issue は表示と操作だけ(手で書き換えた内容は次の更新で上書きされる)
-- 停止の通知: 全体管理 Issue へのコメントに加え、`AUTOPILOT_NOTIFY_CMD`(例: `notify-send autopilot`、ntfy / Slack への `curl` を包んだスクリプト)があれば理由を引数に実行する。**自分の gh アカウントで投稿したコメントは自分には通知されない**ので、手元で気づきたいなら `AUTOPILOT_NOTIFY_CMD` を設定する
-- **econ(モード B)**: 1 チケットを 計画(`claude -p "/next-ticket N --plan-only"`)→ 実装(ループがシェルから `delegate-codex.sh impl` を直接実行。Claude を起動しない)→ draft PR(`claude -p "/ship-ticket N"`)の 3 段で進める。検収はせず CI に委ねる。`package.json` の `scripts` / `lint-staged` / `prepare` が変わっていたら止まって人間に返す。Codex が使えない(exit 3)ときは Sonnet fork に自動で落とさず止まる。draft はマージされず枠を埋め続けるので、上限は `econ.maxInFlight`(既定 4)を使う
+- **全体管理 Issue**(`autopilot` ラベル、初回の判定で自動作成): 全チケットの状態(🔧 要対応 / 👀 レビュー待ち / 🚧 実装中 / ▶️ 着手可能 / ⏳ 依存待ち / 🙋 手動 / ✅ 完了)を判定のたびに書き出す。本文の「一時停止」にチェックを入れると次の周から止まり、外すと再開する。人手が要る停止は理由がコメントされる。**状態の正は各チケットのラベルと PR のまま**で、この Issue は表示と操作だけ
+- 停止の通知: 全体管理 Issue へのコメントに加え、`AUTOPILOT_NOTIFY_CMD` があれば理由を引数に実行する。**自分の gh アカウントで投稿したコメントは自分には通知されない**
+- **econ(モード B)**: 1 チケットを 計画(`claude -p "/next-ticket N --plan-only"`)→ 実装(ループがシェルから `delegate-codex.sh impl` を直接実行。Claude を起動しない)→ draft PR(`claude -p "/ship-ticket N"`)の 3 段で進める。検収はせず CI に委ねる。`package.json` の `scripts` / `lint-staged` / `prepare` が変わっていたら止まって人間に返す。Codex が使えない(exit 3)ときは Sonnet fork に自動で落とさず止まる。上限は `econ.maxInFlight`(既定 4)
 - 自動進行に向かないチケット(委託禁止領域・新規依存)は `autopilot:manual` ラベルが付いて候補から外れる。人間が通常モードで `/next-ticket [番号]` を回す
-- `claude -p` は対話できないため、許可が要るコマンドで止まらないよう `AUTOPILOT_CLAUDE_ARGS`(既定 `--permission-mode acceptEdits`)と `.claude/settings.json` の allow を確認しておく
+- ターミナルから直接使う場合: `bash .claude/scripts/autopilot-preflight.sh`(チェックだけ)/ `autopilot-loop.sh --dry-run` / `--background` / `--log` / `--stop`
 
 ## 設定(`.claude/autopilot.json`)
 

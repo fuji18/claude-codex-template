@@ -19,3 +19,12 @@
 
 - 9(ライフサイクル差分で止まった後の「目視済み」をループに伝える手段)は据え置き。目視後に人間が `/ship-ticket N` を実行すれば、次の周から PR ありとして進む
 - 全体管理 Issue の書き込み(作成・更新・コメント)は実リポジトリでは未実行(このセッションで勝手に Issue を作らないため)。`render` で本文のみ確認済み。初回は `--dry-run` の後に前面で 1 周見ること
+
+## 追加: 開始前の事前チェック(2026-10-07)
+
+- [x] `autopilot-preflight.sh`(✅/⚠️/❌/ℹ️ と直し方。exit 0/1/2/3)
+- [x] `autopilot-loop.sh` の起動時にチェックを通す。`--background` は `setsid` で切り離し、`CLAUDECODE` を子に渡さない
+- [x] `/autopilot`: 引数なし = チェック → ✅ なら確認なしで開始 / ⚠️ なら AskUserQuestion / ❌ なら停止。`check` / `status` / `stop`
+- [x] `settings.json` の allow に無人実行で要る操作を追加
+- [x] 手順書・README・CHANGELOG
+- [ ] 検収(code-reviewer)

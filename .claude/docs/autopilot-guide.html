@@ -385,7 +385,7 @@
     <div class="wrap">
       <nav aria-label="目次">
         <div class="title">目次</div>
-        <a href="#quick">早見</a>
+        <a href="#quick">早見(始め方)</a>
         <a href="#setup">初回の準備</a>
         <a href="#daily">いつもの使い方</a>
         <a href="#econ">econ モード</a>
@@ -408,14 +408,48 @@
 
         <section id="quick">
           <h2>早見</h2>
+          <h3>Claude Code から始める(おすすめ)</h3>
+          <div class="cmd"><pre>/autopilot</pre></div>
+          <p>
+            事前チェックが走り、<b>全部 ✅ ならそのまま裏で起動</b>する。⚠️ があれば「承知で始めるか」を聞かれ、❌ があれば直し方を示して起動しない。起動したら Claude Code のセッションは閉じてよい(ループはセッションと関係なく動き続ける)。
+          </p>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>コマンド</th>
+                  <th>用途</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>/autopilot</code></td>
+                  <td>事前チェック → 問題なければ開始</td>
+                </tr>
+                <tr>
+                  <td><code>/autopilot check</code></td>
+                  <td>事前チェックだけ(何も起動しない)</td>
+                </tr>
+                <tr>
+                  <td><code>/autopilot status</code></td>
+                  <td>現在地・全体管理 Issue の URL・直近のログ</td>
+                </tr>
+                <tr>
+                  <td><code>/autopilot stop</code></td>
+                  <td>止める</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>ターミナルから始める場合</h3>
           <div class="cards">
             <div class="card">
-              <div class="k">① 始める前に確認</div>
-              <div class="v">予定だけ表示</div>
-              <div class="cmd"><pre>bash .claude/scripts/autopilot-loop.sh --dry-run</pre></div>
+              <div class="k">① 事前チェックだけ</div>
+              <div class="v">✅ / ⚠️ / ❌ を一覧</div>
+              <div class="cmd"><pre>bash .claude/scripts/autopilot-preflight.sh</pre></div>
             </div>
             <div class="card">
-              <div class="k">② 起動(1 回だけ)</div>
+              <div class="k">② 起動(起動前に同じチェックが自動で走る)</div>
               <div class="v">裏で動かす</div>
               <div class="cmd"><pre>bash .claude/scripts/autopilot-loop.sh --background</pre></div>
             </div>
@@ -437,7 +471,32 @@ bash .claude/scripts/autopilot-loop.sh --stop</pre></div>
 
         <section id="setup">
           <h2>初回の準備</h2>
-          <p>プロジェクトごとに 1 回だけ。リポジトリのルートで行う。</p>
+          <p>
+            プロジェクトごとに 1 回だけ。<b>ほとんどは <code>/autopilot check</code>(または <code>bash .claude/scripts/autopilot-preflight.sh</code>)が自動で確認する</b>ので、まずそれを実行し、❌ / ⚠️ の「→」に従って直せばよい。以下はチェック項目の中身と、チェックでは分からないこと。
+          </p>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>チェック項目</th>
+                  <th>❌ / ⚠️ になる条件</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>必要なコマンド</td><td>git / gh / jq / claude / nohup のどれかが無い(❌)</td></tr>
+                <tr><td>ハーネスモード</td><td>degraded(❌)</td></tr>
+                <tr><td>設定</td><td><code>.claude/autopilot.json</code> が壊れている・値が不正(❌)</td></tr>
+                <tr><td>GitHub</td><td>gh が未認証 / リポジトリに書き込めない(❌)</td></tr>
+                <tr><td>作業ツリー</td><td>未コミットの変更がある(❌)</td></tr>
+                <tr><td>ベースブランチ</td><td>origin のベースブランチに届かない(❌)</td></tr>
+                <tr><td>依存</td><td>node_modules が無い(⚠️)</td></tr>
+                <tr><td>無人実行の許可</td><td>チケットを回すのに要る操作が settings.json の allow に無い(⚠️)</td></tr>
+                <tr><td>Codex</td><td>econ で codex が無い・未ログイン・送信禁止ファイルがある(❌)。通常モードでは送信禁止ファイルだけ ⚠️</td></tr>
+                <tr><td>チケット</td><td>やることが無い / 依存が閉じない / 手動のものだけ / 別セッションの in-progress がある(⚠️)</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>チェックの内容を自分で確かめたい場合の手順:</p>
           <ol class="steps">
             <li>
               <b>必要なコマンドが使えるか確認する</b>(<code>gh</code> がログイン済み、<code>jq</code>、<code>claude</code>。econ で使うなら <code>codex</code> も)
