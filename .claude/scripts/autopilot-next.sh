@@ -20,6 +20,7 @@
 #   start   — 空き枠があり、依存が解決済みのチケットがある
 #   wait    — 進行中の作業がある(レビュー・CI 待ち)。空き枠が無い / 着手できるものが無い
 #   blocked — open のチケットが残るが、依存が閉じず着手できない
+#   manual  — 残りが autopilot:manual(自動進行に向かないと判断済み)のチケットだけ
 #   done    — open のチケットが無い
 #
 # 終了コード: 0 = 判定成功 / 2 = 取得・解析の失敗
@@ -38,6 +39,7 @@ summarize() {
       (if (.stalled | length) > 0 then " / PR 未作成の in-progress: \(.stalled | map("#\(.)") | join(", "))" else "" end),
     (if (.attention | length) > 0 then "要対応 PR: " + (.attention | map("#\(.pr)(\(.reasons | join(",")))") | join(", ")) else empty end),
     (if (.ready | length) > 0 then "着手可能: " + (.ready | map("#\(.number)") | join(", ")) else empty end),
+    (if ((.manual // []) | length) > 0 then "手動で回す: " + (.manual | map("#\(.)") | join(", ")) else empty end),
     (if (.blocked | length) > 0 then "依存待ち: " + (.blocked | map("#\(.number)←\(.waitingOn | map("#\(.)") | join("+"))") | join(", ")) else empty end),
     (if ((.fetchErrors // []) | length) > 0 then "⚠️ PR 詳細の取得失敗(判定が甘くなっている): " + (.fetchErrors | map("#\(.pr)(\(.failed | join(",")))") | join(", ")) else empty end),
     "open チケット: \(.openTickets)"'
@@ -67,9 +69,16 @@ fi
 
 # --- 設定(環境変数 > .claude/autopilot.json > 既定値) ---
 CONF=.claude/autopilot.json
-conf() { [ -f "$CONF" ] && jq -r --arg k "$1" '.[$k] // empty' "$CONF" 2>/dev/null; }
-MAX_IN_FLIGHT="${AUTOPILOT_MAX_IN_FLIGHT:-$(conf maxInFlight)}"
-MAX_IN_FLIGHT="${MAX_IN_FLIGHT:-2}"
+conf() { [ -f "$CONF" ] && jq -r --arg k "$1" 'if has($k) then .[$k] else empty end' "$CONF" 2>/dev/null; } # // は false を値なし扱いにするので使わない
+# econ(モード B)の PR は draft のままマージされず枠を埋め続けるので、上限を別に持つ
+HMODE="$(bash .claude/scripts/harness-mode.sh 2>/dev/null || echo normal)"
+if [ "$HMODE" = econ ]; then
+  MAX_IN_FLIGHT="${AUTOPILOT_MAX_IN_FLIGHT:-$([ -f "$CONF" ] && jq -r '.econ.maxInFlight // empty' "$CONF" 2>/dev/null)}"
+  MAX_IN_FLIGHT="${MAX_IN_FLIGHT:-4}"
+else
+  MAX_IN_FLIGHT="${AUTOPILOT_MAX_IN_FLIGHT:-$(conf maxInFlight)}"
+  MAX_IN_FLIGHT="${MAX_IN_FLIGHT:-2}"
+fi
 case "$MAX_IN_FLIGHT" in '' | *[!0-9]* | 0) die "maxInFlight は 1 以上の整数にする: $MAX_IN_FLIGHT" ;; esac
 
 # --- データ取得 ---
@@ -87,13 +96,9 @@ if [ -n "$ISSUES_FILE" ] || [ -n "$PRS_FILE" ]; then
   if [ -n "$DETAILS_FILE" ]; then cp "$DETAILS_FILE" "$TMP/details.json"; else echo '{}' >"$TMP/details.json"; fi
 else
   command -v gh >/dev/null 2>&1 || die "gh が見つからない(--issues/--prs でフィクスチャを渡すこともできる)"
-  REPO="${AUTOPILOT_REPO:-}"
-  if [ -z "$REPO" ]; then
-    # https://github.com/o/r(.git) / git@github.com:o/r.git / プロキシ経由の .../o/r のいずれも末尾 2 要素を取る
-    URL="$(git remote get-url origin 2>/dev/null)" || die "origin が無い(AUTOPILOT_REPO=owner/repo で指定できる)"
-    REPO="$(printf '%s' "$URL" | sed -E 's#\.git$##; s#^.*[:/]([^/:]+/[^/]+)$#\1#')"
-  fi
-  case "$REPO" in */*) ;; *) die "リポジトリを特定できない: $REPO" ;; esac
+  # shellcheck source=lib-github.sh
+  . .claude/scripts/lib-github.sh 2>/dev/null || die "lib-github.sh が読めない"
+  REPO="$(gh_resolve_repo)" || die "リポジトリを特定できない(AUTOPILOT_REPO=owner/repo で指定できる)"
   gh api --paginate "repos/$REPO/issues?labels=ticket&state=all&per_page=100" >"$TMP/issues.pages" 2>/dev/null ||
     die "Issue 一覧を取得できない(gh auth status を確認する)"
   gh api --paginate "repos/$REPO/pulls?state=open&per_page=100" >"$TMP/prs.pages" 2>/dev/null ||
@@ -124,7 +129,8 @@ BASE="$(jq -n --slurpfile i "$TMP/issues.json" --slurpfile p "$TMP/prs.json" '
   $i[0] as $issues | $p[0] as $prs
   | ($issues | map(select(.pull_request == null))) as $t
   | ($t | map(select(.state == "open"))) as $open
-  | ($t | map(select(.state == "closed") | .number)) as $closed
+  | ($t | map(select(.state == "closed"))) as $closedT
+  | ($closedT | map(.number)) as $closed
   | ($open | map(.number)) as $openNums
   | ($prs | map({number, draft, head, sha, issues: (.links | map(select(. as $n | $openNums | index($n))))})
          | map(select(.issues | length > 0))) as $tprs
@@ -132,8 +138,9 @@ BASE="$(jq -n --slurpfile i "$TMP/issues.json" --slurpfile p "$TMP/prs.json" '
   | ($open | map(select(.labels | index("in-progress")) | .number)) as $wip
   | (($wip + $withPr) | unique) as $inFlight
   | {
-      open: ($open | map({number, title, priority: prio, deps})),
+      open: ($open | map({number, title, priority: prio, deps, labels})),
       closed: $closed,
+      closedT: ($closedT | map({number, title})),
       prs: $tprs,
       inFlight: $inFlight,
       stalled: ($wip - $withPr)
@@ -169,7 +176,7 @@ fi
 
 # --- 2 段目: 判定 ---
 RESULT="$(jq -n --argjson b "$BASE" --slurpfile dd "$TMP/details.json" --argjson extra "$EXTRA_CLOSED" \
-  --argjson max "$MAX_IN_FLIGHT" '
+  --argjson max "$MAX_IN_FLIGHT" --arg mode "$HMODE" '
   $dd[0] as $d
   | ($b.closed + $extra) as $closed
   | ($b.prs | map(. as $p | ($d[($p.number | tostring)] // {}) as $x
@@ -188,12 +195,15 @@ RESULT="$(jq -n --argjson b "$BASE" --slurpfile dd "$TMP/details.json" --argjson
       | {pr: $p.number, issues: $p.issues, head: $p.head, draft: $p.draft, reasons: $why})) as $attention
   | ($b.open | map(select(.number as $n | $b.inFlight | index($n) | not))
       | map(select(all(.deps[]; . as $dep | $closed | index($dep))))
+      # autopilot:manual = 自動進行に向かない(委託禁止領域・新規依存など)と判断済み。人間が手で回す
+      | map(select(.labels | index("autopilot:manual") | not))
       | sort_by(.priority, .number)) as $ready
   | ([$max - ($b.inFlight | length), 0] | max) as $slots
   | (if ($attention | length) > 0 then "fix"
      elif $slots > 0 and ($ready | length) > 0 then "start"
      elif ($b.inFlight | length) > 0 then "wait"
-     elif ($b.open | length) > 0 then "blocked"
+     elif ($b.open | map(select(.labels | index("autopilot:manual") | not)) | length) > 0 then "blocked"
+     elif ($b.open | length) > 0 then "manual"
      else "done" end) as $action
   | {
       action: $action,
@@ -205,12 +215,17 @@ RESULT="$(jq -n --argjson b "$BASE" --slurpfile dd "$TMP/details.json" --argjson
       stalled: $b.stalled,
       attention: $attention,
       ready: ($ready | map({number, title, priority})),
-      blocked: ($b.open | map(select(.number as $n | ($b.inFlight | index($n) | not) and ($ready | map(.number) | index($n) | not)))
+      manual: ($b.open | map(select((.labels | index("autopilot:manual")) and (.number as $n | $b.inFlight | index($n) | not))) | map(.number)),
+      blocked: ($b.open | map(select(.number as $n | ($b.inFlight | index($n) | not) and ($ready | map(.number) | index($n) | not)
+                                     and (.labels | index("autopilot:manual") | not)))
                  | map({number, waitingOn: [.deps[] | select(. as $dep | $closed | index($dep) | not)]})),
       prs: ($b.prs | map({number, issues, head, draft})),
       fetchErrors: ($b.prs | map(. as $p | ($d[($p.number | tostring)].fetchErrors // []) | select(length > 0)
                      | {pr: $p.number, failed: .})),
-      openTickets: ($b.open | length)
+      openTickets: ($b.open | length),
+      mode: $mode,
+      tickets: ($b.open | map({number, title})),
+      closedTickets: $b.closedT
     }')" || die "判定に失敗した"
 
 if [ "$MODE" = summary ]; then

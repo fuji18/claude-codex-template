@@ -16,6 +16,19 @@
 
 ## 2026-10-07
 
+- **[manual]** autopilot に **全体管理 Issue**・**バックグラウンド実行**・**econ(モード B)対応**を足しました。
+  - 全体管理 Issue: `autopilot` ラベルの Issue を判定のたびに自動作成・更新します(実体は新規の
+    `.claude/scripts/autopilot-board.sh`)。全チケットの状態の一覧・本文のチェックでの一時停止・停止理由の
+    コメントを担います。状態の正は各チケットのラベル・PR のままです。`.claude/autopilot.json` の `board: false` で無効にできます
+  - `autopilot-loop.sh --background` / `--log` / `--stop` を追加しました。停止時には `AUTOPILOT_NOTIFY_CMD` を実行します。
+    自分のブランチ上の中断作業では止まらずに再開し、別セッションが実装中の in-progress があっても待機を続けます
+  - econ: 計画(`/next-ticket N --plan-only`)→ ループがシェルから `delegate-codex.sh impl` → draft PR(新規
+    `/ship-ticket`)の 3 段です。`package.json` のライフサイクル差分があれば止まります。WIP 上限は `econ.maxInFlight`(既定 4)
+  - 自動進行に向かないチケットは `autopilot:manual` ラベルで候補から外します(判定の新しい action `manual`)
+  - GitHub REST の解決を `lib-github.sh`(source 専用・新規)に切り出しました
+  - **取り込む側の作業**: `.claude/autopilot.json` に `board` / `econ` キーを足し、`.gitignore` に
+    `.harness/autopilot.log` と `.harness/autopilot.pid` を足してください(どちらも merge 対象)
+
 - **[manual]** チケット消化の自動進行 **`/autopilot`** と PR 修復 **`/fix-pr`** を追加しました。
   `/next-ticket` は「`in-progress` が 1 つでもあれば止まる」をやめ、**`maxInFlight`(既定 2)の空き枠が
   あれば、レビュー待ちの PR があっても依存解決済みのチケットに着手**します。判定(要対応 PR の修復 >

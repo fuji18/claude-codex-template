@@ -1,5 +1,5 @@
 ---
-description: チケット消化を自動進行する。レビュー待ちの PR は待ち、その間に依存が解決済みの独立チケットを並行で進める(WIP 上限は .claude/autopilot.json)
+description: チケット消化を自動進行する。レビュー待ちの PR は待ち、その間に依存が解決済みの独立チケットを並行で進める。全体管理 Issue で状態表示・一時停止、econ モードにも対応
 ---
 
 # チケットの自動進行
@@ -12,18 +12,18 @@ description: チケット消化を自動進行する。レビュー待ちの PR 
 
 ## ステップ0: 前提検査
 
-1. `bash .claude/scripts/harness-mode.sh` が `normal` でなければ**止まる**。econ(モード B)は枠を温存するモード、degraded(モード C)は Claude が動かない前提のモードで、どちらも自動進行と目的が矛盾する
+1. `bash .claude/scripts/harness-mode.sh` を確認する。`degraded`(モード C)なら**止まる**(Claude が動かない前提のモード)。`econ`(モード B)は**ローカルのみ**可(ステップ2。計画と PR だけ Claude、実装はシェルから Codex)。クラウドの子セッション起動は枠を使うので econ では行わない
 2. `bash .claude/scripts/autopilot-next.sh --summary` で現在地を出し、1〜3 行でユーザーに示す。終了コード 2 なら原因(gh の認証等)を報告して止まる
 3. 実行環境で分岐する:
-   - **クラウド**(`CLAUDE_CODE_REMOTE=true` かつ `mcp__claude-code-remote__create_session` が使える)→ ステップ1
-   - **ローカル** → ステップ2
+   - **ローカル**(既定)→ ステップ2
+   - **クラウド**(`CLAUDE_CODE_REMOTE=true` かつ `mcp__claude-code-remote__create_session` が使える、かつ normal)→ ステップ1
 
 ## ステップ1: クラウド(司令塔 = 振り分け役、チケットは子セッション)
 
 この司令塔セッションは**実装も計画もしない**。チケット 1 枚につき子セッションを 1 つ起動し(コンテナ・ブランチ・コンテキストが別 = `/clear` 不要)、自分は判定と起動だけを繰り返す。
 
 1. 自分のセッション ID を `mcp__claude-code-remote__get_session`(`session_id` 省略)で取得しておく(子からの通知先)
-2. `bash .claude/scripts/autopilot-next.sh` の `action` で分岐する:
+2. `bash .claude/scripts/autopilot-next.sh` の `action` で分岐する(判定のたびに `bash .claude/scripts/autopilot-next.sh | bash .claude/scripts/autopilot-board.sh sync --status "[いまの動き]"` で全体管理 Issue を更新し、`autopilot-board.sh paused` が exit 0 なら起動をせず 3 の予約だけして終える):
 
 | action | 動き |
 | --- | --- |
@@ -58,16 +58,21 @@ autopilot の子セッションとして動く。親セッション: [親のセ�
 
 このセッションの中でチケットを回し続けない。1 セッションで複数チケットを回すと、前のチケットの調査・実装ログが毎ターン再送され続ける。
 
-ユーザーに次をターミナルで実行するよう案内して終わる:
+ユーザーに次をターミナルで実行するよう案内して終わる(**起動は 1 回だけ。あとは GitHub の全体管理 Issue を見ればよい**):
 
 ```bash
-bash .claude/scripts/autopilot-loop.sh --dry-run   # まず判定と起動予定だけ確認
-bash .claude/scripts/autopilot-loop.sh             # 実行(Ctrl-C で止まる)
+bash .claude/scripts/autopilot-loop.sh --dry-run      # まず判定と起動予定だけ確認
+bash .claude/scripts/autopilot-loop.sh --background   # 裏で起動(ターミナルを閉じてもよい)
+bash .claude/scripts/autopilot-loop.sh --log          # 進行を見る / --stop で止める
 ```
 
 - 1 周ごとに `claude -p` を新しいプロセスで起動する(= チケットごとの `/clear` 相当)
 - レビュー・CI 待ちの間はシェルが `pollSeconds` 眠るだけで、Claude の枠を消費しない
 - 作業ツリーは 1 つなので**実装は直列**。ただし WIP 上限まで PR を開いたままにできるので、PR 1 本のレビュー待ちの間に次のチケットを進められる
+- **全体管理 Issue**(`autopilot` ラベル、初回の判定で自動作成): 全チケットの状態(🔧 要対応 / 👀 レビュー待ち / 🚧 実装中 / ▶️ 着手可能 / ⏳ 依存待ち / 🙋 手動 / ✅ 完了)を判定のたびに書き出す。本文の「一時停止」にチェックを入れると次の周から止まり、外すと再開する(スマホの GitHub アプリからでも操作できる)。人手が要る停止は理由がコメントされる。**状態の正は各チケットのラベルと PR のまま**で、この Issue は表示と操作だけ(手で書き換えた内容は次の更新で上書きされる)
+- 停止の通知: 全体管理 Issue へのコメントに加え、`AUTOPILOT_NOTIFY_CMD`(例: `notify-send autopilot`、ntfy / Slack への `curl` を包んだスクリプト)があれば理由を引数に実行する。**自分の gh アカウントで投稿したコメントは自分には通知されない**ので、手元で気づきたいなら `AUTOPILOT_NOTIFY_CMD` を設定する
+- **econ(モード B)**: 1 チケットを 計画(`claude -p "/next-ticket N --plan-only"`)→ 実装(ループがシェルから `delegate-codex.sh impl` を直接実行。Claude を起動しない)→ draft PR(`claude -p "/ship-ticket N"`)の 3 段で進める。検収はせず CI に委ねる。`package.json` の `scripts` / `lint-staged` / `prepare` が変わっていたら止まって人間に返す。Codex が使えない(exit 3)ときは Sonnet fork に自動で落とさず止まる。draft はマージされず枠を埋め続けるので、上限は `econ.maxInFlight`(既定 4)を使う
+- 自動進行に向かないチケット(委託禁止領域・新規依存)は `autopilot:manual` ラベルが付いて候補から外れる。人間が通常モードで `/next-ticket [番号]` を回す
 - `claude -p` は対話できないため、許可が要るコマンドで止まらないよう `AUTOPILOT_CLAUDE_ARGS`(既定 `--permission-mode acceptEdits`)と `.claude/settings.json` の allow を確認しておく
 
 ## 設定(`.claude/autopilot.json`)
@@ -77,6 +82,8 @@ bash .claude/scripts/autopilot-loop.sh             # 実行(Ctrl-C で止まる)
 | `maxInFlight` | 2 | 同時に進める作業の上限(in-progress のチケット + チケットに紐づく open PR)。レビュー待ちの PR もここに数える |
 | `pollSeconds` | 300 | ローカルループの再判定間隔 |
 | `maxRuns` | 20 | ローカルループが `claude -p` を起動する回数の上限 |
+| `board` | true | 全体管理 Issue を作成・更新するか |
+| `econ.maxInFlight` | 4 | econ(モード B)での同時進行の上限(draft PR を積む) |
 
 **チケットの完了は Issue の closed で判定する。** PR の `Closes #N` で Issue が自動クローズされるのは**デフォルトブランチへのマージ時だけ**なので、`baseBranch` が `develop` のプロジェクトでは、マージ後に Issue を手で閉じないと依存が解けず `blocked` / `stalled` が残る。
 

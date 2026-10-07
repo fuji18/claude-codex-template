@@ -6,7 +6,11 @@ description: GitHub Issues のチケットから次に着手すべきものを�
 
 GitHub Issues のチケット(`ticket` ラベル付き Issue)を消化するための日常コマンドです。ステータスはラベル(`in-progress`)と open/closed で管理し、チケットファイルの編集・コミットは発生しません。
 
-**引数:** なし(任意で Issue 番号を指定してよい。例: `/next-ticket 12`)
+**引数:** なし(任意で Issue 番号を指定してよい。例: `/next-ticket 12`)。`--plan-only` を付けると計画までで止まる(下記)
+
+> **`--plan-only`(econ の自動進行用。`autopilot-loop.sh` が付ける)**: ステップ1〜2 と、ステップ3 のブランチ準備・steering 計画(`/add-feature` ステップ1〜4)だけを行う。`design.md` を書き切って冒頭を `<!-- status: ready -->` にし、`.steering/` を `Skill('commit')` でコミット・push して**終了する**(実装の委託はループがシェルから `delegate-codex.sh impl` で行い、PR は `/ship-ticket` が作る。.claude/rules/mode/econ.md の 1・3・4)。
+> - すでに `.steering/*-issue[番号]-*` がある場合は計画のやり直し: Codex の判断待ち(exit 1)なら `bash .claude/scripts/codex-run.sh list` → `show [id]` で直近の run の判断待ち内容を読み、判断を `design.md` に追記する。計画未完成(exit 5)なら書き切って印を `ready` に変える。どちらもコミットして終了する
+> - `delegate:codex` ラベルの判定はしない(econ の自動進行は常に Codex に委託する)。委託禁止領域に触れる・新規依存が要るチケットなら計画せず、`in-progress` を外して **`autopilot:manual` ラベルを付け**、Issue に理由をコメントして終了する(判定はこのラベルのチケットを自動着手の候補から外すので、ループは次のチケットへ進む。人間が通常モードで `/next-ticket [番号]` を回す)
 
 ---
 
