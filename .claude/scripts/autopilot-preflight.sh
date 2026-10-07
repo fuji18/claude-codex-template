@@ -41,6 +41,11 @@ if [ -n "$MISSING" ]; then
   ng "必要なコマンドが無い:$MISSING" "インストールしてから再実行する(claude は Claude Code CLI)"
 else
   ok "必要なコマンド: git / gh / jq / claude / nohup"
+  if claude auth status >/dev/null 2>&1; then
+    ok "Claude: ログイン済み"
+  else
+    ng "Claude: ログインしていない(claude -p が起動直後に失敗する)" "claude を起動してログインする(claude auth login)"
+  fi
 fi
 command -v jq >/dev/null 2>&1 || { echo "RESULT: ng"; exit 2; } # 以降の検査は jq 前提
 
@@ -63,6 +68,8 @@ if [ -f "$CONF" ]; then
       v="$(jq -r --arg k "$k" 'if has($k) then .[$k] | tostring else "" end' "$CONF")"
       case "$v" in '' | *[!0-9]* | 0) [ -n "$v" ] && BAD="$BAD $k=$v" ;; esac
     done
+    v="$(jq -r 'if (.econ | type) == "object" and (.econ | has("maxInFlight")) then .econ.maxInFlight | tostring else "" end' "$CONF")"
+    case "$v" in '' | *[!0-9]* | 0) [ -n "$v" ] && BAD="$BAD econ.maxInFlight=$v" ;; esac
     if [ -n "$BAD" ]; then
       ng "設定: 1 以上の整数でない値がある:$BAD" "$CONF を直す"
     else
@@ -131,9 +138,12 @@ Bash(gh issue view:*)
 Bash(gh issue edit:*)
 Bash(gh issue comment:*)
 Bash(gh pr create:*)
+Bash(gh pr view:*)
+Bash(gh pr checks:*)
+Bash(gh run view:*)
 Bash(bash .claude/scripts/autopilot-next.sh:*)
 Bash(bash .claude/scripts/harness-mode.sh:*)
-Bash(bash .claude/scripts/delegate-codex.sh:*)
+Bash(bash .claude/scripts/delegate-codex.sh impl:*)
 Bash(bash .claude/scripts/codex-run.sh list:*)
 Bash(bash .claude/scripts/codex-run.sh show:*)
 EOF

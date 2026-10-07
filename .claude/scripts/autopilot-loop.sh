@@ -73,21 +73,39 @@ case "${1:-}" in
     # 事前チェック: 致命的な問題(❌)があれば起動しない。警告(⚠️)は表示して進む
     bash .claude/scripts/autopilot-preflight.sh
     case $? in
-      2) echo "事前チェックに ❌ があるので起動しない(上の → を直してから再実行する)"; exit 2 ;;
+      0 | 1) ;;
       3) exit 1 ;;
+      *) echo "事前チェックに ❌ がある(または事前チェック自体が失敗した)ので起動しない。上の → を直してから再実行する"; exit 2 ;;
     esac
     mkdir -p .harness
     # pid ファイルは起動した本体が自分で書く(前面実行と同じ排他を通す)。
     # setsid で端末・呼び出し元(Claude Code の Bash 等)のプロセスグループから切り離し、呼び出し元が
     # 終わっても生き残らせる。Claude Code の中から起動したときの環境変数は子の claude -p に引き継がない
-    LAUNCH=(nohup)
-    command -v setsid >/dev/null 2>&1 && LAUNCH=(setsid nohup)
-    AUTOPILOT_PREFLIGHT_DONE=1 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT "${LAUNCH[@]}" bash "$SELF" >>"$LOGF" 2>&1 </dev/null &
-    sleep 1
-    if P="$(loop_alive)"; then
+    # setsid が無い環境(macOS 標準)は python3 / perl の setsid で代替する。どれも無ければ nohup だけ
+    # (SIGHUP は防げるが、呼び出し元がプロセスグループごと終了させると巻き込まれうる)
+    if command -v setsid >/dev/null 2>&1; then
+      LAUNCH=(setsid nohup)
+    elif command -v python3 >/dev/null 2>&1; then
+      LAUNCH=(python3 -c 'import os, sys; os.setsid(); os.execvp(sys.argv[1], sys.argv[1:])' nohup)
+    elif command -v perl >/dev/null 2>&1; then
+      LAUNCH=(perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV or die' nohup)
+    else
+      LAUNCH=(nohup)
+      echo "⚠️ setsid / python3 / perl が無いため、呼び出し元から完全には切り離せない。ターミナルから起動するのが確実"
+    fi
+    # 親の Claude Code セッション由来の変数は子の claude -p に渡さない(ネスト起動の検出・接続先の混線を避ける)
+    AUTOPILOT_PREFLIGHT_DONE=1 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT -u CLAUDE_CODE_SSE_PORT \
+      "${LAUNCH[@]}" bash "$SELF" >>"$LOGF" 2>&1 </dev/null &
+    # 本体が pid ファイルを書くまで最大 5 秒待つ(遅い環境で「失敗」と誤報しない)
+    P=""
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+      P="$(loop_alive)" && break
+      sleep 0.5
+    done
+    if [ -n "$P" ]; then
       echo "autopilot を裏で起動した(pid $P)。ログ: bash $SELF --log / 停止: bash $SELF --stop"
     else
-      echo "起動に失敗した。ログを確認する: tail -n 30 $LOGF"; exit 1
+      echo "起動を確認できない(すぐ終了したか、まだ起動中)。ログを確認する: tail -n 30 $LOGF"; exit 1
     fi
     exit 0
     ;;
@@ -163,8 +181,9 @@ trap 'log "割り込みで終了"; release_pid; exit 130' INT TERM
 if [ "$DRY" = 0 ] && [ "${AUTOPILOT_PREFLIGHT_DONE:-}" != 1 ]; then
   bash .claude/scripts/autopilot-preflight.sh
   case $? in
-    2) echo "事前チェックに ❌ があるので起動しない(上の → を直してから再実行する)" >&2; exit 2 ;;
+    0 | 1) ;;
     3) exit 1 ;;
+    *) echo "事前チェックに ❌ がある(または事前チェック自体が失敗した)ので起動しない。上の → を直してから再実行する" >&2; exit 2 ;;
   esac
 fi
 

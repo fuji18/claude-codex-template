@@ -27,4 +27,4 @@
 - [x] `/autopilot`: 引数なし = チェック → ✅ なら確認なしで開始 / ⚠️ なら AskUserQuestion / ❌ なら停止。`check` / `status` / `stop`
 - [x] `settings.json` の allow に無人実行で要る操作を追加
 - [x] 手順書・README・CHANGELOG
-- [ ] 検収(code-reviewer)
+- [x] 検収(code-reviewer): Critical 0 / Major 4 / Minor 7。Major は全件修正(事前チェックの想定外終了コードで起動しない / delegate-codex.sh の allow を impl に限定 / fix-pr・next-ticket の gh api を allow 済みの gh issue view・gh pr checks・gh run view に置換 / claude のログイン確認)。Minor は 5(setsid の代替)・6(起動確認の待ち)・7(親セッションの変数)・10(econ.maxInFlight の検査)を修正。8・9・11 は据え置き(内部フラグ・保護ブランチ上でもループがブランチを切る・econ の説明は手順書にある)

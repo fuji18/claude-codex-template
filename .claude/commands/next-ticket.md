@@ -42,7 +42,7 @@ bash .claude/scripts/autopilot-next.sh             # JSON(action / target / read
 | `done` | ステップ5 の「全チケットがクローズ済み」と同じ提案をして終了する |
 
    空き枠の上限は `.claude/autopilot.json` の `maxInFlight`(既定 2)。in-progress の open チケットと、チケットに紐づく open PR の和集合を数える。
-3. 選定した Issue に **`delegate:codex` ラベルが付いているか**を確認する(`gh api repos/{owner}/{repo}/issues/[番号] --jq '[.labels[].name]'`)。**ラベルの有無は選定順序に影響しない** — 変わるのはステップ3 の実装フェーズの流し方だけ。
+3. 選定した Issue に **`delegate:codex` ラベルが付いているか**を確認する(`gh issue view [番号] --json labels --jq '[.labels[].name]'`。クラウドでは `mcp__github__issue_read`)。**ラベルの有無は選定順序に影響しない** — 変わるのはステップ3 の実装フェーズの流し方だけ。
 4. 選定結果(Issue 番号・タイトル・理由・`delegate:codex` の有無・レビュー待ちで並行している PR があればその番号)を 1〜2 行でユーザーに提示してから着手する。
 
 ### ステップ2: ステータス更新(着手)
