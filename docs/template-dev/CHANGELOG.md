@@ -14,6 +14,41 @@
 
 ---
 
+## 2026-10-07
+
+- **[manual]** autopilot の**事前チェック**を追加しました。`/autopilot` は `.claude/scripts/autopilot-preflight.sh`(新規・読み取り専用)を
+  実行し、全部 ✅ なら確認なしで裏で起動、⚠️ なら確認、❌ なら直し方を示して起動しません。`/autopilot check` / `status` / `stop` を足し、
+  `autopilot-loop.sh` も起動時に同じチェックを通します(`--background` は `setsid` で呼び出し元から切り離し、Claude Code から起動しても
+  セッション終了後に動き続けます)。チケットを無人で回すのに要る操作を `.claude/settings.json` の allow に足しました
+  (`Skill(commit)` / `harness-mode.sh` / `delegate-codex.sh impl` / `codex-run.sh list|show` / `gh run view` / `autopilot-preflight.sh` / `autopilot-loop.sh`)。
+  **取り込む側の作業**: `.claude/settings.json`(merge 対象)の allow に上の項目を足してください(足さないとチェックが ⚠️ で知らせます)。
+
+- **[auto]** autopilot の人間向け手順書 `.claude/docs/autopilot-guide.html` を追加しました(ブラウザで開く単体の HTML。
+  早見・初回の準備・econ・全体管理 Issue の見方・停止理由ごとの対処・設定・コマンド一覧)。
+
+- **[manual]** autopilot に **全体管理 Issue**・**バックグラウンド実行**・**econ(モード B)対応**を足しました。
+  - 全体管理 Issue: `autopilot` ラベルの Issue を判定のたびに自動作成・更新します(実体は新規の
+    `.claude/scripts/autopilot-board.sh`)。全チケットの状態の一覧・本文のチェックでの一時停止・停止理由の
+    コメントを担います。状態の正は各チケットのラベル・PR のままです。`.claude/autopilot.json` の `board: false` で無効にできます
+  - `autopilot-loop.sh --background` / `--log` / `--stop` を追加しました。停止時には `AUTOPILOT_NOTIFY_CMD` を実行します。
+    自分のブランチ上の中断作業では止まらずに再開し、別セッションが実装中の in-progress があっても待機を続けます
+  - econ: 計画(`/next-ticket N --plan-only`)→ ループがシェルから `delegate-codex.sh impl` → draft PR(新規
+    `/ship-ticket`)の 3 段です。`package.json` のライフサイクル差分があれば止まります。WIP 上限は `econ.maxInFlight`(既定 4)
+  - 自動進行に向かないチケットは `autopilot:manual` ラベルで候補から外します(判定の新しい action `manual`)
+  - GitHub REST の解決を `lib-github.sh`(source 専用・新規)に切り出しました
+  - **取り込む側の作業**: `.claude/autopilot.json` に `board` / `econ` キーを足し、`.gitignore` に
+    `.harness/autopilot.log` と `.harness/autopilot.pid` を足してください(どちらも merge 対象)
+
+- **[manual]** チケット消化の自動進行 **`/autopilot`** と PR 修復 **`/fix-pr`** を追加しました。
+  `/next-ticket` は「`in-progress` が 1 つでもあれば止まる」をやめ、**`maxInFlight`(既定 2)の空き枠が
+  あれば、レビュー待ちの PR があっても依存解決済みのチケットに着手**します。判定(要対応 PR の修復 >
+  着手 > 待機)は新規の `.claude/scripts/autopilot-next.sh` に一本化し、`/next-ticket`・`/status`・
+  `/autopilot`・ローカルループ(`.claude/scripts/autopilot-loop.sh`)が同じ結果を使います。GitHub へは
+  REST(`gh api`)だけで触るため、GraphQL が 403 になるクラウドセッションでも動きます。
+  **取り込む側の作業**: `.claude/autopilot.json`(merge 対象・新規)を取り込み、`.claude/settings.json` の
+  allow に `Bash(bash .claude/scripts/autopilot-next.sh:*)` を足してください。ローカルループを使う場合は
+  `claude -p` が許可待ちで止まらないよう `AUTOPILOT_CLAUDE_ARGS` と allow を確認してください。
+
 ## 2026-09-07
 
 - **[auto]** `delegate-codex.sh`(1777 行)から `lib-forbidden.sh`(委託禁止領域の配列・

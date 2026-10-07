@@ -106,6 +106,8 @@ Agent Teams を有効化した場合は、`/config` で **Default teammate model
 ```
 > /status                                # 現在地の確認と次の一手の提案
 > /next-ticket                           # 次のチケットに着手(ラベル管理込み)
+> /autopilot                             # チケット消化を自動進行(事前チェック → 問題なければ裏で開始)
+> /fix-pr 42                             # 既存 PR のコンフリクト・CI 失敗・レビュー指摘を直す
 > /add-feature ユーザープロフィール編集   # 機能追加(計画→実装→検証→PR まで)
 > /fix-issue 42                          # GitHub Issue の修正と PR 作成
 > /check                                 # lint・型チェック・テスト・フォーマット一括実行&自動修正
@@ -188,6 +190,16 @@ flowchart TD
 - **Claude Code on the web** から開いた場合、SessionStart hook が `npm install` を自動実行する(devcontainer 不要で `/check` が通る)。web のリモート環境には `gh` CLI が無いため、GitHub 操作は `mcp__github__*` で代替する
 - **MCP は最小構成。** 既定は Context7(最新ライブラリドキュメント参照)のみを `.mcp.json` に登録している。追加の判断基準は `.claude/docs/mcp-introduction-guide.md`、serena の再導入は `.claude/docs/serena-reintroduction.md`
 - **PR ボディは `.github/pull_request_template.md`** に従う(`Closes #N` と `.steering/` ディレクトリ名を記録する)
+
+### チケット消化の自動進行(`/autopilot`)
+
+`/next-ticket` → `/clear` の繰り返しを自動化する。人間向けの手順書は **`.claude/docs/autopilot-guide.html`**(ブラウザで開く)。
+
+- **判定は `.claude/scripts/autopilot-next.sh` が毎回行う**(REST のみなのでクラウドでも動く)。優先順は 要対応 PR(コンフリクト / CI 失敗 / 変更要求)の修復 → 空き枠があれば依存(`depends: #N`)が解決済みのチケットに着手 → 待機。**レビュー待ちの PR は待つ(マージは人間)が、その間も `maxInFlight`(`.claude/autopilot.json`、既定 2)まで独立チケットを並行して進める**
+- **ローカル**(推奨): Claude Code で **`/autopilot`** を実行すると事前チェック(`autopilot-preflight.sh`)が走り、全部 ✅ なら裏で起動、⚠️ なら確認、❌ なら直し方を示して起動しない(`/autopilot check` / `status` / `stop` もある)。ターミナルからは `bash .claude/scripts/autopilot-loop.sh --background`(起動前に同じチェックが走る。ログは `--log`、停止は `--stop`)。1 周ごとに `claude -p` を新プロセスで起動し(= `/clear` 相当)、待機中はシェルが眠るだけで枠を消費しない
+- **全体管理 Issue**(`autopilot` ラベル、自動作成): 全チケットの状態を一覧し、本文のチェックで一時停止・再開できる。人手が要る停止は理由がコメントされる。状態の正は各チケットのラベル・PR のままで、この Issue は表示と操作だけ
+- **econ(モード B)でも動く**(ローカルのみ): 計画だけ `claude -p` → 実装はループがシェルから Codex に委託 → draft PR だけ `claude -p`(`/ship-ticket`)。検収は CI に委ね、`package.json` のライフサイクル差分があれば止まる。degraded では止まる
+- **クラウド**: 司令塔セッションがチケットごとに子セッションを起動する(コンテナ・ブランチ・コンテキストが別)。子は PR を購読して CI・レビューに対応し、作成・マージを親に通知する
 
 ### ブランチ戦略(単一ソース = `.claude/branch-policy.json`)
 
@@ -385,6 +397,9 @@ Codex CLI が無い・未認証の環境では `delegate-codex.sh` が `exit 3` 
 | `/setup-tickets`         | 初回(任意)                 | 実装チケットを GitHub Issues に発行                    |
 | `/harness-setup`         | 初回(検証コマンド確定後)   | ハーネス層の追加(スキルとして提供)                     |
 | `/next-ticket`           | 日常                       | 次のチケットに着手(ラベル管理込み)                     |
+| `/autopilot`             | 日常                       | チケット消化の自動進行(事前チェック → 開始)            |
+| `/fix-pr [番号]`         | 日常                       | 既存 PR の修復(コンフリクト・CI・レビュー指摘)         |
+| `/ship-ticket [番号]`    | econ 自動進行が呼ぶ        | Codex の委託成果を draft PR にする(検収なし)           |
 | `/add-feature [機能]`    | 日常                       | 機能追加の計画→実装→検証→PR                            |
 | `/fix-issue [番号]`      | 日常                       | Issue 修正と PR 作成                                   |
 | `/check`                 | 日常                       | 品質チェック一括実行&自動修正                          |
@@ -407,8 +422,10 @@ Codex CLI が無い・未認証の環境では `delegate-codex.sh` が `exit 3` 
 | `latest-steering.sh`                                                                                       | 最新 `.steering/` の判定(hook・fork・SessionStart が共有)                   |
 | `check-record-hygiene.sh`                                                                                  | CHANGELOG / decisions.jsonl の記録漏れ判定(CI と手元で同じ結果)             |
 | `check-forbidden-paths-doc.sh`                                                                             | 委託禁止領域の記述乖離の双方向照合                                          |
+| `autopilot-next.sh`                                                                                        | チケット自動進行の判定(`/next-ticket` / `/autopilot` / ループが共有)        |
+| `autopilot-loop.sh` / `autopilot-preflight.sh` / `autopilot-board.sh`                                      | 自動進行のループ / 開始前チェック / 全体管理 Issue                          |
 | `block-dangerous-cmds.sh` / `check-branch-policy.sh` / `check-implementation-phase.sh` / `lint-on-edit.sh` | hook の実体                                                                 |
-| `lib-record.sh`                                                                                            | source 専用の共有ライブラリ(**実行権限を付けない**。CI が検査する)          |
+| `lib-record.sh` / `lib-github.sh`                                                                          | source 専用の共有ライブラリ(**実行権限を付けない**。CI が検査する)          |
 
 ---
 

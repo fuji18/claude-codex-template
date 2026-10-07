@@ -1,0 +1,404 @@
+#!/bin/bash
+# ローカル CLI 用のチケット自動進行ループ(人間がターミナルで 1 回叩けば、あとは放置できる)。
+#
+# 1 周 = autopilot-next.sh の判定 1 回 + 必要なら `claude -p` 1 回。
+# `claude -p` は毎回新しいプロセスなので、チケットごとの /clear を人手で挟む必要がない。
+# レビュー・CI 待ちの間はシェルが眠るだけで Claude を起動しない(枠を消費しない)。
+#
+# 司令塔セッションの中でループさせないのは、1 セッションで複数チケットを回すと
+# 調査・実装ログが毎ターン再送され続けるため(.claude/rules/lead/context-management.md)。
+#
+# 使い方:
+#   bash .claude/scripts/autopilot-preflight.sh          # 事前チェックだけ(起動時にも自動で走る)
+#   bash .claude/scripts/autopilot-loop.sh --dry-run     # 判定と起動予定のコマンドだけ表示して終わる
+#   bash .claude/scripts/autopilot-loop.sh --background  # 裏で起動する(ログ: .harness/autopilot.log)
+#   bash .claude/scripts/autopilot-loop.sh --log         # ログを追う(Ctrl-C でログ表示だけ終わる)
+#   bash .claude/scripts/autopilot-loop.sh --stop        # 裏の実行を止める
+#   bash .claude/scripts/autopilot-loop.sh               # 前面で実行する
+#
+# 全体管理 Issue(`autopilot` ラベル): 判定のたびに全チケットの状態を書き出し、
+#   本文の「一時停止」にチェックが入っていれば新規着手も修復もせずに待つ。人手が要る停止は
+#   そこにコメントされる(実体は autopilot-board.sh。`.claude/autopilot.json` の board: false で無効)
+#
+# ハーネスモード:
+#   normal — /next-ticket が計画 → 委託 → 検収 → PR まで 1 回の claude -p で行う
+#   econ   — 枠を温存する 3 段: claude -p で計画だけ(/next-ticket N --plan-only)→ このスクリプトが
+#            delegate-codex.sh impl を直接叩く(Claude を起動しない)→ claude -p で draft PR だけ
+#            (/ship-ticket N)。検収は CI に委ねる(.claude/rules/mode/econ.md)
+#   degraded — 止まる(Claude が動かない前提のモード)
+#
+# 環境変数(設定ファイル .claude/autopilot.json より優先):
+#   AUTOPILOT_POLL_SECONDS  待機時の再判定間隔(既定 300)
+#   AUTOPILOT_MAX_RUNS      claude -p を起動する回数の上限(既定 20)
+#   AUTOPILOT_CLAUDE_ARGS   claude に渡す引数(既定 "--permission-mode acceptEdits")
+#   AUTOPILOT_NOTIFY_CMD    停止時に理由を引数に実行するコマンド(例: 'notify-send autopilot')
+#
+# 止まる条件(人間に返す。全体管理 Issue にコメントされる): モードが degraded / 他チケットの
+#   未コミット変更 / 判定の失敗 / 同じ対象が 2 周続けて進まない / 別セッションの作業らしい
+#   in-progress / econ で Codex が使えない・失敗・package.json のライフサイクル差分 /
+#   blocked / done / 起動回数の上限
+set -uo pipefail
+
+SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")" # cd の後でも --background が自分を起動できるよう先に絶対パス化する
+cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" || exit 2
+
+LOGF=.harness/autopilot.log
+PIDF=.harness/autopilot.pid
+
+# pid ファイルが指すプロセスが本当にこのループか(pid の再利用で無関係なプロセスを殺さない)
+loop_alive() {
+  local p
+  p="$(cat "$PIDF" 2>/dev/null)" || return 1
+  [ -n "$p" ] && kill -0 "$p" 2>/dev/null || return 1
+  ps -o args= -p "$p" 2>/dev/null | grep -q 'autopilot-loop' || return 1
+  printf '%s' "$p"
+}
+# 子孫を先に集めてから止める(delegate-codex.sh が起動した codex exec は孫なので pkill -P では残る)
+descendants() { local c; for c in $(pgrep -P "$1" 2>/dev/null); do echo "$c"; descendants "$c"; done; }
+# 本体を先に TERM する: bash は前面の子が終わるまで trap を保留し、子が終わった直後に trap(静かな終了)を
+# 走らせるので、子の失敗を「claude -p が失敗した」と誤って停止通知しない。子孫は先に集めておく
+kill_tree() {
+  local d
+  d="$(descendants "$1")"
+  kill -TERM "$1" 2>/dev/null
+  [ -n "$d" ] && kill -TERM $d 2>/dev/null
+  return 0
+}
+
+DRY=0
+case "${1:-}" in
+  --dry-run) DRY=1 ;;
+  --background)
+    if P="$(loop_alive)"; then echo "既に実行中(pid $P)。止めるには --stop"; exit 1; fi
+    # 事前チェック: 致命的な問題(❌)があれば起動しない。警告(⚠️)は表示して進む
+    bash .claude/scripts/autopilot-preflight.sh
+    case $? in
+      0 | 1) ;;
+      3) exit 1 ;;
+      *) echo "事前チェックに ❌ がある(または事前チェック自体が失敗した)ので起動しない。上の → を直してから再実行する"; exit 2 ;;
+    esac
+    mkdir -p .harness
+    # pid ファイルは起動した本体が自分で書く(前面実行と同じ排他を通す)。
+    # setsid で端末・呼び出し元(Claude Code の Bash 等)のプロセスグループから切り離し、呼び出し元が
+    # 終わっても生き残らせる。Claude Code の中から起動したときの環境変数は子の claude -p に引き継がない
+    # setsid が無い環境(macOS 標準)は python3 / perl の setsid で代替する。どれも無ければ nohup だけ
+    # (SIGHUP は防げるが、呼び出し元がプロセスグループごと終了させると巻き込まれうる)
+    if command -v setsid >/dev/null 2>&1; then
+      LAUNCH=(setsid nohup)
+    elif command -v python3 >/dev/null 2>&1; then
+      LAUNCH=(python3 -c 'import os, sys; os.setsid(); os.execvp(sys.argv[1], sys.argv[1:])' nohup)
+    elif command -v perl >/dev/null 2>&1; then
+      LAUNCH=(perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV or die' nohup)
+    else
+      LAUNCH=(nohup)
+      echo "⚠️ setsid / python3 / perl が無いため、呼び出し元から完全には切り離せない。ターミナルから起動するのが確実"
+    fi
+    # 親の Claude Code セッション由来の変数は子の claude -p に渡さない(ネスト起動の検出・接続先の混線を避ける)
+    AUTOPILOT_PREFLIGHT_DONE=1 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT -u CLAUDE_CODE_SSE_PORT \
+      "${LAUNCH[@]}" bash "$SELF" >>"$LOGF" 2>&1 </dev/null &
+    # 本体が pid ファイルを書くまで最大 5 秒待つ(遅い環境で「失敗」と誤報しない)
+    P=""
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+      P="$(loop_alive)" && break
+      sleep 0.5
+    done
+    if [ -n "$P" ]; then
+      echo "autopilot を裏で起動した(pid $P)。ログ: bash $SELF --log / 停止: bash $SELF --stop"
+    else
+      echo "起動を確認できない(すぐ終了したか、まだ起動中)。ログを確認する: tail -n 30 $LOGF"; exit 1
+    fi
+    exit 0
+    ;;
+  --stop)
+    if P="$(loop_alive)"; then
+      # 本体の trap は「割り込み」として静かに終わる(停止通知を出さない)
+      kill_tree "$P"
+      echo "停止した(pid $P)"
+    else
+      echo "実行中の autopilot は無い"
+    fi
+    rm -f "$PIDF"
+    exit 0
+    ;;
+  --log) exec tail -n 50 -F "$LOGF" ;;
+  "") ;;
+  -h | --help) sed -n '2,39p' "$0"; exit 0 ;;
+  *) echo "autopilot-loop.sh: 不明な引数: $1" >&2; exit 2 ;;
+esac
+
+CONF=.claude/autopilot.json
+conf() { [ -f "$CONF" ] && jq -r --arg k "$1" 'if has($k) then .[$k] else empty end' "$CONF" 2>/dev/null; } # // は false を値なし扱いにするので使わない
+POLL="${AUTOPILOT_POLL_SECONDS:-$(conf pollSeconds)}"; POLL="${POLL:-300}"
+MAX_RUNS="${AUTOPILOT_MAX_RUNS:-$(conf maxRuns)}"; MAX_RUNS="${MAX_RUNS:-20}"
+CLAUDE_ARGS="${AUTOPILOT_CLAUDE_ARGS:---permission-mode acceptEdits}"
+BOARD=1
+[ "$(conf board)" = false ] && BOARD=0
+# 0 や不正値だと sleep が即失敗し、REST を叩き続ける tight loop になる
+case "$POLL" in '' | *[!0-9]* | 0) echo "autopilot-loop.sh: pollSeconds は 1 以上の整数にする: $POLL" >&2; exit 2 ;; esac
+case "$MAX_RUNS" in '' | *[!0-9]* | 0) echo "autopilot-loop.sh: maxRuns は 1 以上の整数にする: $MAX_RUNS" >&2; exit 2 ;; esac
+
+# 自分が書いた pid ファイルだけを消す(dry-run や別のループが本体の pid を消すと --stop が効かなくなる)
+release_pid() { [ "$DRY" = 0 ] && [ "$(cat "$PIDF" 2>/dev/null)" = "$$" ] && rm -f "$PIDF"; return 0; }
+
+log() { printf '[autopilot %s] %s\n' "$(date '+%m-%d %H:%M:%S')" "$*"; }
+
+# 全体管理 Issue の操作。失敗しても進行は止めない(表示層が落ちて本体が止まるのは逆)
+board() {
+  [ "$BOARD" = 1 ] && [ "$DRY" = 0 ] || return 1
+  bash .claude/scripts/autopilot-board.sh "$@" 2>&1 >/dev/null | sed 's/^/  (board) /' >&2
+  return "${PIPESTATUS[0]}"
+}
+board_sync() { [ -n "${J:-}" ] && printf '%s' "$J" | board sync --status "$1"; }
+# 0 = 一時停止中 / 1 = 停止中でない / 2 = 確認できない(GitHub 障害・認証切れ)。2 で進めると人間が入れた
+# 一時停止を無視することになるので、ループは 2 を「待つ」として扱う(フェイルクローズ)
+board_paused() {
+  [ "$BOARD" = 1 ] && [ "$DRY" = 0 ] || return 1
+  bash .claude/scripts/autopilot-board.sh paused 2>/dev/null
+}
+
+stop() {
+  log "停止: $1"
+  if [ "$DRY" = 0 ]; then
+    board_sync "🔴 停止 — $1"
+    board notify "🔴 **autopilot が停止しました**
+
+$1
+
+再開: \`bash .claude/scripts/autopilot-loop.sh --background\`" || true
+    printf '\a'
+  fi
+  release_pid
+  exit "${2:-1}"
+}
+
+command -v jq >/dev/null 2>&1 || stop "jq が見つからない" 2
+if [ "$DRY" = 0 ]; then
+  command -v claude >/dev/null 2>&1 || stop "claude CLI が見つからない" 2
+fi
+trap 'log "割り込みで終了"; release_pid; exit 130' INT TERM
+
+# 前面で起動したときも事前チェックを通す(--background は起動前に済ませている)
+if [ "$DRY" = 0 ] && [ "${AUTOPILOT_PREFLIGHT_DONE:-}" != 1 ]; then
+  bash .claude/scripts/autopilot-preflight.sh
+  case $? in
+    0 | 1) ;;
+    3) exit 1 ;;
+    *) echo "事前チェックに ❌ がある(または事前チェック自体が失敗した)ので起動しない。上の → を直してから再実行する" >&2; exit 2 ;;
+  esac
+fi
+
+# 前面・裏を問わず 1 作業ツリーにループは 1 本(同じチケットを二重に進めない)
+if [ "$DRY" = 0 ]; then
+  if P="$(loop_alive)" && [ "$P" != "$$" ]; then
+    echo "autopilot-loop.sh: 既に実行中(pid $P)。止めるには --stop" >&2; exit 1
+  fi
+  mkdir -p .harness && echo $$ >"$PIDF"
+fi
+
+RUNS=0
+LAST_KEY=""
+RATE_WAITS=0
+WAIT_SIG=""
+WAIT_STREAK=0
+# 待機が変化なしでこの周回数続いたら 1 度だけ知らせる(止めはしない。レビューは長引いてよい)
+WAIT_NOTIFY_AFTER="$(( (3600 + POLL - 1) / POLL ))"
+
+run_claude() { # $1=プロンプト
+  RUNS=$((RUNS + 1))
+  [ "$RUNS" -le "$MAX_RUNS" ] || stop "起動回数の上限($MAX_RUNS)に達した。続けるなら再起動する" 0
+  log "起動 $RUNS/$MAX_RUNS: claude -p \"$1\""
+  # shellcheck disable=SC2086 # CLAUDE_ARGS は意図的に単語分割する
+  claude -p "$1" $CLAUDE_ARGS || stop "claude -p が失敗した($1)"
+}
+
+# チケット N のブランチ(この作業ツリーで切ったもの)を返す
+ticket_branches() { git for-each-ref --format='%(refname:short)' refs/heads/ | grep -E "(^|/|-)issue${1}-"; }
+# 1 本に決まるときだけ返す(複数あるときは check_branches が先に止める)
+ticket_branch() {
+  local b
+  b="$(ticket_branches "$1")"
+  [ "$(printf '%s' "$b" | grep -c .)" = 1 ] && printf '%s' "$b"
+}
+# サブシェルの外で呼ぶ(stop を $(...) の中で呼ぶとサブシェルだけが終わる)
+check_branches() {
+  local b
+  b="$(ticket_branches "$1")"
+  if [ "$(printf '%s' "$b" | grep -c .)" -gt 1 ]; then
+    stop "#$1 に対応するブランチが複数ある($(printf '%s' "$b" | tr '\n' ' '))。どれを使うか人間が決めて、不要なものを消す"
+  fi
+}
+ticket_steering() {
+  find .steering -maxdepth 1 -type d -name "*-issue${1}-*" 2>/dev/null | sort | tail -1
+}
+
+# package.json のライフサイクル系(scripts / lint-staged / prepare)が HEAD から変わったか。
+# CI が回す npm test 自体が委託成果になるため、econ でも人間の目視を飛ばさない(econ.md 5)
+lifecycle_changed() {
+  [ -f package.json ] || return 1
+  local before after
+  local base mb
+  # 比較の基準は HEAD ではなく base との分岐点(途中で commit 済みの委託成果も見落とさない)
+  base="$(jq -r '.baseBranch // "main"' .claude/branch-policy.json 2>/dev/null || echo main)"
+  mb="$(git merge-base HEAD "origin/$base" 2>/dev/null || echo HEAD)"
+  before="$(git show "$mb:package.json" 2>/dev/null | jq -S '{scripts, "lint-staged", prepare: .scripts.prepare}' 2>/dev/null)"
+  after="$(jq -S '{scripts, "lint-staged", prepare: .scripts.prepare}' package.json 2>/dev/null)"
+  [ "$before" != "$after" ]
+}
+
+# econ の 1 チケット: 段階を実態(steering・tasklist・終了コード)から判定して 1 段だけ進める
+econ_step() { # $1=Issue 番号
+  local n="$1" dir br rc
+  br="$(ticket_branch "$n")"
+  [ -n "$br" ] && [ "$(git branch --show-current)" != "$br" ] && { git switch -q "$br" || stop "#$n のブランチ $br に移れない"; }
+  dir="$(ticket_steering "$n")"
+  if [ -z "$dir" ] || [ ! -f "$dir/design.md" ] || ! grep -q '<!-- status: ready -->' "$dir/design.md"; then
+    run_claude "/next-ticket $n --plan-only"
+    return
+  fi
+  if grep -qE '^[[:space:]]*- \[ \]' "$dir/tasklist.md" 2>/dev/null; then
+    # Codex の枠も消費するので起動回数の上限に数える(exit 0 なのに tasklist が閉じない等で回り続けない)
+    RUNS=$((RUNS + 1))
+    [ "$RUNS" -le "$MAX_RUNS" ] || stop "起動回数の上限($MAX_RUNS)に達した。続けるなら再起動する" 0
+    log "起動 $RUNS/$MAX_RUNS: Codex に委託: $dir"
+    bash .claude/scripts/delegate-codex.sh impl "$dir/"
+    rc=$?
+    case "$rc" in
+      0) RATE_WAITS=0 ;; # 次の周で tasklist が閉じていれば ship に進む
+      1 | 5) run_claude "/next-ticket $n --plan-only" ;; # 判断待ち / 計画未完成 → design.md を直す
+      3) stop "Codex が使えない(exit 3)。econ では Sonnet fork に自動で落とさない(枠を使うため)。Codex を直すか、通常モードに戻して /next-ticket $n" ;;
+      4)
+        RATE_WAITS=$((RATE_WAITS + 1))
+        [ "$RATE_WAITS" -le 12 ] || stop "Codex のレート上限(exit 4)が 12 回続いた。枠の回復を待ってから再起動する" 0
+        RUNS=$((RUNS - 1)) # 待っただけなので起動回数にも「進まなかった」にも数えない
+        log "Codex のレート上限(exit 4)。${POLL}s 待って再開する($RATE_WAITS/12)"; sleep "$POLL"; KEEP_GOING=1 ;;
+      *) stop "Codex への委託が失敗した(exit $rc / $dir)。.harness/codex-runs/ のログを確認する" ;;
+    esac
+    return
+  fi
+  if lifecycle_changed; then
+    stop "#$n: package.json の scripts / lint-staged / prepare が変わっている。目視してから /ship-ticket $n を実行する(econ.md 5)"
+  fi
+  run_claude "/ship-ticket $n"
+}
+
+while :; do
+  MODE="$(bash .claude/scripts/harness-mode.sh 2>/dev/null || echo normal)"
+  case "$MODE" in
+    normal | econ) ;;
+    *) stop "ハーネスモードが $MODE(Claude が動かない前提のモード。自動進行しない)" ;;
+  esac
+
+  J="$(bash .claude/scripts/autopilot-next.sh)" || { J=""; stop "判定に失敗した(autopilot-next.sh の stderr を参照)" 2; }
+  # 要約は取得済みの JSON から作る(REST を 2 回叩かない / 2 回の結果がずれない)
+  printf '%s' "$J" | bash .claude/scripts/autopilot-next.sh --format-summary | sed 's/^/  /'
+
+  board_paused
+  case $? in
+    0)
+      board_sync "⏸ 一時停止中(全体管理 Issue のチェックを外すと再開)"
+      log "一時停止中。${POLL}s 後に再確認する"
+      LAST_KEY=""; sleep "$POLL"; continue ;;
+    2)
+      log "全体管理 Issue の一時停止を確認できない(GitHub への接続・認証)。進めずに ${POLL}s 待つ"
+      LAST_KEY=""; sleep "$POLL"; continue ;;
+  esac
+
+  ACTION="$(printf '%s' "$J" | jq -r .action)"
+  TARGET="$(printf '%s' "$J" | jq -r '.target // empty')"
+
+  # 1 ローカル作業ツリーは同時に 1 チケットしか扱えない。PR 未作成の in-progress のうち、
+  # この作業ツリーにブランチがあるもの(= 前回の実行が PR まで届かなかった自分の作業)を最優先で再開する
+  OWN_STALLED=""
+  for s in $(printf '%s' "$J" | jq -r '.stalled[]'); do
+    check_branches "$s"
+    if [ -n "$(ticket_branch "$s")" ]; then OWN_STALLED="$s"; break; fi
+  done
+
+  # 未コミット変更は「再開するチケット自身のブランチ上」なら続きとして扱う(Codex の部分成果・
+  # 途中で終わった claude -p)。それ以外は誰の変更か分からないので止まる
+  if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+    if [ -z "$OWN_STALLED" ] || [ "$(git branch --show-current)" != "$(ticket_branch "$OWN_STALLED")" ]; then
+      [ "$DRY" = 1 ] && log "(dry-run) 作業ツリーに未コミットの変更がある。本番ではここで停止する" ||
+        stop "作業ツリーに未コミットの変更がある($(git branch --show-current))。再開中のチケットのものではないので触らない"
+    fi
+  fi
+
+  if [ -n "$OWN_STALLED" ]; then
+    KEY="resume:$OWN_STALLED:$(git rev-parse HEAD 2>/dev/null):$(git status --porcelain 2>/dev/null | git hash-object --stdin | cut -c1-8)"
+    STATUS="🟢 実行中 — #$OWN_STALLED を再開"
+  else
+    case "$ACTION" in
+      fix) KEY="fix:$TARGET:$(printf '%s' "$J" | jq -r '.attention[0].reasons | join(",")')"; STATUS="🟢 実行中 — PR #$TARGET を修復" ;;
+      start) KEY="start:$TARGET"; STATUS="🟢 実行中 — #$TARGET に着手" ;;
+      wait)
+        # 別セッションの作業らしい stalled(この作業ツリーにブランチが無い)は、枠を食ったまま
+        # 進まない可能性があるので知らせる。ただし待機は続ける(別セッションが進めているかもしれない)
+        OTHER="$(printf '%s' "$J" | jq -r '.stalled | map("#\(.)") | join(", ")')"
+        if [ "$DRY" = 1 ]; then log "(dry-run) ${POLL}s 待って再判定する"; exit 0; fi
+        board_sync "👀 レビュー・CI 待ち${OTHER:+(別セッションで実装中: $OTHER)}"
+        log "レビュー・CI 待ち。${POLL}s 後に再判定する"
+        # 進行中の集合が変わらないまま約 1 時間 → 1 度だけ知らせる(別セッションの放置・積まれた draft・
+        # 長いレビュー待ちに気づけるように)。変化したら数え直す
+        SIG="$(printf '%s' "$J" | jq -c '{inFlight, stalled, prs: [.prs[].number]}')"
+        if [ "$SIG" = "$WAIT_SIG" ]; then WAIT_STREAK=$((WAIT_STREAK + 1)); else WAIT_SIG="$SIG"; WAIT_STREAK=1; fi
+        if [ "$WAIT_STREAK" = "$WAIT_NOTIFY_AFTER" ]; then
+          board notify "⏳ **約 1 時間、進行中の作業が変わっていません**(待機は続けます)
+
+- 進行中: $(printf '%s' "$J" | jq -r '.inFlight | map("#\(.)") | join(", ")')
+${OTHER:+- PR 未作成の in-progress(この作業ツリー以外): $OTHER — 別セッションが止まっているなら in-progress を外す
+}- レビュー・マージ(econ なら \`gh pr ready\`)が済むと次のチケットに進みます" || true
+          [ -n "${AUTOPILOT_NOTIFY_CMD:-}" ] || printf '\a'
+        fi
+        LAST_KEY=""
+        sleep "$POLL"
+        continue
+        ;;
+      blocked)
+        OTHER="$(printf '%s' "$J" | jq -r '.stalled | map("#\(.)") | join(", ")')"
+        if [ -n "$OTHER" ]; then
+          stop "$OTHER が in-progress だが PR が無く、この作業ツリーにブランチも無い。別のセッションが実装中か確認し、中断なら in-progress を外す"
+        fi
+        stop "着手できるチケットが無い(依存が閉じない)。全体管理 Issue の「依存待ち」を確認する" 0
+        ;;
+      manual)
+        stop "残りは autopilot:manual のチケットだけ($(printf '%s' "$J" | jq -r '.manual | map("#\(.)") | join(", ")'))。通常モードで /next-ticket [番号] を回す" 0
+        ;;
+      done)
+        board_sync "✅ 完了 — open のチケットが無い"
+        log "open のチケットが無い。/sync-docs と次フェーズ(P1)の計画を検討する"
+        [ "$DRY" = 0 ] && board notify "✅ 全チケットが完了しました。/sync-docs と次フェーズ(P1)の計画を検討してください" || true
+        release_pid
+        exit 0
+        ;;
+      *) stop "未知の action: $ACTION" 2 ;;
+    esac
+  fi
+
+  # 前の周と同じ対象・同じ状態のまま = 進められなかった。同じ起動を繰り返さない
+  if [ "$KEY" = "$LAST_KEY" ]; then
+    stop "前回の実行後も状態が変わっていない(${KEY%%:*} #${OWN_STALLED:-$TARGET})。人間の判断が要る"
+  fi
+
+  if [ "$DRY" = 1 ]; then
+    if [ "$ACTION" = fix ] && [ -z "$OWN_STALLED" ]; then
+      log "(dry-run) 起動予定: claude -p \"/fix-pr $TARGET\" $CLAUDE_ARGS"
+    elif [ "$MODE" = econ ]; then
+      log "(dry-run) econ: #${OWN_STALLED:-$TARGET} を 計画(claude -p)→ 委託(delegate-codex.sh)→ draft PR(claude -p)の段階で 1 段進める"
+    else
+      log "(dry-run) 起動予定: claude -p \"/next-ticket ${OWN_STALLED:-$TARGET}\" $CLAUDE_ARGS"
+    fi
+    exit 0
+  fi
+
+  board_sync "$STATUS"
+  if [ "$ACTION" = fix ] && [ -z "$OWN_STALLED" ]; then
+    run_claude "/fix-pr $TARGET"
+  elif [ "$MODE" = econ ]; then
+    econ_step "${OWN_STALLED:-$TARGET}"
+  else
+    # 指定チケットが PR 未作成の in-progress なら /next-ticket が再開経路に入る
+    run_claude "/next-ticket ${OWN_STALLED:-$TARGET}"
+  fi
+  if [ "${KEEP_GOING:-0}" = 1 ]; then LAST_KEY=""; else LAST_KEY="$KEY"; fi
+  KEEP_GOING=0
+done

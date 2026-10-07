@@ -14,7 +14,7 @@ description: チケット・ステアリング・gitの現在地を集約し、�
 
 ### ステップ1: 情報収集(並列で実行)
 
-1. **チケット**: GitHub Issues の集計(`gh issue list --label ticket --state all --json number,title,state,labels --limit 100`)。closed / in-progress / open(未着手)、依存解決済みで着手可能なもの
+1. **チケット**: `bash .claude/scripts/autopilot-next.sh --summary`(進行中・空き枠・要対応 PR・着手可能・依存待ち。REST のみなのでクラウドでも動く)
 2. **ステアリング**: `.steering/*/tasklist.md` の未完了タスク(`- [ ]`)の有無と直近の申し送り事項
 3. **git**: 現在のブランチ、未コミット変更、直近のコミット、オープン中の PR(`gh pr list`)
 4. **ドキュメント**: `docs/` の正式版ドキュメントの有無(未セットアップ検出用)
@@ -45,6 +45,6 @@ description: チケット・ステアリング・gitの現在地を集約し、�
 1. `docs/` が未セットアップ → `/kickoff`
 2. 未完了の `.steering/` がある → `/resume-work`
 3. 未コミット変更がある → `/check` → `/commit`
-4. オープン PR にレビュー指摘が残っている → 対応を提案
-5. 着手可能なチケットがある → `/next-ticket`(候補の Issue 番号を添える)
+4. オープン PR に要対応(コンフリクト / CI 失敗 / 変更要求。`bash .claude/scripts/autopilot-next.sh` の `attention`)がある → `/fix-pr [PR番号]`
+5. 着手可能なチケットがあり空き枠(`slots`)がある → `/next-ticket`(候補の Issue 番号を添える。**レビュー待ちの PR があっても空き枠があれば着手できる**)。繰り返しを自動化したい場合は `/autopilot` を添える
 6. 全チケット closed → `/sync-docs` と次フェーズ(P1)の計画

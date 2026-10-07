@@ -20,6 +20,6 @@
 
 ### チケット運用(GitHub Issues)
 
-チケットは GitHub Issues(`ticket` + 優先度ラベル)で管理する(`/setup-tickets` が発行)。着手時に `in-progress` ラベルを付け、PR ボディの `Closes #N` でマージ時に自動クローズさせる。PR 作成後は Issue にコメントで `.steering/` ディレクトリ名とPR URLを記録する(`/next-ticket` が担当)。チケットファイルのステータス編集・コミットは行わない。
+チケットは GitHub Issues(`ticket` + 優先度ラベル)で管理する(`/setup-tickets` が発行)。**次に何をするかの判定は `.claude/scripts/autopilot-next.sh` が単一ソース**(要対応 PR の修復 > 空き枠があれば依存解決済みチケットに着手 > 待機)。レビュー待ちの PR があっても `maxInFlight`(`.claude/autopilot.json`、既定 2)まで並行して着手してよい。自動で回すときは `/autopilot`。着手時に `in-progress` ラベルを付け、PR ボディの `Closes #N` でマージ時に自動クローズさせる。PR 作成後は Issue にコメントで `.steering/` ディレクトリ名とPR URLを記録する(`/next-ticket` が担当)。チケットファイルのステータス編集・コミットは行わない。
 
 **`gh` CLI が使えない環境(Claude Code on the web のリモート実行等)では、コマンド・スキル内の `gh` 操作を同等の GitHub MCP ツール(`mcp__github__*`)で代替する。**

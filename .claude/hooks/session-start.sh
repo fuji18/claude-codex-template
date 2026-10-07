@@ -219,7 +219,7 @@ if [ "$SOURCE" = "resume" ] || [ "$SOURCE" = "clear" ] || { [ "${CLAUDE_CODE_REM
     if [ -n "$UNDONE" ]; then
       echo "- 最新ステアリング(${LATEST_STEERING})の未完了タスク:"
       printf '%s\n' "$UNDONE" | sed 's/^/  /'
-      echo "- 作業を再開する場合は /resume-work、次のチケットに進む場合は /next-ticket"
+      echo "- 作業を再開する場合は /resume-work、次のチケットに進む場合は /next-ticket(自動で回す場合は /autopilot)"
     fi
   fi
 else
