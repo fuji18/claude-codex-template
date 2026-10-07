@@ -28,14 +28,15 @@ description: チケット消化を自動進行する。レビュー待ちの PR 
 | action | 動き |
 | --- | --- |
 | `fix` | 対象 PR を担当している子セッションがこのセッションで起動済みなら、`send_message` で `/fix-pr [PR番号]` を送る。いなければ子を起動して `/fix-pr [PR番号]` を渡す(下の子プロンプトの「PR 作成後」以降を付ける) |
-| `start` | `targets` の各 Issue について、**先に** `in-progress` ラベルを付ける(次の判定で空き枠に数えないため。`mcp__github__issue_write`)→ 子セッションを起動する |
+| `start` | `targets` の各 Issue について、**先に** `in-progress` ラベルを付ける(次の判定で空き枠に数えないため。`mcp__github__issue_write`)→ 子セッションを起動する → Issue に `autopilot: 子セッション [子のセッションID] が着手` とコメントする(コンテキストが圧縮されても、どの stalled が自分の子かを Issue から辿れるようにする) |
 | `wait` | 3 へ |
 | `blocked` | 依存待ちの一覧を報告して終了する(依存が閉じないのは計画の問題。人間の判断が要る) |
 | `done` | 全チケット完了を報告し、`/sync-docs` と次フェーズ(P1)の計画を提案して終了する |
 
-   `stalled`(PR 未作成の in-progress)は、このセッションが起動した子が実装中なら正常。**起動した覚えのない stalled** は中断した作業なので、子を起動して `/next-ticket [番号]`(再開経路に入る)を渡す。
+   `stalled`(PR 未作成の in-progress)は、Issue の最新の `autopilot: 子セッション …` コメントの子が生きていれば(`mcp__claude-code-remote__get_session` で `status_bucket` が `working` / `blocked`)正常。コメントが無い・子が `failed` / `completed` なら中断した作業なので、子を起動して `/next-ticket [番号]`(再開経路に入る)を渡す。
 
-3. `fix` / `start` を処理したら判定をもう一度回し、`wait` になるまで繰り返す。`wait` になったら `mcp__claude-code-remote__send_later` で **60 分後**の再判定(メッセージ: `/autopilot`)を予約し、**ターンを終える**。子からの通知(PR 作成・マージ・行き詰まり)でも起きるので、待機中に `sleep` やポーリングをしない
+3. `fix` / `start` を処理したら判定をもう一度回し、`wait` になるまで繰り返す(**同じ PR への `fix` は 1 ターンに 1 回まで**。送った後も残るなら子の報告を待つ)。`wait` になったら `mcp__claude-code-remote__send_later` で **60 分後**の再判定を予約し、**ターンを終える**。子からの通知(PR 作成・マージ・行き詰まり)でも起きるので、待機中に `sleep` やポーリングをしない
+   - 予約メッセージは `/autopilot (wait [回数])` とし、回数は**判定結果が前回の予約時から変わらなかった連続回数**にする(変われば 1 に戻す)。**6 回(約 6 時間)続いたら再予約せず**、待っている PR の一覧を報告して終了する(次の子の通知かユーザーの `/autopilot` で再開する)
 
 **子セッションの起動**(`mcp__claude-code-remote__create_session`、`source_url` はこのリポジトリ、`title` は `ticket #[番号] [タイトル]`)。`prompt` は次の形にする:
 
@@ -77,4 +78,6 @@ bash .claude/scripts/autopilot-loop.sh             # 実行(Ctrl-C で止まる)
 | `pollSeconds` | 300 | ローカルループの再判定間隔 |
 | `maxRuns` | 20 | ローカルループが `claude -p` を起動する回数の上限 |
 
-**独立性の判定は `depends: #N` だけを見る。** 依存先が未マージ(PR がレビュー待ち)のチケットは着手しない(ブランチを積み重ねない)。依存を書いていないのに同じファイルを触るチケット同士はコンフリクトしうる —— 起きたら `/fix-pr` が base を取り込んで解消する。頻発するなら `/setup-tickets` で `depends:` を足す。
+**チケットの完了は Issue の closed で判定する。** PR の `Closes #N` で Issue が自動クローズされるのは**デフォルトブランチへのマージ時だけ**なので、`baseBranch` が `develop` のプロジェクトでは、マージ後に Issue を手で閉じないと依存が解けず `blocked` / `stalled` が残る。
+
+**独立性の判定は `depends:` 行の `#N` だけを見る。** 依存先が未マージ(PR がレビュー待ち)のチケットは着手しない(ブランチを積み重ねない)。依存を書いていないのに同じファイルを触るチケット同士はコンフリクトしうる —— 起きたら `/fix-pr` が base を取り込んで解消する。頻発するなら `/setup-tickets` で `depends:` を足す。

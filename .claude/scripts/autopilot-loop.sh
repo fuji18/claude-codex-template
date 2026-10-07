@@ -18,7 +18,8 @@
 #   AUTOPILOT_CLAUDE_ARGS   claude に渡す引数(既定 "--permission-mode acceptEdits")
 #
 # 止まる条件(人間に返す): モードが normal 以外 / 作業ツリーが汚れている / 判定の失敗 /
-#   同じ対象が 2 周続けて進まない / blocked / done / 起動回数の上限
+#   同じ対象が 2 周続けて進まない(start 直後に PR 未作成なら 1 度だけ再開を試み、それでも
+#   進まなければ止まる) / 別セッションの作業らしい in-progress / blocked / done / 起動回数の上限
 set -uo pipefail
 
 cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" || exit 2
@@ -27,7 +28,7 @@ DRY=0
 case "${1:-}" in
   --dry-run) DRY=1 ;;
   "") ;;
-  -h | --help) sed -n '2,22p' "$0"; exit 0 ;;
+  -h | --help) sed -n '2,24p' "$0"; exit 0 ;;
   *) echo "autopilot-loop.sh: 不明な引数: $1" >&2; exit 2 ;;
 esac
 
@@ -36,6 +37,9 @@ conf() { [ -f "$CONF" ] && jq -r --arg k "$1" '.[$k] // empty' "$CONF" 2>/dev/nu
 POLL="${AUTOPILOT_POLL_SECONDS:-$(conf pollSeconds)}"; POLL="${POLL:-300}"
 MAX_RUNS="${AUTOPILOT_MAX_RUNS:-$(conf maxRuns)}"; MAX_RUNS="${MAX_RUNS:-20}"
 CLAUDE_ARGS="${AUTOPILOT_CLAUDE_ARGS:---permission-mode acceptEdits}"
+# 0 や不正値だと sleep が即失敗し、REST を叩き続ける tight loop になる
+case "$POLL" in '' | *[!0-9]* | 0) echo "autopilot-loop.sh: pollSeconds は 1 以上の整数にする: $POLL" >&2; exit 2 ;; esac
+case "$MAX_RUNS" in '' | *[!0-9]* | 0) echo "autopilot-loop.sh: maxRuns は 1 以上の整数にする: $MAX_RUNS" >&2; exit 2 ;; esac
 
 log() { printf '[autopilot %s] %s\n' "$(date +%H:%M:%S)" "$*"; }
 stop() { log "停止: $*"; exit "${2:-1}"; }
@@ -57,7 +61,8 @@ while :; do
   fi
 
   J="$(bash .claude/scripts/autopilot-next.sh)" || stop "判定に失敗した(autopilot-next.sh の stderr を参照)" 2
-  bash .claude/scripts/autopilot-next.sh --summary 2>/dev/null | sed 's/^/  /'
+  # 要約は取得済みの JSON から作る(REST を 2 回叩かない / 2 回の結果がずれない)
+  printf '%s' "$J" | bash .claude/scripts/autopilot-next.sh --format-summary | sed 's/^/  /'
 
   ACTION="$(printf '%s' "$J" | jq -r .action)"
   TARGET="$(printf '%s' "$J" | jq -r '.target // empty')"
@@ -68,6 +73,11 @@ while :; do
   PROMPT=""
   KEY=""
   if [ -n "$STALLED" ]; then
+    # この作業ツリーで切ったブランチがあるときだけ再開する。無ければ別のセッション
+    # (対話・別ワークツリー・クラウドの子)が実装中の可能性があり、二重に進めてしまう
+    if ! git for-each-ref --format='%(refname:short)' refs/heads/ | grep -Eq "issue${STALLED}(-|$)"; then
+      stop "#$STALLED は in-progress だが PR が無く、この作業ツリーにブランチも無い。別のセッションが実装中か確認し、中断なら in-progress を外す"
+    fi
     PROMPT="/next-ticket $STALLED" # 指定チケットが PR 未作成の in-progress なら /next-ticket が再開経路に入る
     KEY="resume:$STALLED"
   else

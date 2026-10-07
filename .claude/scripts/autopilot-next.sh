@@ -10,6 +10,7 @@
 # 使い方:
 #   bash .claude/scripts/autopilot-next.sh            # JSON を出す
 #   bash .claude/scripts/autopilot-next.sh --summary  # 人間向けの要約を出す
+#   ... | bash .claude/scripts/autopilot-next.sh --format-summary  # 取得済みの JSON を要約に整形する
 #   bash .claude/scripts/autopilot-next.sh --issues F --prs F [--details F]  # フィクスチャ(テスト用)
 #     F はそれぞれ REST の issues 一覧 / pulls 一覧の JSON 配列。
 #     --details は {"<PR番号>": {"mergeable_state":..,"checks":[conclusion..],"reviews":[{"user":..,"state":..}]}}
@@ -30,6 +31,18 @@ die() { echo "autopilot-next.sh: $*" >&2; exit 2; }
 
 command -v jq >/dev/null 2>&1 || die "jq が見つからない"
 
+summarize() {
+  jq -r '
+    "action: \(.action)" + (if .target then " → #\(.target)" else "" end),
+    "進行中: \(.inFlight | length)/\(.maxInFlight)(空き \(.slots))" +
+      (if (.stalled | length) > 0 then " / PR 未作成の in-progress: \(.stalled | map("#\(.)") | join(", "))" else "" end),
+    (if (.attention | length) > 0 then "要対応 PR: " + (.attention | map("#\(.pr)(\(.reasons | join(",")))") | join(", ")) else empty end),
+    (if (.ready | length) > 0 then "着手可能: " + (.ready | map("#\(.number)") | join(", ")) else empty end),
+    (if (.blocked | length) > 0 then "依存待ち: " + (.blocked | map("#\(.number)←\(.waitingOn | map("#\(.)") | join("+"))") | join(", ")) else empty end),
+    (if ((.fetchErrors // []) | length) > 0 then "⚠️ PR 詳細の取得失敗(判定が甘くなっている): " + (.fetchErrors | map("#\(.pr)(\(.failed | join(",")))") | join(", ")) else empty end),
+    "open チケット: \(.openTickets)"'
+}
+
 MODE=json
 ISSUES_FILE=""
 PRS_FILE=""
@@ -37,21 +50,27 @@ DETAILS_FILE=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --summary) MODE=summary ;;
+    --format-summary) MODE=format ;; # 標準入力の判定 JSON を要約に整形する(取得をやり直さない)
     --issues) ISSUES_FILE="${2:-}"; shift ;;
     --prs) PRS_FILE="${2:-}"; shift ;;
     --details) DETAILS_FILE="${2:-}"; shift ;;
-    -h | --help) sed -n '2,24p' "$0"; exit 0 ;;
+    -h | --help) sed -n "2,26p" "$0"; exit 0 ;;
     *) die "不明な引数: $1" ;;
   esac
   shift
 done
+
+if [ "$MODE" = format ]; then
+  summarize || die "判定 JSON を整形できない"
+  exit 0
+fi
 
 # --- 設定(環境変数 > .claude/autopilot.json > 既定値) ---
 CONF=.claude/autopilot.json
 conf() { [ -f "$CONF" ] && jq -r --arg k "$1" '.[$k] // empty' "$CONF" 2>/dev/null; }
 MAX_IN_FLIGHT="${AUTOPILOT_MAX_IN_FLIGHT:-$(conf maxInFlight)}"
 MAX_IN_FLIGHT="${MAX_IN_FLIGHT:-2}"
-case "$MAX_IN_FLIGHT" in '' | *[!0-9]*) die "maxInFlight が整数でない: $MAX_IN_FLIGHT" ;; esac
+case "$MAX_IN_FLIGHT" in '' | *[!0-9]* | 0) die "maxInFlight は 1 以上の整数にする: $MAX_IN_FLIGHT" ;; esac
 
 # --- データ取得 ---
 # 本文を丸ごと持つと jq の引数長上限(ARG_MAX)を超えるため、一時ファイル経由で受け、
@@ -91,10 +110,10 @@ jq -e 'type == "object"' "$TMP/details.json" >/dev/null 2>&1 || die "--details �
 
 jq '[.[] | {number, state, title, pull_request,
             labels: [.labels[]? | (.name? // .)],
-            deps: [(.body // "") | scan("depends:\\s*#(\\d+)"; "i") | .[0] | tonumber] | unique}]' \
+            deps: [(.body // "") | scan("depends:[^\\n]*"; "i") | scan("#(\\d+)") | .[0] | tonumber] | unique}]' \
   "$TMP/issues.raw" >"$TMP/issues.json" || die "Issue 一覧の整形に失敗した"
 jq '[.[] | {number, draft: (.draft // false), head: (.head.ref // ""), sha: (.head.sha // ""),
-            links: [(.body // "") | scan("(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\s+#(\\d+)"; "i") | .[0] | tonumber] | unique}]' \
+            links: [(.body // "") | scan("\\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\\s+#(\\d+)"; "i") | .[0] | tonumber] | unique}]' \
   "$TMP/prs.raw" >"$TMP/prs.json" || die "PR 一覧の整形に失敗した"
 
 # --- 1 段目: チケットと PR の対応づけ(詳細取得の対象を絞るため先に計算する) ---
@@ -136,12 +155,14 @@ done
 if [ "$FIXTURE" = 0 ]; then
   for pr in $(printf '%s' "$BASE" | jq -r '.prs[].number'); do
     sha="$(printf '%s' "$BASE" | jq -r --argjson p "$pr" '.prs[] | select(.number == $p) | .sha')"
+    # 取得に失敗した項目は「問題なし」に倒さず fetchErrors に載せる(要約に出る)
+    err='[]'
     # mergeable_state は詳細エンドポイントでしか返らない。計算中は "unknown"(= 判定しない)
-    ms="$(gh api "repos/$REPO/pulls/$pr" --jq '.mergeable_state // "unknown"' 2>/dev/null || echo unknown)"
-    checks="$(gh api "repos/$REPO/commits/$sha/check-runs?per_page=100" --jq '[.check_runs[].conclusion]' 2>/dev/null || echo '[]')"
-    reviews="$(gh api "repos/$REPO/pulls/$pr/reviews?per_page=100" --jq '[.[] | {user: .user.login, state}]' 2>/dev/null || echo '[]')"
-    jq --arg p "$pr" --arg ms "$ms" --argjson c "$checks" --argjson r "$reviews" \
-      '. + {($p): {mergeable_state: $ms, checks: $c, reviews: $r}}' "$TMP/details.json" >"$TMP/details.next" &&
+    ms="$(gh api "repos/$REPO/pulls/$pr" --jq '.mergeable_state // "unknown"' 2>/dev/null)" || { ms=unknown; err="$(jq -c '. + ["pull"]' <<<"$err")"; }
+    checks="$(gh api "repos/$REPO/commits/$sha/check-runs?per_page=100" --jq '[.check_runs[].conclusion]' 2>/dev/null)" || { checks='[]'; err="$(jq -c '. + ["checks"]' <<<"$err")"; }
+    reviews="$(gh api --paginate "repos/$REPO/pulls/$pr/reviews?per_page=100" --jq '.[] | {user: .user.login, state, commit_id}' 2>/dev/null | jq -s -c .)" || { reviews='[]'; err="$(jq -c '. + ["reviews"]' <<<"$err")"; }
+    jq --arg p "$pr" --arg ms "$ms" --argjson c "$checks" --argjson r "$reviews" --argjson e "$err" \
+      '. + {($p): {mergeable_state: $ms, checks: $c, reviews: $r, fetchErrors: $e}}' "$TMP/details.json" >"$TMP/details.next" &&
       mv "$TMP/details.next" "$TMP/details.json"
   done
 fi
@@ -153,11 +174,15 @@ RESULT="$(jq -n --argjson b "$BASE" --slurpfile dd "$TMP/details.json" --argjson
   | ($b.closed + $extra) as $closed
   | ($b.prs | map(. as $p | ($d[($p.number | tostring)] // {}) as $x
       | ([ (if ($x.mergeable_state // "") == "dirty" then "conflict" else empty end),
-           (if ([$x.checks[]? | select(. == "failure" or . == "timed_out" or . == "cancelled" or . == "action_required")] | length) > 0
+           # cancelled は concurrency による自動キャンセルでも付くため数えない
+           (if ([$x.checks[]? | select(. == "failure" or . == "timed_out")] | length) > 0
               then "ci_failed" else empty end),
-           # レビュアーごとの最新の判定(COMMENTED は判定を上書きしない)
+           # レビュアーごとの最新の判定(COMMENTED は判定を上書きしない)。変更要求は再レビューか
+           # dismiss まで残り続けるので、**現在の head に対して出たものだけ**を数える。
+           # 対応を push した後は人間の再レビュー待ち(= wait)であり、fix を繰り返さない
            (if ([$x.reviews[]? | select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or .state == "DISMISSED")]
-                 | group_by(.user) | map(last.state) | index("CHANGES_REQUESTED")) != null
+                 | group_by(.user) | map(last)
+                 | map(select(.state == "CHANGES_REQUESTED" and ((.commit_id // $p.sha) == $p.sha))) | length) > 0
               then "changes_requested" else empty end) ]) as $why
       | select($why | length > 0)
       | {pr: $p.number, issues: $p.issues, head: $p.head, draft: $p.draft, reasons: $why})) as $attention
@@ -183,18 +208,13 @@ RESULT="$(jq -n --argjson b "$BASE" --slurpfile dd "$TMP/details.json" --argjson
       blocked: ($b.open | map(select(.number as $n | ($b.inFlight | index($n) | not) and ($ready | map(.number) | index($n) | not)))
                  | map({number, waitingOn: [.deps[] | select(. as $dep | $closed | index($dep) | not)]})),
       prs: ($b.prs | map({number, issues, head, draft})),
+      fetchErrors: ($b.prs | map(. as $p | ($d[($p.number | tostring)].fetchErrors // []) | select(length > 0)
+                     | {pr: $p.number, failed: .})),
       openTickets: ($b.open | length)
     }')" || die "判定に失敗した"
 
 if [ "$MODE" = summary ]; then
-  printf '%s' "$RESULT" | jq -r '
-    "action: \(.action)" + (if .target then " → #\(.target)" else "" end),
-    "進行中: \(.inFlight | length)/\(.maxInFlight)(空き \(.slots))" +
-      (if (.stalled | length) > 0 then " / PR 未作成の in-progress: \(.stalled | map("#\(.)") | join(", "))" else "" end),
-    (if (.attention | length) > 0 then "要対応 PR: " + (.attention | map("#\(.pr)(\(.reasons | join(",")))") | join(", ")) else empty end),
-    (if (.ready | length) > 0 then "着手可能: " + (.ready | map("#\(.number)") | join(", ")) else empty end),
-    (if (.blocked | length) > 0 then "依存待ち: " + (.blocked | map("#\(.number)←\(.waitingOn | map("#\(.)") | join("+"))") | join(", ")) else empty end),
-    "open チケット: \(.openTickets)"'
+  printf '%s' "$RESULT" | summarize
 else
   printf '%s\n' "$RESULT"
 fi

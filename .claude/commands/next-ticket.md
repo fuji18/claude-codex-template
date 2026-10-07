@@ -24,7 +24,7 @@ bash .claude/scripts/autopilot-next.sh             # JSON(action / target / read
 終了コード 2 は取得の失敗(gh 未認証等)。原因を報告して止まる。**Issue の `body` は取得しない**(選定に要る `depends:` と `Closes #N` はスクリプトが抜き出す)。
 
 1. **引数で Issue 番号が指定された場合**:
-   - その Issue が `stalled`(`in-progress` だが open PR が無い)に入っていて、**対応するブランチ(`git branch -a` で `issue[番号]` を含むもの)か `.steering/*-issue[番号]-*` がある** → 中断した作業の再開。そのブランチに移り、`.steering/` を `/resume-work` と同じ手順で再開する(ステップ3 の「ブランチの準備」は飛ばす)。どちらも無ければ `/autopilot` が着手直前に付けたラベルなので、新規着手として扱う
+   - その Issue が `stalled`(`in-progress` だが open PR が無い)に入っていて、**対応するブランチ(`git branch -a` で `issue[番号]-` を含むもの。`issue12` が `issue123` に当たらないよう区切りの `-` まで照合する)か `.steering/*-issue[番号]-*` がある** → 中断した作業の再開。そのブランチに移り、`.steering/` を `/resume-work` と同じ手順で再開する(ステップ3 の「ブランチの準備」は飛ばす)。どちらも無ければ `/autopilot` が着手直前に付けたラベルなので、新規着手として扱う
    - open PR がある → 着手済み。`/fix-pr [PR番号]` を案内して終了する
    - それ以外 → そのまま選ぶ(WIP 上限は見ない。指定した人・`/autopilot` が判断済み)
 2. **指定が無い場合**は `action` で分岐する:

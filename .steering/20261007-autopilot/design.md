@@ -28,11 +28,12 @@ GitHub へは **REST(`gh api`)だけ**でアクセスする。クラウドセッ
 - PR ↔ Issue: open PR のボディの `Closes|Fixes|Resolves #N`(大小無視)
 - `inFlight`: open チケットのうち `in-progress` ラベル付き ∪ open PR に紐づくもの
 - `stalled`: `in-progress` だが open PR が無い(中断 or 子セッションが実装中)
-- `ready`: open・inFlight でない・`depends: #N` が全部 closed。P0>P1>P2>無印、同順位は番号順
+- `ready`: open・inFlight でない・`depends:` 行に並ぶ `#N` が全部 closed。P0>P1>P2>無印、同順位は番号順
   - depends 先が ticket 一覧に無い番号は `gh api issues/N` で個別に state を引く
 - `attention`: inFlight の PR のうち、`conflict`(mergeable_state=dirty)/ `ci_failed`
   (head の check-runs に failure・timed_out・cancelled・action_required)/
-  `changes_requested`(レビュアーごとの最新レビューに CHANGES_REQUESTED がある)
+  `changes_requested`(レビュアーごとの最新レビューが CHANGES_REQUESTED で、かつ**現在の head に対して**出たもの。
+  対応を push した後は再レビュー待ち = wait。数えると fix が最上位のまま抜けられない)。取得失敗は `fetchErrors` に出す
 - `slots = maxInFlight - |inFlight|`
 - `action`(上から最初に当たったもの):
   1. `fix` — attention がある(先頭の PR 番号を `target`)
@@ -76,9 +77,9 @@ GitHub へは **REST(`gh api`)だけ**でアクセスする。クラウドセッ
 1 周 = 判定 1 回 + 必要なら `claude -p` 1 回(新プロセス = `/clear` 済みのコンテキスト)。
 
 - モード != normal → 停止
-- stalled がある → `claude -p "/resume-work"`。同じ stalled が 2 周続いたら停止(人間に返す)
+- stalled がある → この作業ツリーに `issue[N]-` のブランチがあれば `claude -p "/next-ticket N"`(再開経路)。無ければ別セッションの作業とみなして停止。同じ stalled が 2 周続いたら停止(start 直後に PR 未作成なら 1 度だけ再開を試みることになる)
 - `fix` → `claude -p "/fix-pr N"`。直後の判定で同じ PR が同じ理由で残ったら停止
-- `start` → `claude -p "/next-ticket N"`。直後に N が stalled なら停止
+- `start` → `claude -p "/next-ticket N"`
 - `wait` → `pollSeconds` 眠る(Claude を起動しない)
 - `blocked` / `done` → 終了
 - 作業ツリーが汚れていたら起動前に停止
