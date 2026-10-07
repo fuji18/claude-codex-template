@@ -14,6 +14,18 @@
 
 ---
 
+## 2026-10-07
+
+- **[manual]** チケット消化の自動進行 **`/autopilot`** と PR 修復 **`/fix-pr`** を追加しました。
+  `/next-ticket` は「`in-progress` が 1 つでもあれば止まる」をやめ、**`maxInFlight`(既定 2)の空き枠が
+  あれば、レビュー待ちの PR があっても依存解決済みのチケットに着手**します。判定(要対応 PR の修復 >
+  着手 > 待機)は新規の `.claude/scripts/autopilot-next.sh` に一本化し、`/next-ticket`・`/status`・
+  `/autopilot`・ローカルループ(`.claude/scripts/autopilot-loop.sh`)が同じ結果を使います。GitHub へは
+  REST(`gh api`)だけで触るため、GraphQL が 403 になるクラウドセッションでも動きます。
+  **取り込む側の作業**: `.claude/autopilot.json`(merge 対象・新規)を取り込み、`.claude/settings.json` の
+  allow に `Bash(bash .claude/scripts/autopilot-next.sh:*)` を足してください。ローカルループを使う場合は
+  `claude -p` が許可待ちで止まらないよう `AUTOPILOT_CLAUDE_ARGS` と allow を確認してください。
+
 ## 2026-09-07
 
 - **[auto]** `delegate-codex.sh`(1777 行)から `lib-forbidden.sh`(委託禁止領域の配列・

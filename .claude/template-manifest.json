@@ -25,6 +25,7 @@
     "docs/ui-design-guidelines.md",
     ".claude/settings.json",
     ".claude/branch-policy.json",
+    ".claude/autopilot.json",
     ".claude/codex-denylist.txt",
     ".claude/template-manifest.json",
     ".github/dependabot.yml",
