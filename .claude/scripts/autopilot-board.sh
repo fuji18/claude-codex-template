@@ -8,7 +8,7 @@
 #   ... | bash .claude/scripts/autopilot-board.sh sync [--status TEXT]
 #       標準入力の判定 JSON(autopilot-next.sh の出力)で本文を更新する。無ければ作る。
 #       内容が前回と同じなら書き込まない(5 分ごとの再判定で編集履歴を埋めない)
-#   bash .claude/scripts/autopilot-board.sh paused   # 一時停止中なら exit 0、そうでなければ 1
+#   bash .claude/scripts/autopilot-board.sh paused   # 一時停止中なら exit 0、そうでなければ 1、確認できなければ 2
 #   bash .claude/scripts/autopilot-board.sh notify TEXT
 #       全体管理 Issue にコメントし、AUTOPILOT_NOTIFY_CMD があれば TEXT を引数に実行する
 #       (例: AUTOPILOT_NOTIFY_CMD='notify-send autopilot' / ntfy・Slack への curl を包んだスクリプト)
@@ -18,7 +18,7 @@
 # 全体管理 Issue は `autopilot` ラベルの open Issue(番号が最小のもの)。`ticket` ラベルは付けない
 # (付けると判定にチケットとして数えられる)。
 #
-# 終了コード: 0 成功 / 1 paused で「停止中でない」 / 2 取得・更新の失敗
+# 終了コード: 0 成功 / 1 paused で「停止中でない」 / 2 取得・更新の失敗(paused では「確認できない」)
 set -uo pipefail
 
 cd "${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}" || exit 2
@@ -39,6 +39,7 @@ PAUSE_OFF='- [ ] **一時停止**(チェックすると次の周から新規着�
 PAUSE_ON='- [x] **一時停止**(チェックすると次の周から新規着手と PR 修復を止める。外すと再開)'
 
 # 全体管理 Issue の {number, body, html_url} を返す(無ければ空)
+# 取得に失敗したら非 0 を返す(「無い」と「確認できない」を区別する)
 find_board() {
   gh api "repos/$REPO/issues?labels=$LABEL&state=open&per_page=100" \
     --jq '[.[] | select(.pull_request == null)] | sort_by(.number) | .[0] // empty | {number, body, html_url}' 2>/dev/null
@@ -47,14 +48,16 @@ find_board() {
 is_paused() { printf '%s' "$1" | grep -qiE '^- \[x\] \*\*一時停止\*\*'; }
 
 # 「最終更新」行を除いた本文(変化の有無の比較用)
-strip_stamp() { printf '%s' "$1" | grep -v '^\*\*最終更新:\*\*'; }
+strip_stamp() { printf '%s' "$1" | tr -d '\r' | grep -v '^\*\*最終更新:\*\*'; } # Web UI で編集すると CRLF になる
 
 render() { # $1=判定 JSON $2=状態テキスト $3=一時停止中か(1/0)
   local pause_line="$PAUSE_OFF"
   [ "$3" = 1 ] && pause_line="$PAUSE_ON"
   printf '%s' "$1" | jq -r --arg mark "$MARK" --arg status "$2" --arg pause "$pause_line" \
     --arg now "$(date '+%Y-%m-%d %H:%M')" '
-    def esc: gsub("\\|"; "\\|") | gsub("\n"; " ");
+    # タイトルは利用者が書いた文字列。表の崩れ・HTML(</details> 等)・@メンション通知・リンク化を防ぐ
+    def esc: gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;") | gsub("\\|"; "\\|")
+      | gsub("`"; "\\`") | gsub("\\["; "\\[") | gsub("\\]"; "\\]") | gsub("@"; "@\u200b") | gsub("[\r\n]"; " ");
     def row($icon; $n; $title; $state): "| \($icon) | #\($n) | \($title | esc) | \($state) |";
     . as $j
     | ($j.attention | map({key: (.issues[] | tostring), value: .}) | from_entries) as $att
@@ -138,7 +141,7 @@ case "$CMD" in
     fi
     ;;
   paused)
-    B="$(find_board)"
+    B="$(find_board)" || exit 2 # 確認できない(ループは進めずに待つ)
     [ -n "$B" ] || exit 1
     is_paused "$(printf '%s' "$B" | jq -r '.body // ""')" && exit 0
     exit 1

@@ -16,7 +16,7 @@ description: (econ の自動進行用)Codex が実装を終えたチケットを
    - `bash .claude/scripts/harness-mode.sh` が `econ`
    - 現在のブランチがこのチケットのもの(名前に `issue[番号]-` を含む)
    - `.steering/*-issue[番号]-*/tasklist.md` に未完了(`- [ ]`)が無い
-2. **`/check` も `code-reviewer` も回さない**(econ.md の 2)。`git diff --stat` と `tasklist.md` だけを見て、PR の概要を書く材料にする。`package.json` のライフサイクル差分は**ループが事前に検査済み**(差分があればループは止まり、ここに来ない)
+2. **`/check` も `code-reviewer` も回さない**(econ.md の 2)。`git diff --stat` と `tasklist.md` だけを見て、PR の概要を書く材料にする。`package.json` のライフサイクル差分はループが事前に検査するが、**このコマンドを直接呼ばれた場合に備えて自分でも見る**: `git diff $(git merge-base HEAD origin/[baseBranch]) -- package.json` で `scripts` / `lint-staged` / `prepare` が変わっていたら、対話中ならユーザーに見せて確認を取り、無人(`claude -p`)なら何もせず終了する
 3. `Skill('commit')` で委託成果をコミットする(Codex は `.git` を書けないため、成果は未コミットで残っている)
 4. `.harness/decisions.jsonl` に 1 行追記してコミットする(**PR より前**。delegation-policy.md「実測の記録」)。`implementer` は `"codex"`、往復・指摘数は委託の実績どおり、`review_rounds` は `0`。無人実行なので `/usage` は尋ねず `"usage": {"mode": "econ", "weekly_pct": null, "raw": "autopilot 無人実行のため未取得"}` とする
 5. `git push` し、**draft で** PR を作る(`/add-feature` ステップ8 の形式。`--draft` 必須・ベースは `.claude/branch-policy.json` の `baseBranch`・ボディに `Closes #[番号]`)。「検証」節にはチェックを付けず「モード B のため検収未実施(CI に委ねる)」と書く

@@ -14,7 +14,7 @@ Claude の週枠を温存する運用。**モードの切替を宣言するの�
 5. **委託を挟んだら、draft PR を作る前に `git diff -- package.json` でライフサイクル系(`scripts` / `lint-staged` / `prepare`)を目視する。** このモードは検収を CI に預けるが、**CI が回す `npm test` 自体が委託成果**である以上、ここを見ないと層が 1 枚も残らない(根拠: `docs/template-dev/codex-delegation-plan.md` §9)
 6. **`decisions.jsonl` を書く前に `/usage` の週枠使用率をユーザーに 1 行で尋ね、`usage` に載せる**(答えが無ければ `null` のまま進む。設計: `docs/template-dev/econ-measurement.md`)
 
-**自動進行(`bash .claude/scripts/autopilot-loop.sh`)はこのモードでも使える。** 人間がターミナルで 1 回起動すれば 1・3・4 を代行する: 計画だけの `claude -p "/next-ticket N --plan-only"` → **ループ(シェル)が `delegate-codex.sh impl` を直接叩く**(Claude を起動しない)→ 最小コンテキストの `claude -p "/ship-ticket N"` で draft PR。5 はループが機械的に検査し、差分があれば止まって人間に返す。6 は無人なので `null`。Codex が使えない(exit 3)ときに Sonnet fork へ自動で落とさない。
+**自動進行(`bash .claude/scripts/autopilot-loop.sh`)はこのモードでも使える。** 人間がターミナルで 1 回起動すれば 1・3・4 を代行する: 計画だけの `claude -p "/next-ticket N --plan-only"` → **ループ(シェル)が `delegate-codex.sh impl` を直接叩く**(Claude を起動しない)→ 最小コンテキストの `claude -p "/ship-ticket N"` で draft PR。5 はループが機械的に検査し、差分があれば止まって人間に返す。6 は無人なので `null`。Codex が使えない(exit 3)ときに Sonnet fork へ自動で落とさない。draft PR の CI 失敗・コンフリクトだけは `/fix-pr` を `claude -p` で回す(検収を CI に預けるモードで CI が赤のまま積むと、ready にした時点で全部が詰まるため。枠を使うのはこの修復だけ)。draft が `econ.maxInFlight` まで積まれると約 1 時間後に全体管理 Issue へ通知が出る。
 
 検収を飛ばした分の担保は、ベンダー中立ガードレール(`.husky/*`)と CI(`ci.yml`)。
 

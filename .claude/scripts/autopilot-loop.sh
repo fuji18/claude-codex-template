@@ -38,33 +38,52 @@
 #   blocked / done / 起動回数の上限
 set -uo pipefail
 
+SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")" # cd の後でも --background が自分を起動できるよう先に絶対パス化する
 cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" || exit 2
 
 LOGF=.harness/autopilot.log
 PIDF=.harness/autopilot.pid
 
+# pid ファイルが指すプロセスが本当にこのループか(pid の再利用で無関係なプロセスを殺さない)
+loop_alive() {
+  local p
+  p="$(cat "$PIDF" 2>/dev/null)" || return 1
+  [ -n "$p" ] && kill -0 "$p" 2>/dev/null || return 1
+  ps -o args= -p "$p" 2>/dev/null | grep -q 'autopilot-loop' || return 1
+  printf '%s' "$p"
+}
+# 子孫を先に集めてから止める(delegate-codex.sh が起動した codex exec は孫なので pkill -P では残る)
+descendants() { local c; for c in $(pgrep -P "$1" 2>/dev/null); do echo "$c"; descendants "$c"; done; }
+# 本体を先に TERM する: bash は前面の子が終わるまで trap を保留し、子が終わった直後に trap(静かな終了)を
+# 走らせるので、子の失敗を「claude -p が失敗した」と誤って停止通知しない。子孫は先に集めておく
+kill_tree() {
+  local d
+  d="$(descendants "$1")"
+  kill -TERM "$1" 2>/dev/null
+  [ -n "$d" ] && kill -TERM $d 2>/dev/null
+  return 0
+}
+
 DRY=0
 case "${1:-}" in
   --dry-run) DRY=1 ;;
   --background)
-    if [ -f "$PIDF" ] && kill -0 "$(cat "$PIDF")" 2>/dev/null; then
-      echo "既に実行中(pid $(cat "$PIDF"))。止めるには --stop"; exit 1
-    fi
+    if P="$(loop_alive)"; then echo "既に実行中(pid $P)。止めるには --stop"; exit 1; fi
     mkdir -p .harness
-    nohup bash "$0" >>"$LOGF" 2>&1 </dev/null &
-    echo $! >"$PIDF"
-    echo "autopilot を裏で起動した(pid $!)。ログ: bash $0 --log / 停止: bash $0 --stop"
+    # pid ファイルは起動した本体が自分で書く(前面実行と同じ排他を通す)
+    nohup bash "$SELF" >>"$LOGF" 2>&1 </dev/null &
+    echo "autopilot を裏で起動した(pid $!)。ログ: bash $SELF --log / 停止: bash $SELF --stop"
     exit 0
     ;;
   --stop)
-    if [ -f "$PIDF" ] && kill -0 "$(cat "$PIDF")" 2>/dev/null; then
-      # ループ本体と、その子(claude -p / sleep)をまとめて止める
-      pkill -TERM -P "$(cat "$PIDF")" 2>/dev/null
-      kill "$(cat "$PIDF")" 2>/dev/null && echo "停止した(pid $(cat "$PIDF"))"
-      rm -f "$PIDF"
+    if P="$(loop_alive)"; then
+      # 本体の trap は「割り込み」として静かに終わる(停止通知を出さない)
+      kill_tree "$P"
+      echo "停止した(pid $P)"
     else
-      echo "実行中の autopilot は無い"; rm -f "$PIDF"
+      echo "実行中の autopilot は無い"
     fi
+    rm -f "$PIDF"
     exit 0
     ;;
   --log) exec tail -n 50 -F "$LOGF" ;;
@@ -84,6 +103,9 @@ BOARD=1
 case "$POLL" in '' | *[!0-9]* | 0) echo "autopilot-loop.sh: pollSeconds は 1 以上の整数にする: $POLL" >&2; exit 2 ;; esac
 case "$MAX_RUNS" in '' | *[!0-9]* | 0) echo "autopilot-loop.sh: maxRuns は 1 以上の整数にする: $MAX_RUNS" >&2; exit 2 ;; esac
 
+# 自分が書いた pid ファイルだけを消す(dry-run や別のループが本体の pid を消すと --stop が効かなくなる)
+release_pid() { [ "$DRY" = 0 ] && [ "$(cat "$PIDF" 2>/dev/null)" = "$$" ] && rm -f "$PIDF"; return 0; }
+
 log() { printf '[autopilot %s] %s\n' "$(date '+%m-%d %H:%M:%S')" "$*"; }
 
 # 全体管理 Issue の操作。失敗しても進行は止めない(表示層が落ちて本体が止まるのは逆)
@@ -93,7 +115,12 @@ board() {
   return "${PIPESTATUS[0]}"
 }
 board_sync() { [ -n "${J:-}" ] && printf '%s' "$J" | board sync --status "$1"; }
-board_paused() { [ "$BOARD" = 1 ] && [ "$DRY" = 0 ] && bash .claude/scripts/autopilot-board.sh paused 2>/dev/null; }
+# 0 = 一時停止中 / 1 = 停止中でない / 2 = 確認できない(GitHub 障害・認証切れ)。2 で進めると人間が入れた
+# 一時停止を無視することになるので、ループは 2 を「待つ」として扱う(フェイルクローズ)
+board_paused() {
+  [ "$BOARD" = 1 ] && [ "$DRY" = 0 ] || return 1
+  bash .claude/scripts/autopilot-board.sh paused 2>/dev/null
+}
 
 stop() {
   log "停止: $1"
@@ -106,7 +133,7 @@ $1
 再開: \`bash .claude/scripts/autopilot-loop.sh --background\`" || true
     printf '\a'
   fi
-  rm -f "$PIDF" 2>/dev/null
+  release_pid
   exit "${2:-1}"
 }
 
@@ -114,10 +141,23 @@ command -v jq >/dev/null 2>&1 || stop "jq が見つからない" 2
 if [ "$DRY" = 0 ]; then
   command -v claude >/dev/null 2>&1 || stop "claude CLI が見つからない" 2
 fi
-trap 'log "割り込みで終了"; rm -f "$PIDF" 2>/dev/null; exit 130' INT TERM
+trap 'log "割り込みで終了"; release_pid; exit 130' INT TERM
+
+# 前面・裏を問わず 1 作業ツリーにループは 1 本(同じチケットを二重に進めない)
+if [ "$DRY" = 0 ]; then
+  if P="$(loop_alive)" && [ "$P" != "$$" ]; then
+    echo "autopilot-loop.sh: 既に実行中(pid $P)。止めるには --stop" >&2; exit 1
+  fi
+  mkdir -p .harness && echo $$ >"$PIDF"
+fi
 
 RUNS=0
 LAST_KEY=""
+RATE_WAITS=0
+WAIT_SIG=""
+WAIT_STREAK=0
+# 待機が変化なしでこの周回数続いたら 1 度だけ知らせる(止めはしない。レビューは長引いてよい)
+WAIT_NOTIFY_AFTER="$(( (3600 + POLL - 1) / POLL ))"
 
 run_claude() { # $1=プロンプト
   RUNS=$((RUNS + 1))
@@ -128,8 +168,20 @@ run_claude() { # $1=プロンプト
 }
 
 # チケット N のブランチ(この作業ツリーで切ったもの)を返す
+ticket_branches() { git for-each-ref --format='%(refname:short)' refs/heads/ | grep -E "(^|/|-)issue${1}-"; }
+# 1 本に決まるときだけ返す(複数あるときは check_branches が先に止める)
 ticket_branch() {
-  git for-each-ref --format='%(refname:short)' refs/heads/ | grep -E "issue${1}(-|$)" | head -1
+  local b
+  b="$(ticket_branches "$1")"
+  [ "$(printf '%s' "$b" | grep -c .)" = 1 ] && printf '%s' "$b"
+}
+# サブシェルの外で呼ぶ(stop を $(...) の中で呼ぶとサブシェルだけが終わる)
+check_branches() {
+  local b
+  b="$(ticket_branches "$1")"
+  if [ "$(printf '%s' "$b" | grep -c .)" -gt 1 ]; then
+    stop "#$1 に対応するブランチが複数ある($(printf '%s' "$b" | tr '\n' ' '))。どれを使うか人間が決めて、不要なものを消す"
+  fi
 }
 ticket_steering() {
   find .steering -maxdepth 1 -type d -name "*-issue${1}-*" 2>/dev/null | sort | tail -1
@@ -160,14 +212,21 @@ econ_step() { # $1=Issue 番号
     return
   fi
   if grep -qE '^[[:space:]]*- \[ \]' "$dir/tasklist.md" 2>/dev/null; then
-    log "Codex に委託: $dir"
+    # Codex の枠も消費するので起動回数の上限に数える(exit 0 なのに tasklist が閉じない等で回り続けない)
+    RUNS=$((RUNS + 1))
+    [ "$RUNS" -le "$MAX_RUNS" ] || stop "起動回数の上限($MAX_RUNS)に達した。続けるなら再起動する" 0
+    log "起動 $RUNS/$MAX_RUNS: Codex に委託: $dir"
     bash .claude/scripts/delegate-codex.sh impl "$dir/"
     rc=$?
     case "$rc" in
-      0) ;; # 次の周で tasklist が閉じていれば ship に進む
+      0) RATE_WAITS=0 ;; # 次の周で tasklist が閉じていれば ship に進む
       1 | 5) run_claude "/next-ticket $n --plan-only" ;; # 判断待ち / 計画未完成 → design.md を直す
       3) stop "Codex が使えない(exit 3)。econ では Sonnet fork に自動で落とさない(枠を使うため)。Codex を直すか、通常モードに戻して /next-ticket $n" ;;
-      4) log "Codex のレート上限(exit 4)。${POLL}s 待って再開する"; sleep "$POLL"; KEEP_GOING=1 ;; # 待っただけなので「進まなかった」に数えない
+      4)
+        RATE_WAITS=$((RATE_WAITS + 1))
+        [ "$RATE_WAITS" -le 12 ] || stop "Codex のレート上限(exit 4)が 12 回続いた。枠の回復を待ってから再起動する" 0
+        RUNS=$((RUNS - 1)) # 待っただけなので起動回数にも「進まなかった」にも数えない
+        log "Codex のレート上限(exit 4)。${POLL}s 待って再開する($RATE_WAITS/12)"; sleep "$POLL"; KEEP_GOING=1 ;;
       *) stop "Codex への委託が失敗した(exit $rc / $dir)。.harness/codex-runs/ のログを確認する" ;;
     esac
     return
@@ -189,13 +248,16 @@ while :; do
   # 要約は取得済みの JSON から作る(REST を 2 回叩かない / 2 回の結果がずれない)
   printf '%s' "$J" | bash .claude/scripts/autopilot-next.sh --format-summary | sed 's/^/  /'
 
-  if board_paused; then
-    board_sync "⏸ 一時停止中(全体管理 Issue のチェックを外すと再開)"
-    log "一時停止中。${POLL}s 後に再確認する"
-    LAST_KEY=""
-    sleep "$POLL"
-    continue
-  fi
+  board_paused
+  case $? in
+    0)
+      board_sync "⏸ 一時停止中(全体管理 Issue のチェックを外すと再開)"
+      log "一時停止中。${POLL}s 後に再確認する"
+      LAST_KEY=""; sleep "$POLL"; continue ;;
+    2)
+      log "全体管理 Issue の一時停止を確認できない(GitHub への接続・認証)。進めずに ${POLL}s 待つ"
+      LAST_KEY=""; sleep "$POLL"; continue ;;
+  esac
 
   ACTION="$(printf '%s' "$J" | jq -r .action)"
   TARGET="$(printf '%s' "$J" | jq -r '.target // empty')"
@@ -204,6 +266,7 @@ while :; do
   # この作業ツリーにブランチがあるもの(= 前回の実行が PR まで届かなかった自分の作業)を最優先で再開する
   OWN_STALLED=""
   for s in $(printf '%s' "$J" | jq -r '.stalled[]'); do
+    check_branches "$s"
     if [ -n "$(ticket_branch "$s")" ]; then OWN_STALLED="$s"; break; fi
   done
 
@@ -230,6 +293,18 @@ while :; do
         if [ "$DRY" = 1 ]; then log "(dry-run) ${POLL}s 待って再判定する"; exit 0; fi
         board_sync "👀 レビュー・CI 待ち${OTHER:+(別セッションで実装中: $OTHER)}"
         log "レビュー・CI 待ち。${POLL}s 後に再判定する"
+        # 進行中の集合が変わらないまま約 1 時間 → 1 度だけ知らせる(別セッションの放置・積まれた draft・
+        # 長いレビュー待ちに気づけるように)。変化したら数え直す
+        SIG="$(printf '%s' "$J" | jq -c '{inFlight, stalled, prs: [.prs[].number]}')"
+        if [ "$SIG" = "$WAIT_SIG" ]; then WAIT_STREAK=$((WAIT_STREAK + 1)); else WAIT_SIG="$SIG"; WAIT_STREAK=1; fi
+        if [ "$WAIT_STREAK" = "$WAIT_NOTIFY_AFTER" ]; then
+          board notify "⏳ **約 1 時間、進行中の作業が変わっていません**(待機は続けます)
+
+- 進行中: $(printf '%s' "$J" | jq -r '.inFlight | map("#\(.)") | join(", ")')
+${OTHER:+- PR 未作成の in-progress(この作業ツリー以外): $OTHER — 別セッションが止まっているなら in-progress を外す
+}- レビュー・マージ(econ なら \`gh pr ready\`)が済むと次のチケットに進みます" || true
+          [ -n "${AUTOPILOT_NOTIFY_CMD:-}" ] || printf '\a'
+        fi
         LAST_KEY=""
         sleep "$POLL"
         continue
@@ -248,7 +323,7 @@ while :; do
         board_sync "✅ 完了 — open のチケットが無い"
         log "open のチケットが無い。/sync-docs と次フェーズ(P1)の計画を検討する"
         [ "$DRY" = 0 ] && board notify "✅ 全チケットが完了しました。/sync-docs と次フェーズ(P1)の計画を検討してください" || true
-        rm -f "$PIDF" 2>/dev/null
+        release_pid
         exit 0
         ;;
       *) stop "未知の action: $ACTION" 2 ;;
