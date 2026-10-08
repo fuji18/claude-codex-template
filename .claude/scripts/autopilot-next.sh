@@ -41,6 +41,7 @@ summarize() {
     (if (.ready | length) > 0 then "着手可能: " + (.ready | map("#\(.number)") | join(", ")) else empty end),
     (if ((.manual // []) | length) > 0 then "手動で回す: " + (.manual | map("#\(.)") | join(", ")) else empty end),
     (if (.blocked | length) > 0 then "依存待ち: " + (.blocked | map("#\(.number)←\(.waitingOn | map("#\(.)") | join("+"))") | join(", ")) else empty end),
+    (if ((.untrustedPrs // []) | length) > 0 then "⚠️ fork の PR は対象外(自動で触らない): " + (.untrustedPrs | map("#\(.pr)→" + (.issues | map("#\(.)") | join("+"))) | join(", ")) else empty end),
     (if ((.fetchErrors // []) | length) > 0 then "⚠️ PR 詳細の取得失敗(判定が甘くなっている): " + (.fetchErrors | map("#\(.pr)(\(.failed | join(",")))") | join(", ")) else empty end),
     "open チケット: \(.openTickets)"'
 }
@@ -117,7 +118,11 @@ jq '[.[] | {number, state, title, pull_request,
             labels: [.labels[]? | (.name? // .)],
             deps: [(.body // "") | scan("depends:[^\\n]*"; "i") | scan("#(\\d+)") | .[0] | tonumber] | unique}]' \
   "$TMP/issues.raw" >"$TMP/issues.json" || die "Issue 一覧の整形に失敗した"
+# fork(head が別リポジトリ)の PR は信頼しない。本文に Closes #N と書くだけで誰でも「チケットの PR」を
+# 名乗れるため、通すと autopilot が外部コードに /fix-pr を回す(手元で npm ci / npm test = 任意コード実行)。
+# head.repo は fork が消えると null になるので、その場合も信頼しない。フィクスチャは両方欠けていて一致する
 jq '[.[] | {number, draft: (.draft // false), head: (.head.ref // ""), sha: (.head.sha // ""),
+            trusted: ((.head.repo.full_name? // null) == (.base.repo.full_name? // null)),
             links: [(.body // "") | scan("\\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\\s+#(\\d+)"; "i") | .[0] | tonumber] | unique}]' \
   "$TMP/prs.raw" >"$TMP/prs.json" || die "PR 一覧の整形に失敗した"
 
@@ -132,8 +137,10 @@ BASE="$(jq -n --slurpfile i "$TMP/issues.json" --slurpfile p "$TMP/prs.json" '
   | ($t | map(select(.state == "closed"))) as $closedT
   | ($closedT | map(.number)) as $closed
   | ($open | map(.number)) as $openNums
-  | ($prs | map({number, draft, head, sha, issues: (.links | map(select(. as $n | $openNums | index($n))))})
-         | map(select(.issues | length > 0))) as $tprs
+  | ($prs | map({number, draft, head, sha, trusted, issues: (.links | map(select(. as $n | $openNums | index($n))))})
+         | map(select(.issues | length > 0))) as $linked
+  | ($linked | map(select(.trusted)) | map(del(.trusted))) as $tprs
+  | ($linked | map(select(.trusted | not)) | map({pr: .number, issues})) as $untrusted
   | ($tprs | map(.issues[]) | unique) as $withPr
   | ($open | map(select(.labels | index("in-progress")) | .number)) as $wip
   | (($wip + $withPr) | unique) as $inFlight
@@ -142,6 +149,7 @@ BASE="$(jq -n --slurpfile i "$TMP/issues.json" --slurpfile p "$TMP/prs.json" '
       closed: $closed,
       closedT: ($closedT | map({number, title})),
       prs: $tprs,
+      untrusted: $untrusted,
       inFlight: $inFlight,
       stalled: ($wip - $withPr)
     }')" || die "Issue / PR の解析に失敗した"
@@ -220,6 +228,7 @@ RESULT="$(jq -n --argjson b "$BASE" --slurpfile dd "$TMP/details.json" --argjson
                                      and (.labels | index("autopilot:manual") | not)))
                  | map({number, waitingOn: [.deps[] | select(. as $dep | $closed | index($dep) | not)]})),
       prs: ($b.prs | map({number, issues, head, draft})),
+      untrustedPrs: $b.untrusted,
       fetchErrors: ($b.prs | map(. as $p | ($d[($p.number | tostring)].fetchErrors // []) | select(length > 0)
                      | {pr: $p.number, failed: .})),
       openTickets: ($b.open | length),

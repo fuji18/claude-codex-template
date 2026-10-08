@@ -14,6 +14,15 @@
 
 ---
 
+## 2026-10-08
+
+- **[auto]** 🔒 `autopilot-next.sh` が **fork(head が別リポジトリ)の PR をチケットの PR として扱わない**ようにしました。
+  これまでは PR 本文に `Closes #N` があれば作成者を問わず対象にしていたため、公開リポジトリでは第三者の PR に対して
+  autopilot が手元で `/fix-pr`(`npm ci` / `npm test` を含む)を回し得ました。除外した PR は判定 JSON の `untrustedPrs` と
+  要約の ⚠️ 行に出ます。fork からの PR は人間が手で扱ってください。
+
+---
+
 ## 2026-10-07
 
 - **[manual]** autopilot の**事前チェック**を追加しました。`/autopilot` は `.claude/scripts/autopilot-preflight.sh`(新規・読み取り専用)を
