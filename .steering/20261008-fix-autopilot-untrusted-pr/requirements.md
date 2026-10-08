@@ -17,3 +17,10 @@
 ## 付随
 
 - `npm audit` の high 2 件(brace-expansion / source-map-js。いずれも devDependencies の DoS)を `npm audit fix` で解消する(lockfile のみ)
+
+## 追加の要求(2 回目)
+
+- 外部の作成者の `ticket` Issue・書き込み権限の無いレビュアーの変更要求で autopilot が動かない
+- `/fix-pr` に信頼できない書き手のコメント本文を渡さない(散文の指示ではなく、読み取り経路で機械的に落とす)
+- 委託先が書けばサンドボックス外で実行されるパス(`.devcontainer/` / `.vscode/` / `.npmrc`)を委託禁止領域にする
+- セッション開始時に `npx -y` で取得・実行する MCP サーバのバージョンを固定する

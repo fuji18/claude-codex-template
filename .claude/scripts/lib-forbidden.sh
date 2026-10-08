@@ -83,6 +83,11 @@
 # .claude/settings.local.json も同系統(gitignore 済み・hooks を定義できる・次のセッション
 # 開始時にホストで走る)なので、settings.json と対で持つ。
 #
+# .devcontainer/ / .vscode/ / .npmrc も同系統: 委託先が書いた内容がサンドボックス外で走る。
+# devcontainer.json の initializeCommand は**コンテナの外(ホストマシン)**で、postCreateCommand は
+# 次のリビルド時に走る(隔離の境界そのものを書き換えられる)。.vscode/ はタスクの自動実行・
+# ツールのパス指定、.npmrc は registry / script-shell 等でホスト上の npm ci / npm test の挙動を変える。
+#
 # 末尾が / のものはディレクトリ配下すべてが対象。
 #
 # 配列末尾の .harness/codex-runs/ は列挙は残すが、出口検査の内容ハッシュ比較
@@ -102,6 +107,9 @@ FORBIDDEN_PATHS=(
   ".mcp.json"
   ".github/workflows/"
   ".codex/"
+  ".devcontainer/"
+  ".vscode/"
+  ".npmrc"
   ".harness/mode"
   ".harness/codex-runs/"
 )

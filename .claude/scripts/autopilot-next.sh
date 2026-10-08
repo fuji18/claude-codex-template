@@ -41,6 +41,7 @@ summarize() {
     (if (.ready | length) > 0 then "着手可能: " + (.ready | map("#\(.number)") | join(", ")) else empty end),
     (if ((.manual // []) | length) > 0 then "手動で回す: " + (.manual | map("#\(.)") | join(", ")) else empty end),
     (if (.blocked | length) > 0 then "依存待ち: " + (.blocked | map("#\(.number)←\(.waitingOn | map("#\(.)") | join("+"))") | join(", ")) else empty end),
+    (if ((.untrustedTickets // []) | length) > 0 then "⚠️ 外部の作成者のチケットは対象外(自動で触らない): " + (.untrustedTickets | map("#\(.)") | join(", ")) else empty end),
     (if ((.untrustedPrs // []) | length) > 0 then "⚠️ fork の PR は対象外(自動で触らない): " + (.untrustedPrs | map("#\(.pr)→" + (.issues | map("#\(.)") | join("+"))) | join(", ")) else empty end),
     (if ((.fetchErrors // []) | length) > 0 then "⚠️ PR 詳細の取得失敗(判定が甘くなっている): " + (.fetchErrors | map("#\(.pr)(\(.failed | join(",")))") | join(", ")) else empty end),
     "open チケット: \(.openTickets)"'
@@ -114,7 +115,13 @@ jq -e 'type == "array"' "$TMP/issues.raw" >/dev/null 2>&1 || die "Issue 一覧�
 jq -e 'type == "array"' "$TMP/prs.raw" >/dev/null 2>&1 || die "PR 一覧が JSON 配列でない"
 jq -e 'type == "object"' "$TMP/details.json" >/dev/null 2>&1 || die "--details が JSON オブジェクトでない"
 
-jq '[.[] | {number, state, title, pull_request,
+# 書き込み権限のある作成者(OWNER / MEMBER / COLLABORATOR)のチケットだけを自動進行の対象にする。
+# Issue 本文は作成者が後からいつでも書き換えられ、その本文が /next-ticket の要求として claude -p に渡るため、
+# 外部の作成者の Issue に ticket ラベルが付いた時点でプロンプトインジェクションの入口になる。
+# REST は author_association を必ず返す。欠けているのはフィクスチャだけなので信頼側に倒す
+TRUSTED_ASSOC='["OWNER","MEMBER","COLLABORATOR"]'
+jq --argjson ta "$TRUSTED_ASSOC" '[.[] | {number, state, title, pull_request,
+            trusted: ((.author_association // "OWNER") as $a | $ta | index($a) != null),
             labels: [.labels[]? | (.name? // .)],
             deps: [(.body // "") | scan("depends:[^\\n]*"; "i") | scan("#(\\d+)") | .[0] | tonumber] | unique}]' \
   "$TMP/issues.raw" >"$TMP/issues.json" || die "Issue 一覧の整形に失敗した"
@@ -133,7 +140,8 @@ BASE="$(jq -n --slurpfile i "$TMP/issues.json" --slurpfile p "$TMP/prs.json" '
 
   $i[0] as $issues | $p[0] as $prs
   | ($issues | map(select(.pull_request == null))) as $t
-  | ($t | map(select(.state == "open"))) as $open
+  | ($t | map(select(.state == "open" and (.trusted | not))) | map(.number)) as $untrustedT
+  | ($t | map(select(.state == "open" and .trusted))) as $open
   | ($t | map(select(.state == "closed"))) as $closedT
   | ($closedT | map(.number)) as $closed
   | ($open | map(.number)) as $openNums
@@ -150,6 +158,7 @@ BASE="$(jq -n --slurpfile i "$TMP/issues.json" --slurpfile p "$TMP/prs.json" '
       closedT: ($closedT | map({number, title})),
       prs: $tprs,
       untrusted: $untrusted,
+      untrustedTickets: $untrustedT,
       inFlight: $inFlight,
       stalled: ($wip - $withPr)
     }')" || die "Issue / PR の解析に失敗した"
@@ -175,7 +184,7 @@ if [ "$FIXTURE" = 0 ]; then
     # mergeable_state は詳細エンドポイントでしか返らない。計算中は "unknown"(= 判定しない)
     ms="$(gh api "repos/$REPO/pulls/$pr" --jq '.mergeable_state // "unknown"' 2>/dev/null)" || { ms=unknown; err="$(jq -c '. + ["pull"]' <<<"$err")"; }
     checks="$(gh api "repos/$REPO/commits/$sha/check-runs?per_page=100" --jq '[.check_runs[].conclusion]' 2>/dev/null)" || { checks='[]'; err="$(jq -c '. + ["checks"]' <<<"$err")"; }
-    reviews="$(gh api --paginate "repos/$REPO/pulls/$pr/reviews?per_page=100" --jq '.[] | {user: .user.login, state, commit_id}' 2>/dev/null | jq -s -c .)" || { reviews='[]'; err="$(jq -c '. + ["reviews"]' <<<"$err")"; }
+    reviews="$(gh api --paginate "repos/$REPO/pulls/$pr/reviews?per_page=100" --jq '.[] | {user: .user.login, state, commit_id, assoc: (.author_association // "NONE")}' 2>/dev/null | jq -s -c .)" || { reviews='[]'; err="$(jq -c '. + ["reviews"]' <<<"$err")"; }
     jq --arg p "$pr" --arg ms "$ms" --argjson c "$checks" --argjson r "$reviews" --argjson e "$err" \
       '. + {($p): {mergeable_state: $ms, checks: $c, reviews: $r, fetchErrors: $e}}' "$TMP/details.json" >"$TMP/details.next" &&
       mv "$TMP/details.next" "$TMP/details.json"
@@ -186,6 +195,7 @@ fi
 RESULT="$(jq -n --argjson b "$BASE" --slurpfile dd "$TMP/details.json" --argjson extra "$EXTRA_CLOSED" \
   --argjson max "$MAX_IN_FLIGHT" --arg mode "$HMODE" '
   $dd[0] as $d
+  | ["OWNER", "MEMBER", "COLLABORATOR"] as $ta
   | ($b.closed + $extra) as $closed
   | ($b.prs | map(. as $p | ($d[($p.number | tostring)] // {}) as $x
       | ([ (if ($x.mergeable_state // "") == "dirty" then "conflict" else empty end),
@@ -195,7 +205,10 @@ RESULT="$(jq -n --argjson b "$BASE" --slurpfile dd "$TMP/details.json" --argjson
            # レビュアーごとの最新の判定(COMMENTED は判定を上書きしない)。変更要求は再レビューか
            # dismiss まで残り続けるので、**現在の head に対して出たものだけ**を数える。
            # 対応を push した後は人間の再レビュー待ち(= wait)であり、fix を繰り返さない
-           (if ([$x.reviews[]? | select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or .state == "DISMISSED")]
+           # 書き込み権限の無いレビュアーの判定は数えない(公開リポジトリでは誰でも Request changes を出せ、
+           # それだけで /fix-pr が起動して無人の push につながる)。assoc が無いのはフィクスチャだけ
+           (if ([$x.reviews[]? | select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or .state == "DISMISSED")
+                 | select((.assoc // "OWNER") as $a | $ta | index($a) != null)]
                  | group_by(.user) | map(last)
                  | map(select(.state == "CHANGES_REQUESTED" and ((.commit_id // $p.sha) == $p.sha))) | length) > 0
               then "changes_requested" else empty end) ]) as $why
@@ -211,7 +224,8 @@ RESULT="$(jq -n --argjson b "$BASE" --slurpfile dd "$TMP/details.json" --argjson
      elif $slots > 0 and ($ready | length) > 0 then "start"
      elif ($b.inFlight | length) > 0 then "wait"
      elif ($b.open | map(select(.labels | index("autopilot:manual") | not)) | length) > 0 then "blocked"
-     elif ($b.open | length) > 0 then "manual"
+     # 外部の作成者のチケットだけが残った状態を done(全完了)と報告しない。人間が扱う
+     elif ($b.open | length) > 0 or (($b.untrustedTickets // []) | length) > 0 then "manual"
      else "done" end) as $action
   | {
       action: $action,
@@ -223,12 +237,14 @@ RESULT="$(jq -n --argjson b "$BASE" --slurpfile dd "$TMP/details.json" --argjson
       stalled: $b.stalled,
       attention: $attention,
       ready: ($ready | map({number, title, priority})),
-      manual: ($b.open | map(select((.labels | index("autopilot:manual")) and (.number as $n | $b.inFlight | index($n) | not))) | map(.number)),
+      manual: (($b.open | map(select((.labels | index("autopilot:manual")) and (.number as $n | $b.inFlight | index($n) | not))) | map(.number))
+               + ($b.untrustedTickets // [])),
       blocked: ($b.open | map(select(.number as $n | ($b.inFlight | index($n) | not) and ($ready | map(.number) | index($n) | not)
                                      and (.labels | index("autopilot:manual") | not)))
                  | map({number, waitingOn: [.deps[] | select(. as $dep | $closed | index($dep) | not)]})),
       prs: ($b.prs | map({number, issues, head, draft})),
       untrustedPrs: $b.untrusted,
+      untrustedTickets: $b.untrustedTickets,
       fetchErrors: ($b.prs | map(. as $p | ($d[($p.number | tostring)].fetchErrors // []) | select(length > 0)
                      | {pr: $p.number, failed: .})),
       openTickets: ($b.open | length),

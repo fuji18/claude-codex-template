@@ -21,6 +21,23 @@
   autopilot が手元で `/fix-pr`(`npm ci` / `npm test` を含む)を回し得ました。除外した PR は判定 JSON の `untrustedPrs` と
   要約の ⚠️ 行に出ます。fork からの PR は人間が手で扱ってください。
 
+- **[auto]** 🔒 autopilot の判定で、**書き込み権限(OWNER / MEMBER / COLLABORATOR)の無い作成者のチケット**と
+  **書き込み権限の無いレビュアーの変更要求**を数えないようにしました(Issue 本文は作成者が後から書き換えられ、それが
+  無人の `claude -p` に要求として渡るため)。対象外のチケットは判定 JSON の `untrustedTickets` と要約に出ます。
+
+- **[manual]** 🔒 `/fix-pr` が PR のレビュー・コメントを読む経路を新規の `.claude/scripts/pr-feedback.sh` に一本化しました。
+  書き込み権限のある書き手と `.claude/autopilot.json` の `trustedBots`(既定: `claude[bot]` / `github-actions[bot]`)の本文だけを返し、
+  それ以外は件数と名前だけにします。
+  **取り込む側の作業**: `.claude/settings.json`(merge 対象)の allow に `Bash(bash .claude/scripts/pr-feedback.sh:*)` を足し、
+  `.claude/autopilot.json` に `"trustedBots": ["claude[bot]", "github-actions[bot]"]` を足してください(無ければ同じ既定値で動きます)。
+
+- **[auto]** 🔒 委託禁止領域に `.devcontainer/` / `.vscode/` / `.npmrc` を足しました。`devcontainer.json` の `initializeCommand` は
+  コンテナの外(ホスト)で走るため、委託先が書き換えると隔離そのものを越えられます。
+
+- **[manual]** 🔒 `.mcp.json` の context7 を `@upstash/context7-mcp@4.1.1` に固定しました(`npx -y` で未固定だと毎セッション最新版を
+  取得して実行するため)。**取り込む側の作業**: `.mcp.json` は同期対象外なので、`args` の `"@upstash/context7-mcp"` を
+  `"@upstash/context7-mcp@4.1.1"` に手で書き換えてください。
+
 ---
 
 ## 2026-10-07
