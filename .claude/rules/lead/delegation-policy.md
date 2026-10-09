@@ -44,6 +44,9 @@
 | `.codex/` | Codex 側の設定(`network_access` 等)とモード C の手順書 |
 | `.harness/mode` | 委託先がハーネスモードを詐称できてはならない |
 | `.harness/codex-runs/` | 委託先が自分の結果を `accepted` に書き換えられてはならない |
+| `.devcontainer/` | `initializeCommand` はコンテナの外(ホスト)で、`postCreateCommand` は次のリビルドで走る。隔離の境界そのもの |
+| `.vscode/` | タスクの自動実行・ツールのパス指定で、エディタを開いた瞬間にホストで走りうる |
+| `.npmrc` | registry / `script-shell` 等でホスト上の `npm ci` / `npm test` の挙動を変えられる |
 <!-- /forbidden-paths -->
 
 **機密の送信禁止(`.claude/codex-denylist.txt`)とは別の層。** denylist は該当ファイルが存在するだけで
