@@ -770,6 +770,7 @@ AGENTS.md も `.codex/` も現在マニフェストに**未登録**で、`/sync-
 - `.github/workflows/` — 非 fork PR で `CLAUDE_CODE_OAUTH_TOKEN` にアクセスできるワークフロー定義そのもの
 - `.codex/` — Codex 側の設定(`network_access` 等)とモード C の手順書(`degraded-mode-ticket`)。「Codex 自身は `.codex/` に書けない」は codex-cli v0.149.0 の実測に依存した前提で、CLI 更新で崩れうる。多層防御として入れる(#56 / S6)
 - `.harness/mode` / `.harness/codex-runs/` — ハーネスモードと run record。委託先が自分の結果を `accepted` に書き換えたりモードを詐称したりできてはならない
+- `.devcontainer/` / `.vscode/` / `.npmrc` — 委託先が書いた内容がサンドボックスの外で走る経路。`devcontainer.json` の `initializeCommand` はコンテナではなく**ホストマシン**で、`postCreateCommand` は次のリビルドで実行される(「本当の境界は実行環境の隔離」の、その隔離の定義そのもの)。`.vscode/` はタスクの自動実行やツールのパス指定、`.npmrc` は `registry` / `script-shell` 等でホスト上の `npm ci` / `npm test` を変える(`.npmrc` は denylist にもあるが、あちらは委託**前**の存在検査で、委託中の新規作成は出口検査でしか捕まらない)
 
 `.claude/` 配下でも `skills/` / `commands/` / `agents/` / `docs/` は禁止領域に含めない。対象は次の 3 系統に限る(#56):
 

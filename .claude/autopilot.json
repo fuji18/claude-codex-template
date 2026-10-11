@@ -1,10 +1,14 @@
 {
-  "$comment": "チケット自動進行(/autopilot・autopilot-loop.sh・/next-ticket)の設定。判定の実体は .claude/scripts/autopilot-next.sh。maxInFlight = 同時に進める作業の上限(in-progress の open チケット + チケットに紐づく open PR の和集合。レビュー待ちの PR も数える)。econ.maxInFlight = econ(モード B)での上限(draft PR はマージされず枠を埋め続けるため別に持つ)。pollSeconds = ローカルループの再判定間隔(待機中は Claude を起動しない)。maxRuns = ローカルループが claude -p を起動する回数の上限。board = 全体管理 Issue(autopilot ラベル)を更新するか。環境変数 AUTOPILOT_MAX_IN_FLIGHT / AUTOPILOT_POLL_SECONDS / AUTOPILOT_MAX_RUNS が優先する。",
+  "$comment": "チケット自動進行(/autopilot・autopilot-loop.sh・/next-ticket)の設定。判定の実体は .claude/scripts/autopilot-next.sh。maxInFlight = 同時に進める作業の上限(in-progress の open チケット + チケットに紐づく open PR の和集合。レビュー待ちの PR も数える)。econ.maxInFlight = econ(モード B)での上限(draft PR はマージされず枠を埋め続けるため別に持つ)。pollSeconds = ローカルループの再判定間隔(待機中は Claude を起動しない)。maxRuns = ローカルループが claude -p を起動する回数の上限。board = 全体管理 Issue(autopilot ラベル)を更新するか。環境変数 AUTOPILOT_MAX_IN_FLIGHT / AUTOPILOT_POLL_SECONDS / AUTOPILOT_MAX_RUNS が優先する。 trustedBots = /fix-pr が指摘として読む Bot(pr-feedback.sh)。人間は書き込み権限(OWNER / MEMBER / COLLABORATOR)のある書き手だけを読む。autopilot-next.sh も同じ基準で、外部の作成者のチケット・fork の PR・書き込み権限の無いレビュアーの変更要求を対象外にする。",
   "maxInFlight": 2,
   "pollSeconds": 300,
   "maxRuns": 20,
   "board": true,
   "econ": {
     "maxInFlight": 4
-  }
+  },
+  "trustedBots": [
+    "claude[bot]",
+    "github-actions[bot]"
+  ]
 }

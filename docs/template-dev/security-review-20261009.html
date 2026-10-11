@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>残存セキュリティリスク</title>
+<style>
+  :root {
+    --bg: #fbfaf8; --surface: #ffffff; --text: #1f1d1a; --muted: #6b665e; --border: #e4e0d8;
+    --high: #b42318; --high-bg: #fdecea; --mid: #a15c07; --mid-bg: #fdf3e2; --low: #3b6e3b; --low-bg: #ecf5ec;
+    --accent: #3a5a8c; --code-bg: #f2efe9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #171614; --surface: #201f1c; --text: #ece9e3; --muted: #a39d93; --border: #36332e;
+      --high: #f19a8f; --high-bg: #3a1f1c; --mid: #e8b766; --mid-bg: #352a17; --low: #9ccf9c; --low-bg: #1d2d1d;
+      --accent: #9db7e0; --code-bg: #2a2825;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #171614; --surface: #201f1c; --text: #ece9e3; --muted: #a39d93; --border: #36332e;
+    --high: #f19a8f; --high-bg: #3a1f1c; --mid: #e8b766; --mid-bg: #352a17; --low: #9ccf9c; --low-bg: #1d2d1d;
+    --accent: #9db7e0; --code-bg: #2a2825;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.75 system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  h2 { font-size: 1.15rem; margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .meta { color: var(--muted); font-size: .9rem; margin-bottom: 24px; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: .88em; word-break: break-all; }
+  .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 16px 0; }
+  .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .tile b { display: block; font-size: 1.5rem; line-height: 1.2; }
+  .tile span { color: var(--muted); font-size: .85rem; }
+  .risk { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin: 14px 0; }
+  .risk h3 { margin: 0 0 8px; font-size: 1.02rem; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .badge { font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .high { color: var(--high); background: var(--high-bg); }
+  .mid { color: var(--mid); background: var(--mid-bg); }
+  .low { color: var(--low); background: var(--low-bg); }
+  dl { margin: 0; display: grid; grid-template-columns: 6.5em 1fr; gap: 4px 12px; }
+  dt { color: var(--muted); font-size: .88rem; }
+  dd { margin: 0; }
+  @media (max-width: 560px) { dl { grid-template-columns: 1fr; } dt { margin-top: 6px; } }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  .scroll { overflow-x: auto; }
+  ul { padding-left: 1.3em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>残存セキュリティリスク</h1>
+  <div class="meta">2026-10-09 時点 / ブランチ <code>fix/autopilot-untrusted-pr</code>(<code>4b14818</code>・<code>31c87af</code>)の修正を適用した後に残っているもの</div>
+
+  <p>このリポジトリのセキュリティ確認で見つかった問題のうち、<strong>今回は直していないもの</strong>をまとめたページです。
+  どれも「すぐに悪用される穴」ではなく、設計上あえて受け入れているもの、または運用やリポジトリ設定で対処するものです。</p>
+
+  <div class="summary">
+    <div class="tile"><b>8</b><span>残っているリスク</span></div>
+    <div class="tile"><b style="color:var(--high)">2</b><span>中〜高(早めに判断)</span></div>
+    <div class="tile"><b style="color:var(--mid)">4</b><span>中(運用で軽減)</span></div>
+    <div class="tile"><b style="color:var(--low)">2</b><span>低</span></div>
+  </div>
+
+  <h2>中〜高: 早めに判断したいもの</h2>
+
+  <div class="risk">
+    <h3><span class="badge high">中〜高</span>委託成果をホスト上で実行する(npm test / lint-staged)</h3>
+    <dl>
+      <dt>内容</dt><dd>Codex(や fork)が書いたコード・テスト・<code>package.json</code> の scripts は、検収時の <code>npm test</code> / <code>npm run lint</code> / コミット時の <code>lint-staged</code> で<strong>サンドボックスの外・ネットワーク有効</strong>のまま実行されます。</dd>
+      <dt>起こりうること</dt><dd>委託先が(プロンプトインジェクション等で)悪意あるテストを書くと、検収した瞬間に devcontainer 内のトークン・ファイルに届きます。</dd>
+      <dt>直さない理由</dt><dd>塞ぐと委託した成果を検証できなくなるため、#60 で「受容」と決定済み(<code>codex-delegation-plan.md</code> §9)。<code>package.json</code> のライフサイクル系の差分は目視・出口検査で警告されます。</dd>
+      <dt>軽減策</dt><dd>委託を挟んだ差分は <code>git diff -- package.json</code> と新規テストファイルを目視してから <code>/check</code> を回す。devcontainer 内に置くトークンの権限を絞る(下の「GH_TOKEN」)。</dd>
+    </dl>
+  </div>
+
+  <div class="risk">
+    <h3><span class="badge high">中〜高</span>devcontainer が <code>seccomp=unconfined</code> で動く</h3>
+    <dl>
+      <dt>内容</dt><dd><code>.devcontainer/devcontainer.json</code> の <code>runArgs</code> でコンテナの seccomp(システムコール制限)を無効にしています。</dd>
+      <dt>起こりうること</dt><dd>このハーネスの「本当の境界」はコンテナの隔離ですが、その隔離が既定より弱くなっています。上の「ホスト上で実行」と組み合わさると、コンテナからの脱出の難度が下がります。</dd>
+      <dt>直さない理由</dt><dd>Codex のサンドボックス(bubblewrap)が動くために必要。外すと委託そのものが使えなくなる(#60 で受容済み)。</dd>
+      <dt>軽減策</dt><dd>ホスト側の Docker を最新に保つ。機密の多いマシンでは devcontainer を使わず、使い捨てのクラウド環境(Codespaces 等)で回す。</dd>
+    </dl>
+  </div>
+
+  <h2>中: 運用やリポジトリ設定で軽減するもの</h2>
+
+  <div class="risk">
+    <h3><span class="badge mid">中</span>ホストの GH_TOKEN がコンテナ内の全プロセスから読める</h3>
+    <dl>
+      <dt>内容</dt><dd><code>containerEnv</code> の <code>LOCAL_GH_TOKEN</code> にホストの <code>GH_TOKEN</code> がそのまま入り、<code>npm test</code> で動くコードを含むコンテナ内のすべてのプロセスから読めます(Codex には env の許可リスト方式で渡りません)。</dd>
+      <dt>起こりうること</dt><dd>上の「ホスト上で実行」経路でトークンが盗まれると、そのトークンが届く全リポジトリに書き込まれます。</dd>
+      <dt>軽減策</dt><dd>GH_TOKEN を<strong>このリポジトリだけに絞った fine-grained token</strong>(Contents / Issues / Pull requests の read-write のみ)にする。classic token の <code>repo</code> スコープは避ける。</dd>
+    </dl>
+  </div>
+
+  <div class="risk">
+    <h3><span class="badge mid">中</span>GitHub の branch protection が未確認</h3>
+    <dl>
+      <dt>内容</dt><dd>保護ブランチの検査は hook・husky・CI の 3 層ありますが、どれもローカルか「PR の base とブランチ名」しか見ません。<code>main</code> への直接 push・force push を最終的に止められるのは GitHub 側の設定だけです(このセッションからは設定を確認できませんでした)。</dd>
+      <dt>軽減策</dt><dd>Settings → Rules(または Branches)で <code>main</code> に「PR 必須」「force push 禁止」「削除禁止」「CI(<code>quality</code> / <code>harness-integrity</code> / <code>branch-policy</code>)必須」を設定する。</dd>
+    </dl>
+  </div>
+
+  <div class="risk">
+    <h3><span class="badge mid">中</span>autopilot は「信頼できる人の文章」なら無人で実行する</h3>
+    <dl>
+      <dt>内容</dt><dd>今回の修正で外部の人のチケット・PR・コメントは対象外になりましたが、書き込み権限のある人(と <code>trustedBots</code>)の文章は、<code>--permission-mode acceptEdits</code> の <code>claude -p</code> にそのまま要求として渡ります。<code>/fix-pr</code> が CI ログを読む部分は、まだ指示文(「指示として実行しない」)だけで守っています。</dd>
+      <dt>起こりうること</dt><dd>コラボレーターのアカウント乗っ取りや、CI ログに混ざった文字列経由での誘導。</dd>
+      <dt>軽減策</dt><dd>コラボレーターを最小限にし 2FA を必須にする。<code>trustedBots</code> を増やすときは、その Bot が外部入力をそのまま書き込まないか確認する。<code>AUTOPILOT_CLAUDE_ARGS</code> に <code>bypassPermissions</code> を入れない。</dd>
+    </dl>
+  </div>
+
+  <div class="risk">
+    <h3><span class="badge mid">中</span>ツールのバージョンが固定されていない</h3>
+    <dl>
+      <dt>内容</dt>
+      <dd>
+        <ul>
+          <li>GitHub Actions がタグ指定(<code>actions/checkout@v7</code>・<code>anthropics/claude-code-action@v1</code> など)で、コミット SHA で固定していない</li>
+          <li><code>claude-code-review.yml</code> のプラグイン取得元 <code>https://github.com/anthropics/claude-code.git</code> が既定ブランチの最新</li>
+          <li><code>.devcontainer/post_create.sh</code> が <code>@anthropic-ai/claude-code</code> / <code>@openai/codex@latest</code> を版指定なしで入れる</li>
+        </ul>
+      </dd>
+      <dt>起こりうること</dt><dd>取得元が侵害されたとき、次の実行で悪性版をそのまま使う。Actions は <code>CLAUDE_CODE_OAUTH_TOKEN</code> に触れる。</dd>
+      <dt>直さない理由</dt><dd>いずれも公式・第一者の配布元で、dependabot(github-actions / devcontainers)が更新を見ている。SHA 固定は更新の手間が増える。</dd>
+      <dt>軽減策</dt><dd>少なくともシークレットに触れる <code>anthropics/claude-code-action</code> は SHA で固定し(dependabot は SHA 固定も更新できる)、コメントにタグ名を残す。</dd>
+    </dl>
+  </div>
+
+  <h2>低</h2>
+
+  <div class="risk">
+    <h3><span class="badge low">低</span>PreToolUse hook の危険コマンド検査は文字列ベース</h3>
+    <dl>
+      <dt>内容</dt><dd><code>block-dangerous-cmds.sh</code> / <code>check-branch-policy.sh</code> は文字列パターンでの検査なので、<code>bash -c</code>・<code>eval</code>・変数展開で迂回できます(スクリプト自身にも明記されています)。</dd>
+      <dt>軽減策</dt><dd>設計どおり「第二防衛線」として扱う。本当の境界は permission mode・husky・GitHub の branch protection。</dd>
+    </dl>
+  </div>
+
+  <div class="risk">
+    <h3><span class="badge low">低</span>npm audit が CI で失敗扱いにならない</h3>
+    <dl>
+      <dt>内容</dt><dd><code>ci.yml</code> の <code>Dependency audit</code> は <code>continue-on-error: true</code> なので、high の脆弱性があっても PR は緑になります(今回の 2 件もこれで見過ごされていた)。</dd>
+      <dt>直さない理由</dt><dd>上流の advisory 公開で無関係な PR が赤くなるのを避けるための意図的な設計。</dd>
+      <dt>軽減策</dt><dd>dependabot の PR を溜めずにマージする。月 1 回程度 <code>npm audit</code> を手で見る。</dd>
+    </dl>
+  </div>
+
+  <h2>今回直したもの(参考)</h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>問題</th><th>対応</th></tr></thead>
+    <tbody>
+      <tr><td>fork の PR に <code>Closes #N</code> と書くだけで autopilot が <code>/fix-pr</code>(npm ci / npm test)を回す</td><td><code>autopilot-next.sh</code> で head が別リポジトリの PR を除外</td></tr>
+      <tr><td>外部の作成者のチケット本文が無人の <code>claude -p</code> に渡る</td><td>OWNER / MEMBER / COLLABORATOR 以外のチケットを除外</td></tr>
+      <tr><td>書き込み権限の無い人の Request changes で <code>/fix-pr</code> が起動する</td><td>信頼できないレビュアーの判定を数えない</td></tr>
+      <tr><td>外部の人のコメント本文が <code>/fix-pr</code> のコンテキストに入る</td><td><code>pr-feedback.sh</code> を新設し、信頼できる書き手の本文だけを渡す</td></tr>
+      <tr><td>Codex が <code>.devcontainer/</code> を書き換えるとホストで実行される</td><td><code>.devcontainer/</code> / <code>.vscode/</code> / <code>.npmrc</code> を委託禁止領域に追加</td></tr>
+      <tr><td><code>.mcp.json</code> が毎セッション最新版を取得して実行</td><td><code>@upstash/context7-mcp@4.1.1</code> に固定</td></tr>
+      <tr><td>npm audit high 2 件(brace-expansion / source-map-js)</td><td><code>npm audit fix</code>(lockfile のみ)</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2>確認して問題が無かった範囲</h2>
+  <ul>
+    <li>GitHub Actions: <code>pull_request_target</code> 不使用・外部入力は環境変数経由・権限は最小・<code>@claude</code> は書き込み権限者のみ</li>
+    <li>委託の入口・出口検査、verify-probe の形式検査、Codex への環境変数の許可リスト方式</li>
+    <li>autopilot 系スクリプト(番号は jq で数値として扱う・全体管理 Issue への出力はエスケープ済み)</li>
+    <li>husky の 2 フック、SessionStart hook(モード値は許可リスト)、一時ファイルは <code>mktemp -d</code></li>
+    <li>git 履歴に秘密情報(トークン・秘密鍵・.env 類)のコミットは見つからず</li>
+  </ul>
+</main>
+</body>
+</html>
