@@ -5,8 +5,9 @@
 #      コンテキストに自動注入する(チケット区切りの /clear 運用を支える)。
 #      web リモートでは毎セッションが startup のため、startup でも注入する
 #   3) startup 時にコード規模を検知し、serena MCP 再導入の目安超過を通知する
-#   4) 司令塔専用ルール(.claude/rules/lead/*.md)を注入する
+#   4) 司令塔専用ルール(.claude/rules/lead/*.md)の読み込みを指示する
 #   5) ハーネスモード(.harness/mode)が normal 以外なら .claude/rules/mode/*.md を注入する
+#   7) リモートセッションのブランチがポリシー外なら remoteSessionPrefix 付きへ切り替える
 #   6) 未検収の Codex 委託(.harness/codex-runs/)を注入する
 set -uo pipefail
 
@@ -87,21 +88,58 @@ if [ -d .husky ] && [ -z "$(git config --get core.hooksPath 2>/dev/null)" ]; the
   echo "⚠️ git hook が無効(core.hooksPath 未設定)。npm ci で husky が有効化されるまで .husky/ のフックは一切動かない"
 fi
 
-# --- 4) 司令塔専用ルールの注入(全 source: startup / resume / clear / compact) ---
+# --- リモートセッションのブランチをポリシー準拠に切り替える(startup のみ) ---
+# プラットフォームはポリシーを知らずにブランチを作る(例: ccr-xxxx)。ポリシー側に
+# その名前を足すのではなく、最初のコミットより前に remoteSessionPrefix 付きの
+# ブランチへ移り、以降のコミット・push・PR を最初から規約どおりにする。
+# switch -c は HEAD を動かさないので、未コミットの変更もそのまま持ち越される。
+# 失敗しても止めない(フェイルオープン)。CI の branch-policy と .husky/pre-push が後段で見る。
+POLICY=".claude/branch-policy.json"
+if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] && [ "$SOURCE" = "startup" ] &&
+  [ -f "$POLICY" ] && command -v jq >/dev/null 2>&1; then
+  SW_CUR="$(git branch --show-current 2>/dev/null || true)"
+  SW_PREFIX="$(jq -r '.remoteSessionPrefix // empty' "$POLICY" 2>/dev/null || true)"
+  if [ -n "$SW_CUR" ] && [ -n "$SW_PREFIX" ] &&
+    ! jq -e --arg b "$SW_CUR" '(.protectedBranches // []) | index($b)' "$POLICY" >/dev/null 2>&1 &&
+    ! jq -e --arg b "$SW_CUR" '[(.allowedPrefixes // [])[] | select(. as $p | $b | startswith($p))] | length > 0' "$POLICY" >/dev/null 2>&1; then
+    SW_NEW="${SW_PREFIX}${SW_CUR}"
+    if git show-ref --verify -q "refs/heads/$SW_NEW"; then
+      git switch -q "$SW_NEW" 2>/dev/null
+    else
+      git switch -q -c "$SW_NEW" 2>/dev/null
+    fi
+    if [ "$(git branch --show-current 2>/dev/null)" = "$SW_NEW" ]; then
+      echo "## ブランチをポリシー準拠に切り替えた"
+      echo "- プラットフォームが作ったブランチ \`$SW_CUR\` はポリシー($POLICY の allowedPrefixes)外のため、\`$SW_NEW\` に切り替えた"
+      echo "- **以降のコミット・push・PR は \`$SW_NEW\` で行う**(\`git push -u origin $SW_NEW\`)。\`$SW_CUR\` には push しない。ユーザー承認済みの運用(.claude/rules/lead/branch-and-tickets.md)"
+      echo
+    else
+      echo "⚠️ ブランチ \`$SW_CUR\` はポリシー外だが、\`$SW_NEW\` への切り替えに失敗した。このまま PR を出すと CI の branch-policy で落ちる"
+    fi
+  fi
+fi
+
+# --- 4) 司令塔専用ルールの読み込み指示(全 source: startup / resume / clear / compact) ---
 # .claude/rules/lead/*.md は CLAUDE.md から @ インポートしない。CLAUDE.md 経由にすると
 # 全サブエージェントにも毎回ロードされてしまうため(サブエージェント側では実行不能・無意味な指示)。
-# SessionStart はメインセッションでのみ発火する(サブエージェント起動時は SubagentStart)ため、
-# ここで注入すれば司令塔にだけ届く。判断の根拠は docs/template-dev/cost-model.md を参照。
+# Claude Code は .claude/rules/ 配下をサブディレクトリまで自動ロードするので、各ファイルの
+# frontmatter の paths でそのディレクトリ自身に限定し、自動ロードを止めてある。
+# 本文はここで貼らず、Read を指示する。hook の出力は上限(約 10,000 文字)を超えると
+# 先頭だけのプレビューに切り詰められ、28KB ある本文は届かないため(実測 14.8KB で発生)。
+# SessionStart はメインセッションでのみ発火するので、指示は司令塔にだけ届く。
+# 判断の根拠は docs/template-dev/cost-model.md を参照。
 if [ -d .claude/rules/lead ]; then
-  LEAD_OUT=""
+  LEAD_FILES=""
   for f in .claude/rules/lead/*.md; do
     [ -f "$f" ] || continue
-    LEAD_OUT="${LEAD_OUT}$(cat "$f")"$'\n\n'
+    LEAD_FILES="${LEAD_FILES}- $f"$'\n'
   done
-  if [ -n "$LEAD_OUT" ]; then
-    echo "# 司令塔専用ルール(SessionStart 注入 / サブエージェントには読み込まれません)"
+  if [ -n "$LEAD_FILES" ]; then
+    echo "# 司令塔専用ルール(サブエージェントには不要)"
     echo
-    printf '%s' "$LEAD_OUT"
+    echo "**最初の作業に入る前に、次のファイルをすべて Read で読むこと。** 司令塔の運用ルール(モデル運用・委託・レビュー・ブランチ/チケット・計画)はここにしか書かれていない。/clear・/compact の後も読み直す。"
+    printf '%s' "$LEAD_FILES"
+    echo
   fi
 fi
 
@@ -122,7 +160,8 @@ fi
 if [ "$HMODE" != "normal" ] && [ -f ".claude/rules/mode/$HMODE.md" ]; then
   echo "# ハーネスモード(SessionStart 注入 / 切替を宣言するのは人間です)"
   echo
-  cat ".claude/rules/mode/$HMODE.md"
+  # 先頭の frontmatter(自動ロードを止めるための paths)は注入しない
+  awk 'NR == 1 && $0 == "---" { fm = 1; next } fm && $0 == "---" { fm = 0; next } !fm' ".claude/rules/mode/$HMODE.md"
   echo
 fi
 

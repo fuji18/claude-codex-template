@@ -116,7 +116,7 @@ which tmux 2>/dev/null && echo "tmux 利用可能"
 ```
 CLAUDE.md                          ← 「プロジェクト固有ルール」節に「ハーネス」小節を追記(新規生成しない)
 .claude/rules/*.md                 ← 全エージェント共通ルール。テンプレート所有、編集しない
-.claude/rules/lead/*.md            ← 司令塔専用ルール(SessionStart hook が注入)。同上
+.claude/rules/lead/*.md            ← 司令塔専用ルール(SessionStart hook が Read を指示。frontmatter paths で自動ロードを止める)。同上
 .claude/
 ├── settings.json                  ← env / teammateMode / Q4 の追加 deny を統合
 ├── agents/
