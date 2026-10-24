@@ -7,7 +7,7 @@
 
 @.claude/rules/spec-driven.md
 
-上記は**メインセッションと全サブエージェントに読み込まれる**共通ルール。司令塔だけが使うルール(モデル運用・コンテキスト管理・レビューの使い分け・ブランチ/チケット運用・計画フェーズ)は `.claude/rules/lead/*.md` にあり、**SessionStart hook がメインセッションにのみ注入する**(サブエージェントに載せると spawn のたびに課金されるため。根拠は `docs/template-dev/cost-model.md`)。
+上記は**メインセッションと全サブエージェントに読み込まれる**共通ルール。司令塔だけが使うルール(モデル運用・コンテキスト管理・レビューの使い分け・ブランチ/チケット運用・計画フェーズ)は `.claude/rules/lead/*.md` にあり、**SessionStart hook がメインセッションにのみ Read を指示する**(各ファイルの frontmatter `paths` で自動ロードを止めてある。サブエージェントに載せると spawn のたびに課金されるため。根拠は `docs/template-dev/cost-model.md`)。
 
 ## 技術スタック
 
@@ -42,7 +42,7 @@
   - `docs/ui-design-request-template.md`: AI に画面デザインを依頼するプロンプト雛形(ガイドライン §11 の単体版・記入例つき)
 - 実装チケット: GitHub Issues で管理(`/setup-tickets` が発行。リポジトリ内にチケットファイルは置かない)
 - `.claude/rules/`: テンプレート所有の共通ルール(全エージェント共通。上記でインポート)。`/sync-template` の同期対象
-  - `.claude/rules/lead/`: 司令塔専用ルール(SessionStart hook が注入。サブエージェントには載らない)
+  - `.claude/rules/lead/`: 司令塔専用ルール(SessionStart hook が Read を指示。frontmatter `paths` で自動ロードを止めてあり、サブエージェントには載らない)
 - `.claude/docs/`: プロジェクト開始後も参照が続く判断ガイド(MCP 導入の判断 / serena 再導入の目安と手順)。`docs/template-dev/` と違い削除しない
 - `.steering/`: 作業単位の計画とタスクリスト。作業ごとに新規作成し、**履歴としてコミットして保持する**
 

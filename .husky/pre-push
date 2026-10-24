@@ -1,0 +1,17 @@
+# 保護ブランチへの push と、ポリシー外の名前のブランチの push を止める(ベンダー非依存の防衛線)。
+# pre-commit / prepare-commit-msg はコミットを止めるが、`git push origin HEAD:main` は
+# 作業ブランチ上から実行できるためそれらを素通りする。判定の実体は共有スクリプトに一本化。
+#
+# git は pre-push の標準入力に push する ref の一覧を渡す。そのまま検査スクリプトへ流す。
+# 終了コードの受け方は .husky/pre-commit と同じ(husky は `sh -e` で実行するため、
+# `&& / ||` のリスト内で受ける。違反の exit 1 だけを中断に読み替え、内部エラーは素通しする)。
+GUARD=".claude/scripts/check-push-policy.sh"
+if [ -f "$GUARD" ]; then
+  bash "$GUARD" && rc=0 || rc=$?
+  if [ "$rc" = 1 ]; then exit 1; fi
+  if [ "$rc" != 0 ]; then
+    echo "⚠️ push ポリシー検査が内部エラーで終了しました (code $rc)。検査をスキップします — $GUARD を確認してください" >&2
+  fi
+else
+  echo "⚠️ $GUARD が無いため push ポリシー検査をスキップしました(ベンダー非依存の防衛線が失われています)" >&2
+fi

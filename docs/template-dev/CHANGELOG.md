@@ -14,6 +14,25 @@
 
 ---
 
+## 2026-10-21
+
+- **[manual]** 💸 **司令塔専用ルール(`.claude/rules/lead/`)とモード別ルール(`.claude/rules/mode/`)が全サブエージェントに自動ロードされていた問題を直しました。**
+  Claude Code は `.claude/rules/` をサブディレクトリまで自動ロードするため、`lead/` と `mode/` が SessionStart hook とは無関係に
+  全エージェントへ載り、normal モードでも `econ.md` と `degraded.md` の「現在のハーネスモード」が同時に載っていました。
+  各ファイルの先頭に frontmatter `paths: [".claude/rules/<dir>/**"]` を付け、SessionStart hook は本文を貼らずに Read を指示するようにしました
+  (hook の出力が上限を超えてプレビューに切り詰められていたため)。
+  **取り込む側の作業: プロジェクトで `lead/` / `mode/` に独自のファイルを足している場合は、同じ frontmatter を先頭に付ける。**
+
+- **[auto]** リモートセッションのブランチ名が `allowedPrefixes` に一致しない(例: `ccr-xxxx`)とき、SessionStart hook が
+  `remoteSessionPrefix` 付きのブランチ(例: `claude/ccr-xxxx`)へ自動で切り替えるようにしました。以降のコミット・push・PR は最初から
+  ポリシーどおりになります(CI の `branch-policy` で落ちなくなる)。ポリシーにプラットフォームの命名は足しません。
+
+- **[manual]** 🔒 **`.husky/pre-push` を追加しました。** 保護ブランチへの push(`git push origin HEAD:main` など、作業ブランチ上から
+  実行できるためコミット側の層を素通りしていたもの)と、ポリシー外の名前のブランチの push を止めます。判定の実体は
+  `.claude/scripts/check-push-policy.sh`。Claude 経由の `git push --no-verify` は PreToolUse(`check-branch-policy.sh`)が止めます。
+  **取り込む側の作業: `.husky/pre-push` は `merge`(手動統合)対象なので、テンプレートからコピーする。既に独自の pre-push があれば、
+  `check-push-policy.sh` の呼び出しを足す。`npm ci`(husky の `prepare`)を回し直して `.husky/_/pre-push` が生成されることを確認する。**
+
 ## 2026-10-08
 
 - **[auto]** 🔒 `autopilot-next.sh` が **fork(head が別リポジトリ)の PR をチケットの PR として扱わない**ようにしました。

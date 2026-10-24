@@ -207,16 +207,17 @@ flowchart TD
 
 保護ブランチ上での作業は禁止で、層は**強制 3 層 + 情報提供 1 層 + 別軸の最終検証**。保護ブランチ判定の実体は `.claude/scripts/check-protected-branch.sh` に一本化してあり、経路によらず同じ結果になる。
 
-| 層                   | 実体                                | 効く範囲                                                                   |
-| -------------------- | ----------------------------------- | -------------------------------------------------------------------------- |
-| 情報提供(阻止しない) | SessionStart hook                   | 現在のブランチとポリシー上のベースを注入する                               |
-| 強制 1               | PreToolUse `check-branch-policy.sh` | 直接コミットと `gh pr create --base` の誤りをブロック。**Claude 経由のみ** |
-| 強制 2               | `.husky/pre-commit`                 | `git commit` / `--amend`。**ベンダー非依存**                               |
-| 強制 3               | `.husky/prepare-commit-msg`         | `git revert` / `git cherry-pick`。**`--no-verify` で迂回できない唯一の層** |
-| 最終検証(別軸)       | CI の `branch-policy` ジョブ        | クライアント非依存。ただし見るのは PR の base とブランチ名だけ             |
+| 層                   | 実体                                | 効く範囲                                                                                                                                                        |
+| -------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 情報提供(阻止しない) | SessionStart hook                   | 現在のブランチとポリシー上のベースを注入する                                                                                                                    |
+| 強制 1               | PreToolUse `check-branch-policy.sh` | 直接コミットと `gh pr create --base` の誤りをブロック。**Claude 経由のみ**                                                                                      |
+| 強制 2               | `.husky/pre-commit`                 | `git commit` / `--amend`。**ベンダー非依存**                                                                                                                    |
+| 強制 3               | `.husky/prepare-commit-msg`         | `git revert` / `git cherry-pick`。**`--no-verify` で迂回できない唯一の層**                                                                                      |
+| 最終検証(別軸)       | CI の `branch-policy` ジョブ        | クライアント非依存。ただし見るのは PR の base とブランチ名だけ                                                                                                  |
+| push の検査          | `.husky/pre-push`                   | 保護ブランチへの push(`git push origin HEAD:main` 等)とポリシー外の名前の push を止める。**ベンダー非依存**。Claude 経由の `--no-verify` は PreToolUse が止める |
 
 - `git merge` / `git pull` の取り込みだけを通す。判定には第 2 引数ではなく **`.git/MERGE_HEAD` の有無**を使う(`git revert -e` / `git cherry-pick -e` も第 2 引数に `merge` を渡してくるため、引数だけで素通しにすると保護ブランチ上ですり抜ける)
-- **アプリ/web のリモートセッションは `claude/*` ブランチが先に作られた状態で始まる。** `feature/*` と同格の正規ブランチとして扱い、**リネームしない**(セッションとの紐付けが壊れる)
+- **アプリ/web のリモートセッションはプラットフォームが作ったブランチで始まる。** 名前がポリシーに沿っていれば(`claude/*` 等)`feature/*` と同格の正規ブランチとして扱い、**リネームしない**(セッションとの紐付けが壊れる)。ポリシー外の名前(例: `ccr-xxxx`)なら、SessionStart hook が `remoteSessionPrefix` 付きのブランチ(`claude/ccr-xxxx`)へ自動で切り替え、以降のコミット・push・PR はそちらで行う(ポリシーにプラットフォームの命名は足さない)
 - リモートセッションはプラットフォーム既定ブランチ起点で作られるため、`baseBranch` が `develop` のプロジェクトでは乖離する。PR 作成前に `git merge origin/[baseBranch]` で追従し、`gh pr create --base [baseBranch]` を必ず明示する
 
 ---
@@ -225,12 +226,12 @@ flowchart TD
 
 ### Claude Code の hooks(`.claude/settings.json`)
 
-| 契機                    | 実体                                                 | 役割                                                                                                                                                                                       |
-| ----------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| SessionStart            | `.claude/hooks/session-start.sh`                     | リモート環境での `npm install` / 現在地の注入 / 司令塔専用ルール(`rules/lead/`)の注入 / モード別ルール(`rules/mode/`)の注入 / 未検収 Codex 委託の注入 / ハーネスの自壊検知(実行権限の欠落) |
-| PreToolUse(Bash)        | `block-dangerous-cmds.sh` → `check-branch-policy.sh` | 危険コマンドのパターン検査、保護ブランチとベース指定の検査                                                                                                                                 |
-| PreToolUse(Edit/Write)  | `check-implementation-phase.sh`                      | 実装フェーズ中の司令塔による実装コード編集をブロック                                                                                                                                       |
-| PostToolUse(Write/Edit) | prettier(インライン)→ `lint-on-edit.sh`(async)       | 保存のたびに整形し、lint と型チェックを非同期で先行実行する                                                                                                                                |
+| 契機                    | 実体                                                 | 役割                                                                                                                                                                                                                                          |
+| ----------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SessionStart            | `.claude/hooks/session-start.sh`                     | リモート環境での `npm install` / ポリシー外ブランチの自動切り替え(リモート) / 現在地の注入 / 司令塔専用ルール(`rules/lead/`)の Read 指示 / モード別ルール(`rules/mode/`)の注入 / 未検収 Codex 委託の注入 / ハーネスの自壊検知(実行権限の欠落) |
+| PreToolUse(Bash)        | `block-dangerous-cmds.sh` → `check-branch-policy.sh` | 危険コマンドのパターン検査、保護ブランチとベース指定の検査                                                                                                                                                                                    |
+| PreToolUse(Edit/Write)  | `check-implementation-phase.sh`                      | 実装フェーズ中の司令塔による実装コード編集をブロック                                                                                                                                                                                          |
+| PostToolUse(Write/Edit) | prettier(インライン)→ `lint-on-edit.sh`(async)       | 保存のたびに整形し、lint と型チェックを非同期で先行実行する                                                                                                                                                                                   |
 
 危険コマンドは `permissions.deny`(`npm publish` / `git push --force` 等)とパターン検査の二段構え。`npm install` は `ask` にしてある。
 
@@ -433,7 +434,7 @@ Codex CLI が無い・未認証の環境では `delegate-codex.sh` が `exit 3` 
 
 このテンプレートから作ったプロジェクトは、テンプレート側でルール・コマンド・ハーネスが更新されたときに **`/sync-template`** で差分を取り込める。
 
-- **所有権の分離**: 共通ルールは `.claude/rules/`(テンプレート所有・上書き対象)に切り出してある。全エージェント共通のものは `CLAUDE.md` が `@` インポートし、司令塔専用のもの(`lead/`)は SessionStart hook が注入する。プロジェクト固有の追記は `CLAUDE.md` の「プロジェクト固有ルール」節に書く(同期で失われない)
+- **所有権の分離**: 共通ルールは `.claude/rules/`(テンプレート所有・上書き対象)に切り出してある。全エージェント共通のものは `CLAUDE.md` が `@` インポートし、司令塔専用のもの(`lead/`)は frontmatter `paths` で自動ロードを止め、SessionStart hook が Read を指示する。プロジェクト固有の追記は `CLAUDE.md` の「プロジェクト固有ルール」節に書く(同期で失われない)
 - **同期対象の単一ソース**: `.claude/template-manifest.json` の `owned`(上書き)/ `merge`(手動統合)/ `never`(触らない)。判定の優先順位は `owned` > `merge` > `never`。`syncedAt` に前回同期した**テンプレート側の commit SHA** を持ち、そこからの差分だけを見る(`/kickoff` フェーズ0 が初期値を刻む)
 - **変更の伝達**: テンプレート側の `docs/template-dev/CHANGELOG.md` に `[auto]`(上書きで完結)/ `[manual]`(取り込む側の作業が必要)を明示する。`/sync-template` はリモートから直接読むため、`docs/template-dev/` を削除済みのプロジェクトでも機能する
 - **検知**: 月次の `template-update-check` ワークフローが未取り込みの更新を検出して Issue を立てる(Claude は起動しないため枠を消費しない)
@@ -493,7 +494,7 @@ CLAUDE.md              プロジェクトメモリ(全エージェントに毎�
 ├── skills/            スキル(implement-ticket / steering / harness-setup / 各ドキュメント作成ガイド)
 ├── commands/          スラッシュコマンド(15 本)
 ├── rules/             全エージェント共通ルール(テンプレート所有。CLAUDE.md が @ インポート)
-│   ├── lead/          司令塔専用ルール(SessionStart hook が注入。サブエージェントには載らない)
+│   ├── lead/          司令塔専用ルール(SessionStart hook が Read を指示。frontmatter paths で自動ロードを止め、サブエージェントには載らない)
 │   └── mode/          モード別の司令塔ルール(normal 以外のときだけ注入)
 ├── scripts/           hook の実体・共通判定ロジック・Codex 委託経路
 ├── hooks/             SessionStart hook
