@@ -434,7 +434,7 @@ Codex CLI が無い・未認証の環境では `delegate-codex.sh` が `exit 3` 
 このテンプレートから作ったプロジェクトは、テンプレート側でルール・コマンド・ハーネスが更新されたときに **`/sync-template`** で差分を取り込める。
 
 - **所有権の分離**: 共通ルールは `.claude/rules/`(テンプレート所有・上書き対象)に切り出してある。全エージェント共通のものは `CLAUDE.md` が `@` インポートし、司令塔専用のもの(`lead/`)は SessionStart hook が注入する。プロジェクト固有の追記は `CLAUDE.md` の「プロジェクト固有ルール」節に書く(同期で失われない)
-- **同期対象の単一ソース**: `.claude/template-manifest.json` の `owned`(上書き)/ `merge`(手動統合)/ `never`(触らない)。判定の優先順位は `owned` > `merge` > `never`。`syncedAt` に前回同期した**テンプレート側の commit SHA** を持ち、そこからの差分だけを見る(`/kickoff` フェーズ0 が初期値を刻む)
+- **同期対象の単一ソース**: `.claude/template-manifest.json` の `owned`(上書き)/ `merge`(手動統合)/ `never`(触らない)。パスが複数に該当するときは最も具体的な(長い)エントリが勝ち、同じ長さなら `owned` > `merge` > `never`。スタック依存のファイル(`ci.yml` / `session-start.sh` / `lint-on-edit.sh`)は owned ディレクトリ内でも merge に個別指定してある。`syncedAt` に前回同期した**テンプレート側の commit SHA** を持ち、そこからの差分だけを見る(`/kickoff` フェーズ0 が初期値を刻む)
 - **変更の伝達**: テンプレート側の `docs/template-dev/CHANGELOG.md` に `[auto]`(上書きで完結)/ `[manual]`(取り込む側の作業が必要)を明示する。`/sync-template` はリモートから直接読むため、`docs/template-dev/` を削除済みのプロジェクトでも機能する
 - **検知**: 月次の `template-update-check` ワークフローが未取り込みの更新を検出して Issue を立てる(Claude は起動しないため枠を消費しない)
 

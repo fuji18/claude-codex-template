@@ -1,5 +1,5 @@
 {
-  "name": "claude-code-template",
+  "name": "claude-codex-template",
   "version": "0.1.0",
   "description": "Spec-driven development template for Claude Code",
   "type": "module",
