@@ -246,7 +246,7 @@ flowchart TD
 | `record-hygiene.yml`        | PR の opened / synchronize / reopened / edited / labeled / unlabeled    | CHANGELOG と `.harness/decisions.jsonl` の記録漏れを検査                                                                                                                      | 不要                          |
 | `claude-code-review.yml`    | **`main` 向け** PR の opened / ready_for_review(**draft では走らない**) | Claude による自動レビュー                                                                                                                                                     | `CLAUDE_CODE_OAUTH_TOKEN`     |
 | `claude.yml`                | `@claude` メンション(OWNER / MEMBER / COLLABORATOR のみ)                | 指示に応じた作業                                                                                                                                                              | 同上                          |
-| `template-update-check.yml` | 毎月 1 日 + 手動実行                                                    | テンプレート側の未取り込み更新を検出して Issue を立てる                                                                                                                       | 不要(**Claude を起動しない**) |
+| `template-update-check.yml` | 毎月 1 日 + 手動実行                                                    | テンプレートの更新を同期スクリプトで取り込み、PR を作る(競合・ワークフロー変更時は Issue)                                                                                     | 不要(**Claude を起動しない**) |
 
 **CI は Claude の枠を一切消費しない**ので、機械的検証はできるだけ CI に寄せる。`record-hygiene.yml` を `ci.yml` に同居させていないのは、ラベル操作のたびに `npm ci` から再実行させないため。
 
@@ -431,12 +431,15 @@ Codex CLI が無い・未認証の環境では `delegate-codex.sh` が `exit 3` 
 
 ## 7. テンプレート更新の取り込み
 
-このテンプレートから作ったプロジェクトは、テンプレート側でルール・コマンド・ハーネスが更新されたときに **`/sync-template`** で差分を取り込める。
+このテンプレートから作ったプロジェクトは、テンプレート側でルール・コマンド・ハーネスが更新されたときに差分を取り込める。**機械的な取り込みは `.claude/scripts/sync-template.mjs` が行い**、月次の `template-update-check` ワークフローがそれで同期 PR を自動作成する。判断が要るもの(競合・`[manual]` 項目)が残ったときだけ **`/sync-template`**(Claude)を使う。
 
 - **所有権の分離**: 共通ルールは `.claude/rules/`(テンプレート所有・上書き対象)に切り出してある。全エージェント共通のものは `CLAUDE.md` が `@` インポートし、司令塔専用のもの(`lead/`)は SessionStart hook が注入する。プロジェクト固有の追記は `CLAUDE.md` の「プロジェクト固有ルール」節に書く(同期で失われない)
-- **同期対象の単一ソース**: `.claude/template-manifest.json` の `owned`(上書き)/ `merge`(手動統合)/ `never`(触らない)。パスが複数に該当するときは最も具体的な(長い)エントリが勝ち、同じ長さなら `owned` > `merge` > `never`。スタック依存のファイル(`ci.yml` / `session-start.sh` / `lint-on-edit.sh`)は owned ディレクトリ内でも merge に個別指定してある。`syncedAt` に前回同期した**テンプレート側の commit SHA** を持ち、そこからの差分だけを見る(`/kickoff` フェーズ0 が初期値を刻む)
+- **同期対象の単一ソース**: `.claude/template-manifest.json` の `owned`(上書き)/ `merge`(前回同期した版を祖先にした 3-way マージ)/ `never`(触らない)。パスが複数に該当するときは最も具体的な(長い)エントリが勝ち、同じ長さなら `owned` > `merge` > `never`。スタック依存のファイル(`ci.yml` / `session-start.sh` / `lint-on-edit.sh`)は owned ディレクトリ内でも merge に個別指定してある。`syncedAt` に前回同期した**テンプレート側の commit SHA** を持ち、そこからの差分だけを見る(`/kickoff` フェーズ0 が初期値を刻む)
 - **変更の伝達**: テンプレート側の `docs/template-dev/CHANGELOG.md` に `[auto]`(上書きで完結)/ `[manual]`(取り込む側の作業が必要)を明示する。`/sync-template` はリモートから直接読むため、`docs/template-dev/` を削除済みのプロジェクトでも機能する
-- **検知**: 月次の `template-update-check` ワークフローが未取り込みの更新を検出して Issue を立てる(Claude は起動しないため枠を消費しない)
+- **3-way マージ**: `merge` のファイルは、テキストは `git merge-file`(ignore 系は行の和集合)、JSON はキー単位の構造マージ。プロジェクト側の追記(allowlist・ignore 行・Flutter 対応など)を保ったまま、テンプレート側の変更が入る。両側が同じ箇所を変えたときだけ競合になる
+- **自動 PR**: 月次の `template-update-check` ワークフローが同期スクリプトを流して PR を作る(Claude は起動しないため枠を消費しない)。競合がある・`.github/workflows/` が変わる(Actions のトークンでは push できない)・リポジトリ設定で Actions からの PR 作成が無効、のときは Issue で知らせる。PR の作成には Settings → Actions → General の **Allow GitHub Actions to create and approve pull requests** を有効にする。Actions が作った PR では CI が自動で走らないので、Close → Reopen で起動する
+- **ドリフト検出**: `node .claude/scripts/sync-template.mjs --check-drift` で、owned なのにプロジェクトで書き換えてあるファイル(次の同期で上書きされる変更)を列挙できる。自動 PR の本文にも載る
+- **プロジェクト側で同期を止める**: テンプレートから更新されたくないファイルは、プロジェクトの manifest の `never` に足す(区分の判定で最優先される)
 
 > ⚠️ `.claude/rules/`(`lead/` を含む)を直接編集しないこと。次回の `/sync-template` で上書きされる。共通ルールを変えたい場合はテンプレート側を直すか、`CLAUDE.md` に例外を書く。
 
@@ -450,7 +453,7 @@ Codex CLI が無い・未認証の環境では `delegate-codex.sh` が `exit 3` 
 git switch -c chore/sync-template-$(date +%Y%m%d)
 git remote add template <テンプレートリポジトリの URL>
 git fetch template main --quiet
-git checkout template/main -- .claude/commands/sync-template.md .claude/template-manifest.json
+git checkout template/main -- .claude/commands/sync-template.md .claude/scripts/sync-template.mjs .claude/template-manifest.json
 ```
 
 取り込んだ `.claude/template-manifest.json` の `syncedAt` に、**そのプロジェクトが出発点にしたテンプレート側の commit SHA**(`syncedDate` にはその日付)を書く。`null`(初回扱い)のままだと差分抽出が全ファイル比較になり、CHANGELOG も全期間が対象になる。SHA が分からない場合は、プロジェクトの最初のコミット日以前で最も近いテンプレート側のコミットを使う。同じファイルの `templateRepo` が以降の同期元になるので、値が正しいかもここで確認する。

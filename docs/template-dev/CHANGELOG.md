@@ -14,6 +14,16 @@
 
 ---
 
+## 2026-11-01
+
+- **[auto]** テンプレート同期を**スクリプト化**しました(`.claude/scripts/sync-template.mjs`・新規)。owned の上書き・削除、merge の **3-way マージ**(前回同期した版を共通の祖先にする。テキストは `git merge-file`、ignore 系は行の和集合、JSON はキー単位の構造マージで配列は集合として追加・削除を両方反映)、`syncedAt` の更新までを機械的に行います。両側が同じ箇所を変えたときだけ競合として報告します。これまで手作業だった「allowlist に足す」「`.gitignore` に足す」「`autopilot.json` にキーを足す」といった `[manual]` 項目の多くは、自動で入るようになります。
+- **[auto]** `--check-drift` を追加しました。owned なのにプロジェクトで書き換えてあるファイル(次の同期で上書きされて失われる変更)を列挙します。
+- **[auto]** プロジェクトの manifest にだけある `never` のエントリを、区分の判定で最優先するようにしました(テンプレートから更新されたくないファイルをプロジェクトが個別に止めるため)。
+- **[auto]** `/sync-template` をスクリプト前提に書き換えました。Claude が担うのは競合の解消と `[manual]` 項目の対応、検証・PR 作成だけです。
+- **[manual]** 月次の `template-update-check` が **Issue ではなく同期 PR を作る**ようになりました(競合がある・`.github/workflows/` が変わるときは従来どおり Issue)。PR を作らせるには、リポジトリの Settings → Actions → General で **Allow GitHub Actions to create and approve pull requests** を有効にしてください。無効のままだと、ブランチを push したうえで Issue で知らせます。なおこのワークフロー自体の更新は `.github/workflows/` の変更なので、**初回はローカルで `/sync-template` を実行して取り込む**必要があります。
+- **[auto]** `.claude/branch-policy.json`(merge 対象)の `allowedPrefixes` に `chore/` を追加しました(同期 PR のブランチ名 `chore/sync-template-*` 用)。
+- **[auto]** テンプレート本体の CI に同期スクリプトのテスト(`.claude/scripts/test-sync-template.sh`・新規)を追加しました。
+
 ## 2026-10-31 (2)
 
 - **[auto]** `record-hygiene` の CHANGELOG 検査を**テンプレート本体だけ**で行うようにしました(リポジトリ名と `templateRepo` が一致するときだけ)。これまでプロジェクト側でもハーネスを変えるたびに `docs/template-dev/CHANGELOG.md` の追記を求められ、`/kickoff` で `docs/template-dev/` を消したプロジェクトでは毎回落ちていました。
