@@ -8,7 +8,7 @@
 # 利用側: .claude/scripts/delegate-codex.sh
 #
 # **source した瞬間に走るコードを含む**(PROJECT_FORBIDDEN_PATHS の抽出)。呼び出し側は
-#   1) 入口検査0(find / grep / sed の存在確認)を通し、2) $AGENTS を代入してから
+#   1) 入口検査0(find / grep / sed / awk の存在確認)を通し、2) $AGENTS を代入してから
 # source すること。source 位置の前後関係が防御の一部になっている理由は
 # delegate-codex.sh 側の該当ブロックのコメントに書いてある(#86)。
 #
@@ -127,9 +127,19 @@ FORBIDDEN_PATHS=(
 #   行われる必要がある。書き換えそのものは AGENTS.md(汎用項目)の内容ハッシュ差分
 #   として別途検出される。
 #
-# 抽出はバックティック囲みの文字列すべて。実在しないもの(説明のために囲んだだけの
-# 語や <!-- verify-probe: ... --> のような断片)は forbidden_files() の実在検査で
-# 落ちるため、列挙結果に現れないだけで無害。
+# 抽出規則(Issue #28): 各行のうち「`- ` で始まる箇条書き」だけを対象にする。
+#   - ` — `(半角スペース + em dash + 半角スペース)を含む行 … 最初の ` — ` より前
+#     (見出し部)のコードスパンだけを抽出する。見出し部にスパンが 0 個なら
+#     「保護されない」警告、パスに見えないスパンなら「パスに見えない」警告(抽出はする)
+#   - ` — ` を含まない行 … フェイルクローズで行全体からスパンを抽出しつつ
+#     「説明ダッシュが無い」警告を出す
+#   - 上記いずれでも、` — ` より後ろ(説明文)や箇条書きでない行のコードスパンは
+#     抽出せず「地の文」警告を出す
+# 以前は行全体のバックティックを無条件に抽出しており、過剰(地の文の語が実在パスと
+# 衝突して誤爆)・過少(バックティックなしのパスが静かに保護から外れる)の両方が
+# 無通知だった(Issue #28)。
+#
+# 限界: 箇条書きでない地の文にバックティックなしでパスを書いても検出できない。
 #
 # フェイルオープンの条件: マーカーが片方しか無いとき。sed の範囲指定が末尾まで
 # 走り、AGENTS.md 中の無関係なバックティック語まで禁止領域に化けて全委託が常に
@@ -142,13 +152,41 @@ grep -q '<!-- kickoff:delegation-forbidden-paths -->' "$AGENTS" 2>/dev/null && _
 grep -q '<!-- /kickoff:delegation-forbidden-paths -->' "$AGENTS" 2>/dev/null && _fp_end=1
 
 if [ "$_fp_start" = 1 ] && [ "$_fp_end" = 1 ]; then
-  while IFS= read -r _fp_line; do
-    [ -n "$_fp_line" ] && PROJECT_FORBIDDEN_PATHS+=("$_fp_line")
-  done < <(
-    sed -n '/<!-- kickoff:delegation-forbidden-paths -->/,/<!-- \/kickoff:delegation-forbidden-paths -->/p' "$AGENTS" 2>/dev/null |
-      grep -o '`[^`]*`' | sed 's/^`//; s/`$//' | LC_ALL=C sort -u
-  )
-  unset _fp_line
+  while IFS=$'\t' read -r _fp_kind _fp_a _fp_b; do
+    case "$_fp_kind" in
+      P) [ -n "$_fp_a" ] && PROJECT_FORBIDDEN_PATHS+=("$_fp_a") ;;
+      W) echo "delegate-codex: 警告 — AGENTS.md:${_fp_a} (委託禁止領域のマーカー内): ${_fp_b}" >&2 ;;
+    esac
+  done < <(awk '
+    function pathlike(s) { return s ~ /^[A-Za-z0-9._][A-Za-z0-9._\/*-]*$/ && s ~ /[\/.]/ }
+    /<!-- kickoff:delegation-forbidden-paths -->/ { inside = 1; next }
+    /<!-- \/kickoff:delegation-forbidden-paths -->/ { inside = 0; next }
+    !inside { next }
+    {
+      rest = $0
+      if ($0 ~ /^- /) {
+        d = index($0, " — ")
+        if (d > 0) { head = substr($0, 1, d - 1); rest = substr($0, d) }
+        else { head = $0; rest = ""; print "W\t" NR "\t説明ダッシュ( — )の無い箇条書き。行全体からパスを抽出した" }
+        n = 0
+        while (match(head, /`[^`]*`/)) {
+          span = substr(head, RSTART + 1, RLENGTH - 2)
+          head = substr(head, RSTART + RLENGTH)
+          if (span == "") continue
+          n++
+          if (!(span in seen)) { seen[span] = 1; print "P\t" span }
+          if (!pathlike(span)) print "W\t" NR "\tパスに見えない語がバックティックで囲まれている(抽出はする): " span
+        }
+        if (n == 0) print "W\t" NR "\t箇条書きにバックティックで囲んだパスが無い(この項目は保護されない)"
+      }
+      while (match(rest, /`[^`]*`/)) {
+        span = substr(rest, RSTART + 1, RLENGTH - 2)
+        rest = substr(rest, RSTART + RLENGTH)
+        if (span != "") print "W\t" NR "\t地の文のバックティック(抽出しない): " span
+      }
+    }
+  ' "$AGENTS" 2>/dev/null)
+  unset _fp_kind _fp_a _fp_b
 elif [ "$_fp_start" = 1 ] || [ "$_fp_end" = 1 ]; then
   echo "delegate-codex: 警告 — AGENTS.md の <!-- kickoff:delegation-forbidden-paths --> マーカーが片方しかありません。プロジェクト固有パスの抽出をスキップします(汎用項目の検査は従来どおり働きます)。" >&2
 fi
