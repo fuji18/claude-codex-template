@@ -14,6 +14,25 @@
 
 ---
 
+## 2026-11-01 (3)
+
+- **[auto]** **担当AIの切り替え**を追加しました。実装・レビューをどの AI に任せるかを `.claude/scripts/route.sh`(新規)が決めます。優先順位は「コマンドの記載(`/next-ticket 12 実装=sonnet レビュー=codex`)> Issue の『担当AI』チェック > `delegate:codex` ラベル > `.claude/routing.json` > 既定(実装 = Codex / レビュー = Sonnet)」。担当名は `codex` / `sonnet` / `opus` / `haiku`、レビューは `auto`(実装と別ベンダー)も可。`/add-feature` `/next-ticket` `/fix-issue` の実装・レビュー手順、ルール(`model-strategy.md` / `review-policy.md`)を `route.sh` 経由に書き換えました。
+- **[auto]** `.claude/routing.json`(新規・merge 対象)でプロジェクトの既定の担当を決められます。テンプレート既定は従来どおり(実装 = Codex / レビュー = Sonnet)なので、置くだけでは挙動は変わりません。
+- **[auto]** `/setup-tickets` が発行する Issue に「担当AI」のチェック欄を入れるようにしました(チェックなしで発行。着手前にクリックで選ぶ)。
+- **[auto]** 自動進行(econ)は、実装の担当が Codex のチケットだけを回します。Claude 担当のチケットには `autopilot:manual` を付けて候補から外します。
+- **[auto]** `.harness/decisions.jsonl` に担当AI(`route`)を残すようにしました(担当ごとの往復回数・指摘数の比較用)。
+- **[manual]** 既存のチケットに担当を指定したい場合は、Issue 本文に次の節を足してください(無ければ `routing.json` / 既定に従うので、足さなくても動きます)。
+
+  ```
+  ## 担当AI
+  - [ ] 実装: Codex
+  - [ ] 実装: Claude Sonnet
+  - [ ] 実装: Claude Opus
+  - [ ] レビュー: Codex
+  - [ ] レビュー: Claude Sonnet
+  - [ ] レビュー: auto
+  ```
+
 ## 2026-11-01 (2)
 
 - **[auto]** `sync-template.mjs` の `process` / `console` / `Buffer` を、`/* global */` 宣言ではなく `node:` モジュールの import で取るようにしました。Node のグローバルを定義済みの ESLint 設定(omote-navi など)では `/* global */` が `no-redeclare` になり、プロジェクトの lint が落ちていました。

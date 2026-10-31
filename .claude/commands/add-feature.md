@@ -6,7 +6,7 @@ description: 新機能を既存パターンに従って、完全に無停止で�
 
 **重要:** このワークフローは、ユーザーの介入なしに、開始から完了まで完全に自動で実行されるように設計されています。各ステップは完了後、ただちに次のステップへ移行し、途中でユーザーに確認を求めないでください(この指示は全ステップに適用される)。
 
-**引数:** 機能名 (例: `/add-feature ユーザープロフィール編集`)
+**引数:** 機能名 (例: `/add-feature ユーザープロフィール編集`)。末尾に**担当AIの指定**を付けてよい(例: `/add-feature ユーザープロフィール編集 実装=sonnet レビュー=codex`)。`実装=` / `レビュー=` の語は機能名から外し、ステップ5・6 で `route.sh` に `--set` として渡す
 
 ---
 
@@ -61,9 +61,25 @@ description: 新機能を既存パターンに従って、完全に無停止で�
 
 1. `Skill('steering')`を**計画モード**で実行し、ステップ1で作成した3つのファイル (`requirements.md`, `design.md`, `tasklist.md`) の内容を生成する。
 
-## ステップ5: 実装 (Codex 委託 → Sonnet fork フォールバック)
+## ステップ5: 実装 (担当は `route.sh` で決める → Codex 委託 / Claude サブエージェント)
 
-**司令塔は実装コードを書かない。** 実装フェーズは委託する。**既定は Codex**(`delegate-codex.sh impl`)、使えなければ `implement-ticket` スキル(`context: fork` / Sonnet)。委託先が変わっても**司令塔の分岐ロジックは同じ**(完了 / 判断待ち / 失敗)であることが設計要件。司令塔は Opus のまま維持され、モデルの切り替えは不要。
+**司令塔は実装コードを書かない。** 実装フェーズは委託する。**誰に委託するかは `.claude/scripts/route.sh` が決める**(プロジェクト既定は `.claude/routing.json`。テンプレート既定は Codex)。
+
+0. **担当を決める**(Issue 起点なら `--issue [番号]`、引数に `実装=` / `レビュー=` があれば `--set` で渡す):
+
+   ```bash
+   bash .claude/scripts/route.sh implement [--issue 番号] [--set 実装=sonnet] --explain
+   ```
+
+   | 出力 | 経路 |
+   | --- | --- |
+   | `codex` | 下の 1〜3(`delegate-codex.sh impl`)。使えなければ 4 へフォールバック |
+   | `claude:sonnet` | 下の 4(`Skill('implement-ticket')`) |
+   | `claude:opus` / `claude:haiku` | 下の 4 と同じ手順を、`implement-ticket` スキルの代わりに **Agent ツールで `implementer` サブエージェントを `model` 指定で起動**して行う。prompt: 「`.claude/skills/implement-ticket/SKILL.md` の手順に従い `.steering/[dir]` を実装し、同じ形式(判定: 完了 / 判断待ち / 失敗)で返してください」 |
+
+   決まった担当と出典(コマンドの記載 / Issue のチェック / ラベル / routing.json / 既定値)を 1 行でユーザーに伝える。`exit 2`(指定が不正)なら理由を伝えて指定を直してもらう。
+
+   以下の 1 は全経路で共通、2〜3 は Codex 経路、4 は Claude 経路。Codex が使えなければ `implement-ticket` スキル(`context: fork` / Sonnet)に落とす。委託先が変わっても**司令塔の分岐ロジックは同じ**(完了 / 判断待ち / 失敗)であることが設計要件。司令塔は Opus のまま維持され、モデルの切り替えは不要。
 
 1. **委譲前に作業ツリーをクリーンにする**(`git status` で確認)。fork の編集はチェックポイント(`/rewind`)で戻せない可能性があり、Codex の編集は原理的に戻せない。git を退避手段として確保しておく。
 2. **このセッションで既に `exit 3` を受け取っている場合は 3 を飛ばし、4(Sonnet fork)へ直行する**(恒久フォールバック。同じ環境欠落を毎回試さない)。
@@ -78,7 +94,7 @@ description: 新機能を既存パターンに従って、完全に無停止で�
 | `4` | Codex 側のレート上限 | 一時フォールバック。`tasklist.md` と `git diff --stat` を根拠に**ユーザーへ 3 択を提示する**: (a) 待つ(残タスクが多いとき) (b) `Skill('implement-ticket')` に引き継ぐ(残り 1〜2 タスク) (c) 部分成果を破棄(ビルドが壊れていて進捗が 1 タスク以下)。**司令塔が自分で引き取るのを既定にしない** |
 | `5` | 計画が未完成 | `design.md` を書き切り、冒頭の印を `<!-- status: ready -->` に変えてから再委託する。**追記だけでは同じところで止まる** |
 
-4. **Sonnet fork 経路**(`exit 3` を受けた場合、または Codex を使わない判断をした場合): `Skill('implement-ticket')` にステアリングディレクトリのパスを渡して実行し、戻り値の `判定` で分岐する:
+4. **Claude 経路**(担当が `claude:*` の場合、`exit 3` を受けた場合、または Codex を使わない判断をした場合。`claude:opus` / `claude:haiku` は 0. の表のとおり `implementer` を `model` 指定で起動する): `Skill('implement-ticket')` にステアリングディレクトリのパスを渡して実行し、戻り値の `判定` で分岐する:
 
 | 判定 | 司令塔の対応 |
 | --- | --- |
@@ -103,17 +119,20 @@ description: 新機能を既存パターンに従って、完全に無停止で�
 > **ハーネスモードが `econ`(モード B)のときは、このステップを丸ごと飛ばしてステップ7へ進む。** `/check` も `code-reviewer` も回さず、機械的検証は CI に、スペック整合は枠が戻ってからの一括レビューに委ねる(§2.6)。モードは `bash .claude/scripts/harness-mode.sh` で確認する。
 
 1. `tasklist.md`の全タスクが完了したことを最終確認する。
-2. 以下の 2 つのサブエージェントを**同一メッセージ内で並列起動**する(互いに独立しているため直列にしない):
-  - `code-reviewer`(Sonnet): prompt: "今回実装した `[機能名]` の変更差分をレビューしてください。対象ファイルは `[実装したファイルのパスリスト]` です。docs/ のスペック(機能設計・開発ガイドライン)との整合性も確認し、確信が持てない指摘も含めて全て報告してください。"
+2. **レビューの担当を決める**: `bash .claude/scripts/route.sh review [--issue 番号] [--set レビュー=…] --explain`(`auto` は実装と別ベンダーに解決済みで返る)。
+   - `claude:sonnet` / `claude:opus` / `claude:haiku` → 下の `code-reviewer` を Agent ツールの `model` 指定で起動する
+   - `codex` → `code-reviewer` の代わりに `bash .claude/scripts/delegate-codex.sh review origin/[baseBranch]`(read-only)を実行し、そのサマリーを指摘として扱う。`exit 3` / `exit 4` なら `code-reviewer`(Sonnet)に切り替える
+3. 以下の 2 つを**同一メッセージ内で並列起動**する(互いに独立しているため直列にしない):
+  - レビュー(上で決めた担当。既定は `code-reviewer`(Sonnet)): prompt: "今回実装した `[機能名]` の変更差分をレビューしてください。対象ファイルは `[実装したファイルのパスリスト]` です。docs/ のスペック(機能設計・開発ガイドライン)との整合性も確認し、確信が持てない指摘も含めて全て報告してください。"
   - `test-runner`(Haiku): 全品質チェック(lint・型チェック・テスト・フォーマット)の実行と機械的なエラーの自動修正を依頼する。E2E 基盤(playwright 等)がありローカルサーバーが起動可能な場合は E2E 実行も依頼する(環境未整備ならスキップし、その旨を PR ボディに記載する)。
-3. 以下の**両方**に該当する場合のみ、`implementation-validator` サブエージェントも追加で起動する(トークン最適化のため通常はスキップ):
+4. 以下の**両方**に該当する場合のみ、`implementation-validator` サブエージェントも追加で起動する(トークン最適化のため通常はスキップ):
   - 変更が 200 行以上
   - 認証・決済・データ永続化・外部 API 連携など、スペック整合が特に重要な機能
-4. 両方の結果が返ったら、司令塔が対応する:
-  - code-reviewer の `[Critical]` / `[Major]` の指摘は修正する。`[Minor]` は tasklist.md の申し送り事項に記録する
+5. 両方の結果が返ったら、司令塔が対応する:
+  - レビューの `[Critical]` / `[Major]` の指摘は修正する。`[Minor]` は tasklist.md の申し送り事項に記録する
   - test-runner の「未解決の問題」(設計判断を伴うテスト失敗・型エラー)は司令塔が分析して修正する
-5. 修正した場合は test-runner を再起動して失敗したチェックのみ再実行させる(**修正サイクルは最大3周まで**)。テストの期待値をテストを通すためだけに書き換える、`@ts-ignore` や `eslint-disable` で隠蔽する、といった対処は禁止。3周で解消しない場合は申し送り事項に記録して次に進む。
-6. Codex に委託した場合、検収が通った時点で `bash .claude/scripts/codex-run.sh accept [run-id]` を実行し、run record の `accepted` を立てる(run-id は委託時の出力に出ている)。立て忘れると未検収の記録が残り続ける。
+6. 修正した場合は test-runner を再起動して失敗したチェックのみ再実行させる(**修正サイクルは最大3周まで**)。テストの期待値をテストを通すためだけに書き換える、`@ts-ignore` や `eslint-disable` で隠蔽する、といった対処は禁止。3周で解消しない場合は申し送り事項に記録して次に進む。
+7. Codex に委託した場合、検収が通った時点で `bash .claude/scripts/codex-run.sh accept [run-id]` を実行し、run record の `accepted` を立てる(run-id は委託時の出力に出ている)。立て忘れると未検収の記録が残り続ける。
 
 ## ステップ7: 振り返りとドキュメント更新
 

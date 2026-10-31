@@ -363,6 +363,25 @@ Codex CLI が無い・未認証の環境では `delegate-codex.sh` が `exit 3` 
 | 品質チェック実行         | **Haiku**             | `test-runner`。lint・テスト実行と機械的修正、サマリーのみ返す                                                                                       |
 | 最難関タスク             | **Fable 5**(一時切替) | 難度の高い設計・原因不明の調査のみ。`/model fable` → 完了後 `/model opus`                                                                           |
 
+### 担当AIの切り替え(`route.sh`)
+
+実装とレビューを**どの AI に任せるか**は、チケットごと・実行ごとに切り替えられる。判定の実体は `.claude/scripts/route.sh` の 1 本で、上が優先される。
+
+| 優先 | 指定のしかた               | 例                                                                                 |
+| ---- | -------------------------- | ---------------------------------------------------------------------------------- |
+| 1    | コマンドの記載             | `/next-ticket 12 実装=sonnet レビュー=codex`(`/add-feature` / `/fix-issue` も同じ) |
+| 2    | Issue の「担当AI」チェック | `/setup-tickets` が全チケットに入れるチェック欄。起票後もクリックで付け替えられる  |
+| 3    | `delegate:codex` ラベル    | 旧来の指定。「実装: Codex」のチェックと同じ意味                                    |
+| 4    | `.claude/routing.json`     | プロジェクトの既定(`{"implement": "codex", "review": "sonnet"}`)                   |
+| 5    | 既定値                     | 実装 = Codex / レビュー = Claude Sonnet                                            |
+
+- 担当名は `codex` / `sonnet` / `opus` / `haiku`。レビューだけ `auto`(**実装したのとは別のベンダー**。同じベンダーの自己レビューは第二意見にならないため)も選べる
+- 実装: `codex` → `delegate-codex.sh impl` / `sonnet` → `implement-ticket` / `opus`・`haiku` → `implementer` サブエージェントをモデル指定で起動。レビュー: `codex` → `delegate-codex.sh review` / それ以外 → `code-reviewer` をモデル指定で起動
+- 計画・設計と統合はメインセッション(Opus)固定なので選ばない
+- Codex が使えない(`exit 3`)ときは、指定が Codex でも Claude に切り替わる(従来どおり)。委託禁止領域の検査も従来どおり `delegate-codex.sh` が行う
+- 自動進行(econ)は Codex に委託するチケットだけを回す。担当が Claude のチケットには `autopilot:manual` を付けて候補から外す
+- どの担当で何回往復したかは `.harness/decisions.jsonl` の `route` に残す(担当ごとの比較用)
+
 ### 実装フェーズを司令塔から切り離す理由
 
 トークン消費が最も大きいのは「実装 → テスト → エラーを読む → 修正」のループで、ここを司令塔の外で回すのが上限消費を減らす最大の手段になる。手動で `/model` を切り替える運用は、**切替前の `/clear` を忘れると膨らんだコンテキスト全体がキャッシュミスとなり全額課金される**という失敗モードを持っていた。
@@ -417,6 +436,7 @@ Codex CLI が無い・未認証の環境では `delegate-codex.sh` が `exit 3` 
 | `delegate-codex.sh`                                                                                        | Codex 委託の唯一の入口(`explore` / `review` / `impl` / `--print-forbidden`) |
 | `codex-run.sh`                                                                                             | run record の一覧・検収・状態更新・剪定                                     |
 | `harness-mode.sh`                                                                                          | ハーネスモード読み取りの唯一の経路                                          |
+| `route.sh <implement\|review> [--issue N] [--set 工程=担当]`                                               | 担当AI(実装・レビュー)の判定の唯一の経路                                    |
 | `check-guard-integrity.sh`                                                                                 | ガードレール健全性(引数なし / `degraded` / `hooks-path`)                    |
 | `check-protected-branch.sh`                                                                                | 保護ブランチ判定の実体(強制 3 層が共有)                                     |
 | `latest-steering.sh`                                                                                       | 最新 `.steering/` の判定(hook・fork・SessionStart が共有)                   |

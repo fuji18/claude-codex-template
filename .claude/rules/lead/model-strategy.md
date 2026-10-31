@@ -6,7 +6,8 @@
 判断の根拠と実測値は `docs/template-dev/cost-model.md` にある(読み込み対象外)。ここには判断だけを書く。
 
 - **司令塔(メインセッション)は Opus 固定**(`.claude/settings.json`)。計画・設計判断・統合・ユーザーへの報告を担う
-- **実装フェーズは委託する。既定は Codex**(`delegate-codex.sh impl`)、`exit 3`(利用不可)なら **`implement-ticket` スキル**(`context: fork` + `model: sonnet`)にフォールバックする。どちらの経路でも**司令塔はモデルを切り替えない**。実装ループのログは委託先で完結し、司令塔にはサマリーだけが返る
+- **実装・レビューの担当は `bash .claude/scripts/route.sh <implement|review>` が決める**(優先順位: コマンドの記載 `実装=sonnet` > Issue の「担当AI」チェック > `delegate:codex` ラベル > `.claude/routing.json` > 既定)。推測で担当を選ばず、必ずこの出力に従う。手順は `/add-feature` ステップ5・6
+- **実装フェーズは委託する。テンプレート既定は Codex**(`delegate-codex.sh impl`)、`exit 3`(利用不可)なら **`implement-ticket` スキル**(`context: fork` + `model: sonnet`)にフォールバックする。どちらの経路でも**司令塔はモデルを切り替えない**。実装ループのログは委託先で完結し、司令塔にはサマリーだけが返る
   - `/next-ticket` / `/add-feature` / `/fix-issue` の実装ステップはすべてこの経路を通る(分岐の手順は `/add-feature` ステップ5、**どの単位で委託するか**は `delegation-policy.md`)
   - **司令塔が自分で実装コードを書き始めてはいけない。** PreToolUse hook(`check-implementation-phase.sh`)が Edit/Write をブロックする
 - **委譲先の既定**: レビュー(`code-reviewer`)・スペック検証(`implementation-validator`)・ドキュメントレビュー(`doc-reviewer`)は Sonnet、品質チェック実行(`test-runner`)は Haiku、広範囲のコード探索は組み込みの Explore

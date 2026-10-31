@@ -126,6 +126,9 @@ case "${1:-}" in
   *) echo "autopilot-loop.sh: 不明な引数: $1" >&2; exit 2 ;;
 esac
 
+# shellcheck source=lib-github.sh
+. .claude/scripts/lib-github.sh # gh_resolve_repo(REST で Issue にラベルを付けるため)
+
 CONF=.claude/autopilot.json
 conf() { [ -f "$CONF" ] && jq -r --arg k "$1" 'if has($k) then .[$k] else empty end' "$CONF" 2>/dev/null; } # // は false を値なし扱いにするので使わない
 POLL="${AUTOPILOT_POLL_SECONDS:-$(conf pollSeconds)}"; POLL="${POLL:-300}"
@@ -250,6 +253,20 @@ econ_step() { # $1=Issue 番号
   local n="$1" dir br rc
   br="$(ticket_branch "$n")"
   [ -n "$br" ] && [ "$(git branch --show-current)" != "$br" ] && { git switch -q "$br" || stop "#$n のブランチ $br に移れない"; }
+  # 担当AIの判定(route.sh。Issue の「担当AI」チェック・delegate:codex ラベル・routing.json)。
+  # econ の自動進行は Codex に委託するチケットだけを回す。Claude 担当のチケットを
+  # ここで Sonnet fork に流すと、econ が温存しようとしている枠を使ってしまうため
+  local impl repo
+  impl="$(bash .claude/scripts/route.sh implement --issue "$n" 2>/dev/null)" || impl="不正な指定"
+  if [ "$impl" != codex ]; then
+    log "#$n: 実装の担当が $impl のため自動進行から外す(autopilot:manual)"
+    if [ "$DRY" = 0 ] && repo="$(gh_resolve_repo)"; then
+      gh api -X POST "repos/$repo/issues/$n/labels" -f 'labels[]=autopilot:manual' >/dev/null 2>&1 || true
+      gh api -X POST "repos/$repo/issues/$n/comments" \
+        -f body="自動進行(econ)は実装を Codex に委託するチケットだけを回します。このチケットの実装の担当は \`$impl\`(\`route.sh\` の判定)のため、\`autopilot:manual\` を付けて候補から外しました。通常モードで \`/next-ticket $n\` を実行してください。" >/dev/null 2>&1 || true
+    fi
+    return
+  fi
   dir="$(ticket_steering "$n")"
   if [ -z "$dir" ] || [ ! -f "$dir/design.md" ] || ! grep -q '<!-- status: ready -->' "$dir/design.md"; then
     run_claude "/next-ticket $n --plan-only"

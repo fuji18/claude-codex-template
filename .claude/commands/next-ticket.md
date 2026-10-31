@@ -6,11 +6,11 @@ description: GitHub Issues のチケットから次に着手すべきものを�
 
 GitHub Issues のチケット(`ticket` ラベル付き Issue)を消化するための日常コマンドです。ステータスはラベル(`in-progress`)と open/closed で管理し、チケットファイルの編集・コミットは発生しません。
 
-**引数:** なし(任意で Issue 番号を指定してよい。例: `/next-ticket 12`)。`--plan-only` を付けると計画までで止まる(下記)
+**引数:** なし(任意で Issue 番号を指定してよい。例: `/next-ticket 12`)。`--plan-only` を付けると計画までで止まる(下記)。**担当AIの指定**を付けてよい(例: `/next-ticket 12 実装=sonnet レビュー=codex`)。指定は `route.sh` に `--set` で渡り、Issue のチェックや `.claude/routing.json` より優先される
 
 > **`--plan-only`(econ の自動進行用。`autopilot-loop.sh` が付ける)**: ステップ1〜2 と、ステップ3 のブランチ準備・steering 計画(`/add-feature` ステップ1〜4)だけを行う。`design.md` を書き切って冒頭を `<!-- status: ready -->` にし、`.steering/` を `Skill('commit')` でコミット・push して**終了する**(実装の委託はループがシェルから `delegate-codex.sh impl` で行い、PR は `/ship-ticket` が作る。.claude/rules/mode/econ.md の 1・3・4)。
 > - すでに `.steering/*-issue[番号]-*` がある場合は計画のやり直し: Codex の判断待ち(exit 1)なら `bash .claude/scripts/codex-run.sh list` → `show [id]` で直近の run の判断待ち内容を読み、判断を `design.md` に追記する。計画未完成(exit 5)なら書き切って印を `ready` に変える。どちらもコミットして終了する
-> - `delegate:codex` ラベルの判定はしない(econ の自動進行は常に Codex に委託する)。委託禁止領域に触れる・新規依存が要るチケットなら計画せず、`in-progress` を外して **`autopilot:manual` ラベルを付け**、Issue に理由をコメントして終了する(判定はこのラベルのチケットを自動着手の候補から外すので、ループは次のチケットへ進む。人間が通常モードで `/next-ticket [番号]` を回す)
+> - 担当AIの判定はループが行う(`route.sh implement --issue [番号]` が `codex` 以外のチケットは、ループが `autopilot:manual` を付けて候補から外す)。委託禁止領域に触れる・新規依存が要るチケットなら計画せず、`in-progress` を外して **`autopilot:manual` ラベルを付け**、Issue に理由をコメントして終了する(判定はこのラベルのチケットを自動着手の候補から外すので、ループは次のチケットへ進む。人間が通常モードで `/next-ticket [番号]` を回す)
 
 ---
 
@@ -62,16 +62,18 @@ gh issue edit [番号] --add-label in-progress
 | フェーズ | 担当 |
 | --- | --- |
 | Issue 選定・ブランチ作成・steering 計画(requirements / design / tasklist) | 司令塔(Opus) |
-| **実装(tasklist の消化)** | **委託(既定 = `delegate-codex.sh impl` / フォールバック = `Skill('implement-ticket')` の Sonnet fork)** |
+| **実装(tasklist の消化)** | **委託。担当は `bash .claude/scripts/route.sh implement --issue [番号] --explain` で決める**(Codex = `delegate-codex.sh impl` / Claude = `Skill('implement-ticket')` か `implementer` の `model` 指定。手順は `/add-feature` ステップ5) |
+| **レビュー** | **担当は `route.sh review --issue [番号]` で決める**(`/add-feature` ステップ6) |
 | 検収の判断・振り返り・コミット・PR | 司令塔(Opus) |
 
-**`delegate:codex` ラベルによる実装フェーズの流し方**(判定基準の全文は `.claude/rules/lead/delegation-policy.md`):
+**担当が Codex のときの流し方**(判定基準の全文は `.claude/rules/lead/delegation-policy.md`)。`route.sh --explain` の出典で分ける:
 
 | 状態 | 流し方 |
 | --- | --- |
-| **ラベルあり** | `design.md` を書き切ったら、**tasklist を分割せず 1 回の `delegate-codex.sh impl` で全体を委託する**(バッチに割らない)。検収は PR 単位で 1 回 |
-| ラベルなし | 機械的な項目が 3 つ以上連続する部分を 3 項目前後のバッチで委託し、**各バッチの検収を通してから**次を委託する。機械的な項目が 2 つ以下なら Codex に渡さず `Skill('implement-ticket')` に渡す |
+| **明示の指定で Codex**(コマンドの記載 / Issue のチェック / `delegate:codex` ラベル) | `design.md` を書き切ったら、**tasklist を分割せず 1 回の `delegate-codex.sh impl` で全体を委託する**(バッチに割らない)。検収は PR 単位で 1 回 |
+| 既定で Codex(`routing.json` / 既定値) | 機械的な項目が 3 つ以上連続する部分を 3 項目前後のバッチで委託し、**各バッチの検収を通してから**次を委託する。機械的な項目が 2 つ以下なら Codex に渡さず `Skill('implement-ticket')` に渡す |
 
+- 担当が `claude:*` のとき(明示の指定・`routing.json` とも)は Codex に渡さず、`/add-feature` ステップ5 の Claude 経路で流す
 - **計画中(steering)に委託の前提が崩れたらラベルを外す**: 委託禁止領域(`.claude/rules/lead/delegation-policy.md` の一覧 / 全量は `--print-forbidden`)に触れる / 新規依存の追加が要る / `design.md` に書き切れない設計判断が残る、のいずれかに当たったら `gh issue edit [番号] --remove-label delegate:codex` を実行し、理由を 1 行でユーザーに伝えてから通常経路に落とす
 - **`exit 3`(Codex 利用不可)ではラベルを外さない。** 環境の欠落でありチケットの属性ではないため、Sonnet fork にフォールバックするだけでよい
 - ラベルが付いていないチケットを委託候補だと判断した場合は、`gh issue edit [番号] --add-label delegate:codex` を実行してから流す(判断の記録が Issue に残る)
