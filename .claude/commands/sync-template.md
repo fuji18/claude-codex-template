@@ -4,7 +4,7 @@ description: テンプレートリポジトリの更新(共通ルール・コマ
 
 # テンプレート同期
 
-テンプレート(`claude-code-template`)側でルールやハーネスが更新されたとき、**前回同期以降の差分だけ**をこのプロジェクトに取り込むコマンドです。同期対象の単一ソースは `.claude/template-manifest.json`。
+テンプレート(`claude-codex-template`)側でルールやハーネスが更新されたとき、**前回同期以降の差分だけ**をこのプロジェクトに取り込むコマンドです。同期対象の単一ソースは `.claude/template-manifest.json`。
 
 **引数:** なし(`--dry-run` を渡した場合は差分の提示までで停止し、ファイルを変更しない)
 
@@ -18,7 +18,9 @@ description: テンプレートリポジトリの更新(共通ルール・コマ
 | `merge` | 双方が編集しうる。**差分を提示し、プロジェクト側の追記を保ったまま手で統合** |
 | `never` | プロジェクトが正。**絶対に触らない** |
 
-パスが複数区分に該当する場合は **owned > merge > never** の順で上位が勝つ(例: `docs/` は never だが `docs/ui-design-request-template.md` は owned)。
+パスが複数区分に該当する場合は **最も具体的な(長い)エントリが勝つ**。同じ長さなら owned > merge > never(例: `docs/` は never だが `docs/ui-design-request-template.md` は owned / `.claude/scripts/` は owned だが `.claude/scripts/lint-on-edit.sh` は merge)。
+
+技術スタックに合わせて `/kickoff` フェーズ1 が書き換えるファイル(`ci.yml` / `session-start.sh` / `lint-on-edit.sh` など)は、ディレクトリが owned でも **merge** に個別指定してある。上書きするとプロジェクトのスタック対応が消えるため。
 
 ## フェーズ0: 前提確認
 
@@ -76,7 +78,7 @@ CHANGELOG が無い/読めない場合はスキップし、ファイル一覧だ
 ユーザーの承認を得てから実行する(`--dry-run` の場合はここで停止)。
 
 1. 同期用ブランチを切る: `git switch -c chore/sync-template-$(date +%Y%m%d)`(`branch-policy.json` の `allowedPrefixes` に適合させる。適合するプレフィックスが無ければユーザーに確認する)
-2. **owned の上書き**: `git checkout template/<templateBranch> -- <path>` をパス単位で実行する
+2. **owned の上書き**: `git checkout template/<templateBranch> -- <path>` をパス単位で実行する。**owned ディレクトリの中に merge / never の個別指定がある場合は、上書きの直後にそれらを `git checkout HEAD -- <個別指定のパス>` で元に戻してから**手順4 で統合する(ディレクトリ単位の checkout は個別指定も巻き込んで上書きするため)
 3. **owned の削除**: テンプレート側で削除されたファイルは、1 件ずつ確認してから `git rm` する
 4. **merge の統合**: ファイルごとに `git diff <syncedAt>..template/<templateBranch> -- <path>` で差分本文を読み、**プロジェクト固有の設定を保ったまま**テンプレート側の変更点だけを Edit で反映する。特に注意する箇所:
    - `.claude/settings.json`: permissions の allowlist はプロジェクト固有の追加を消さない

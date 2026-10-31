@@ -1,6 +1,6 @@
 name: Template Update Check
 
-# テンプレート(claude-code-template)側の更新を検知して Issue で知らせる。
+# テンプレート(claude-codex-template)側の更新を検知して Issue で知らせる。
 # Claude は一切起動しない(枠を消費しない)。実際の取り込みは、通知を見た人が
 # ローカルで `/sync-template` を実行して行う。
 on:

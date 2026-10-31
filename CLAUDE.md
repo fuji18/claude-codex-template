@@ -68,7 +68,7 @@
 
 ### テンプレート更新の取り込み
 
-テンプレート(`claude-code-template`)側で共通ルール・コマンド・スキル・ハーネスが更新されたら、**`/sync-template`** で差分を取り込む。同期対象・除外は `.claude/template-manifest.json` が単一ソース。
+テンプレート(`claude-codex-template`)側で共通ルール・コマンド・スキル・ハーネスが更新されたら、**`/sync-template`** で差分を取り込む。同期対象・除外は `.claude/template-manifest.json` が単一ソース。
 
 - 月次の `template-update-check` ワークフロー(毎月1日)が、テンプレートに未取り込みの更新があれば Issue を立てる
 - `[manual]` 印の変更はプロジェクト側の対応が要るため、`/sync-template` の提示に従って個別に判断する

@@ -14,6 +14,16 @@
 
 ---
 
+## 2026-10-31
+
+- **[manual]** ⚠️ `.claude/template-manifest.json` の `templateRepo` を `fuji18/claude-codex-template` に直しました。これまで旧テンプレート(`claude-template`)を指していたため、`/kickoff` が記録する `syncedAt` も旧テンプレートの SHA になり、`/sync-template` と `template-update-check` が**新テンプレートの更新を一切拾えていませんでした**。
+  **取り込む側の作業**: 自分の `.claude/template-manifest.json`(merge 対象)の `templateRepo` を同じ URL に直し、`syncedAt` を**プロジェクト開始時点の claude-codex-template の commit SHA** に書き換えてください(分からなければプロジェクトの最初のコミット日以前で最も近い main のコミット)。
+- **[manual]** スタックに合わせて `/kickoff` フェーズ1 が書き換えるファイルを **owned から merge に移しました**: `.github/workflows/ci.yml` / `.claude/hooks/session-start.sh` / `.claude/scripts/lint-on-edit.sh`。owned のままだと `/sync-template` がプロジェクトのスタック対応(Flutter の CI など)を黙って上書きしていました。あわせて未分類だった `.prettierignore` / `.secretlintignore` を merge に追加しました。
+  区分の判定を「**最も具体的な(長い)エントリが勝つ**(同じ長さなら owned > merge > never)」に改め、owned ディレクトリを上書きした直後に中の merge / never 個別指定を戻す手順を `/sync-template` に足しました。
+  **取り込む側の作業**: 自分の manifest(merge 対象)に同じ移動・追加を反映してください。
+- **[auto]** テンプレート本体の CI(`harness-integrity` ジョブ)に `check-manifest-coverage.sh`(新規)を追加しました。追跡ファイルが manifest のどの区分にも無ければ落ちます。下流プロジェクトでは何もしません(リポジトリが `templateRepo` と一致するときだけ働く)。
+- **[auto]** 名称を `claude-codex-template` に統一しました(`package.json` の `name`・`/sync-template`・`CLAUDE.md`・`template-update-check.yml` の表記)。
+
 ## 2026-10-08
 
 - **[auto]** 🔒 `autopilot-next.sh` が **fork(head が別リポジトリ)の PR をチケットの PR として扱わない**ようにしました。

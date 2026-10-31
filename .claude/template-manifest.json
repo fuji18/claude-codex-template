@@ -1,6 +1,6 @@
 {
-  "$comment": "テンプレート追従の単一ソース。/sync-template と .github/workflows/template-update-check.yml が参照する。owned=上書き / merge=手動統合 / never=触らない。判定の優先順位は owned > merge > never(パスが複数に該当する場合は上位が勝つ)。末尾が / のエントリはディレクトリ配下すべてを指す。syncedAt はテンプレート側の commit SHA(未同期なら null)。",
-  "templateRepo": "https://github.com/fuji18/claude-template.git",
+  "$comment": "テンプレート追従の単一ソース。/sync-template と .github/workflows/template-update-check.yml が参照する。owned=上書き / merge=手動統合 / never=触らない。パスが複数に該当する場合は**最も具体的な(長い)エントリが勝つ**(例: .claude/scripts/ は owned だが .claude/scripts/lint-on-edit.sh は merge)。同じ長さなら owned > merge > never。末尾が / のエントリはディレクトリ配下すべてを指す。どの区分にも無い追跡ファイルはテンプレート本体の CI(check-manifest-coverage.sh)が落とす。syncedAt はテンプレート側の commit SHA(未同期なら null)。",
+  "templateRepo": "https://github.com/fuji18/claude-codex-template.git",
   "templateBranch": "main",
   "syncedAt": null,
   "syncedDate": null,
@@ -12,7 +12,6 @@
     ".claude/hooks/",
     ".claude/scripts/",
     ".claude/docs/",
-    ".github/workflows/ci.yml",
     ".github/workflows/claude.yml",
     ".github/workflows/claude-code-review.yml",
     ".github/workflows/template-update-check.yml",
@@ -22,6 +21,7 @@
     ".codex/skills/"
   ],
   "merge": [
+    ".github/workflows/ci.yml",
     "docs/ui-design-guidelines.md",
     ".claude/settings.json",
     ".claude/branch-policy.json",
@@ -35,7 +35,11 @@
     ".gitattributes",
     ".gitignore",
     "AGENTS.md",
-    ".codex/config.toml"
+    ".codex/config.toml",
+    ".claude/hooks/session-start.sh",
+    ".claude/scripts/lint-on-edit.sh",
+    ".prettierignore",
+    ".secretlintignore"
   ],
   "never": [
     "CLAUDE.md",

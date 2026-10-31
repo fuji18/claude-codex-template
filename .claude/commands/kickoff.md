@@ -98,7 +98,7 @@ description: initial-requirements.mdを起点にプロジェクト開始フロ�
 
 1. `README.md` をプロダクトの README(プロダクト名・概要・開発方法)に書き換える。
 2. テンプレートの手順書としての旧内容は削除してよい(原本はテンプレートリポジトリに残っている)。
-3. **package.json のメタデータ**を書き換える: `name`(テンプレートの `claude-code-template` のまま残さない)・`description`・`keywords`。書き換え後に `npm install` を実行して package-lock.json の name を同期する。
+3. **package.json のメタデータ**を書き換える: `name`(テンプレートの `claude-codex-template` のまま残さない)・`description`・`keywords`。書き換え後に `npm install` を実行して package-lock.json の name を同期する。
 4. **`.devcontainer/devcontainer.json` の `name`** をプロダクト名に書き換える。
 5. **ライセンス方針**をユーザーに確認して反映する:
    - 公開(OSS): `LICENSE` の Copyright 名義を自分のものに書き換える(package.json の `license` は `MIT` のまま)
