@@ -1,12 +1,19 @@
 name: Template Update Check
 
-# テンプレート(claude-codex-template)側の更新を検知して Issue で知らせる。
-# Claude は一切起動しない(枠を消費しない)。実際の取り込みは、通知を見た人が
-# ローカルで `/sync-template` を実行して行う。
+# テンプレート(claude-codex-template)の更新を取り込む PR を自動で作る。
+# Claude は一切起動しない(枠を消費しない)。機械的な取り込みは
+# .claude/scripts/sync-template.mjs が行い、判断の要るもの(競合・CHANGELOG の
+# [manual] 項目)は PR / Issue の本文に列挙して人間か /sync-template に渡す。
+#
+# PR にできないときは Issue で知らせる:
+#   - 競合がある(マーカー入りのファイルを PR にしない)
+#   - .github/workflows/ が変わる(GITHUB_TOKEN には workflows 権限が無く push できない)
+#   - リポジトリ設定で Actions からの PR 作成が許可されていない
+#     (Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests")
+# いずれもローカルで `/sync-template`(または node .claude/scripts/sync-template.mjs)を実行すればよい。
 on:
   schedule:
-    # 毎月1日 00:00 UTC(JST 09:00)。テンプレート更新は緊急性が低く、
-    # 同期1回あたりに検証・PR の固定コストがかかるため、差分をまとめてから取り込む。
+    # 毎月1日 00:00 UTC(JST 09:00)。差分をまとめてから取り込む。
     # 急ぐときは workflow_dispatch で手動実行するか、直接 /sync-template を叩く。
     - cron: '0 0 1 * *'
   workflow_dispatch:
@@ -16,98 +23,154 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
+  sync:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: read
+      contents: write
+      pull-requests: write
       issues: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
-      - name: Check for template updates
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Sync template
+        id: sync
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          MANIFEST=".claude/template-manifest.json"
+          SCRIPT=".claude/scripts/sync-template.mjs"
+          if [ ! -f "$MANIFEST" ] || [ ! -f "$SCRIPT" ]; then
+            echo "::notice::$MANIFEST または $SCRIPT が無いためスキップします(テンプレート同期に未対応)"
+            echo "action=skip" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898283+github-actions[bot]@users.noreply.github.com'
+
+          # 同期で上書きされて失われるローカル変更(owned のドリフト)を先に記録する
+          node "$SCRIPT" --check-drift --json > "$RUNNER_TEMP/drift.json" 2>/dev/null || true
+
+          node "$SCRIPT" --json > "$RUNNER_TEMP/sync.json" 2> "$RUNNER_TEMP/sync.err"
+          RC=$?
+          if ! jq -e . "$RUNNER_TEMP/sync.json" >/dev/null 2>&1; then
+            cat "$RUNNER_TEMP/sync.err"
+            echo "::warning::同期スクリプトが結果を返しませんでした"
+            echo "action=skip" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if ! jq -e '.ok' "$RUNNER_TEMP/sync.json" >/dev/null; then
+            # テンプレート本体・syncedAt 未設定など。理由を残して終わる
+            echo "::notice::$(jq -r '.error' "$RUNNER_TEMP/sync.json")"
+            echo "action=skip" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if jq -e '.upToDate' "$RUNNER_TEMP/sync.json" >/dev/null; then
+            echo "テンプレートは最新です"
+            echo "action=skip" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+
+          TO=$(jq -r '.to[0:7]' "$RUNNER_TEMP/sync.json")
+          echo "to=$TO" >> "$GITHUB_OUTPUT"
+          if [ "$RC" = 2 ]; then
+            echo "action=issue" >> "$GITHUB_OUTPUT"
+            echo "reason=競合があるため PR にしませんでした" >> "$GITHUB_OUTPUT"
+            git checkout -q -- . && git clean -qfd; exit 0
+          fi
+          if git status --porcelain | grep -q ' \.github/workflows/'; then
+            echo "action=issue" >> "$GITHUB_OUTPUT"
+            echo "reason=.github/workflows/ が変わるため、Actions からは push できません" >> "$GITHUB_OUTPUT"
+            git checkout -q -- . && git clean -qfd; exit 0
+          fi
+          echo "action=pr" >> "$GITHUB_OUTPUT"
+
+      - name: Build summary
+        if: steps.sync.outputs.action == 'pr' || steps.sync.outputs.action == 'issue'
+        run: |
+          S="$RUNNER_TEMP/sync.json"
+          {
+            echo "テンプレート(\`$(jq -r .templateRepo .claude/template-manifest.json | sed 's/\.git$//')\`)の更新です。"
+            echo
+            echo "- 前回同期: \`$(jq -r '.from[0:7]' "$S")\` → 今回: \`$(jq -r '.to[0:7]' "$S")\`"
+            echo
+            if [ -n "${{ steps.sync.outputs.reason }}" ]; then
+              echo "> ⚠️ ${{ steps.sync.outputs.reason }}。ローカルで **\`/sync-template\`** を実行してください(Claude が競合と手作業の項目まで案内します)。"
+              echo
+            fi
+            jq -r '
+              def sec(t; xs): if (xs|length) > 0 then "### \(t)(\(xs|length))\n\n" + (xs|map("- `\(.)`")|join("\n")) + "\n" else empty end;
+              sec("上書き"; .overwritten),
+              sec("追加"; .added),
+              sec("削除"; .deleted),
+              sec("3-way マージ(プロジェクト側の変更を保持)"; .merged),
+              sec("テンプレートで削除されたがローカルで変更済みのため残した"; .keptLocallyModified),
+              (if (.conflicts|length) > 0 then "### ⚠️ 競合\n\n" + (.conflicts|map("- `\(.path)`: \(.detail|join(" / "))")|join("\n")) + "\n" else empty end)
+            ' "$S"
+            if jq -e '(.drift // []) | length > 0' "$RUNNER_TEMP/drift.json" >/dev/null 2>&1; then
+              echo "### ⚠️ ローカルの書き換えが上書きされる owned ファイル"
+              echo
+              echo "テンプレート所有のファイルをプロジェクトで直していました。必要な変更は CLAUDE.md の「プロジェクト固有ルール」に移すか、テンプレート側に反映してください。"
+              echo
+              jq -r '.drift[] | "- `\(.)`"' "$RUNNER_TEMP/drift.json"
+              echo
+            fi
+            if jq -e '.manual | length > 0' "$S" >/dev/null; then
+              echo "### 📝 取り込む側の作業(CHANGELOG の [manual] 項目)"
+              echo
+              echo "3-way マージで既に反映されている項目もあります。差分を見て、未対応のものだけ対応してください。"
+              echo
+              jq -r '.manual[]' "$S"
+              echo
+            fi
+            echo "---"
+            echo "このワークフロー(\`template-update-check.yml\`)が自動で作成しました。Actions が作った PR では CI が自動で走らないため、**一度 Close → Reopen** して CI を起動してからマージしてください。"
+          } > "$RUNNER_TEMP/body.md"
+          cat "$RUNNER_TEMP/body.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open pull request
+        id: pr
+        if: steps.sync.outputs.action == 'pr'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-
-          MANIFEST=".claude/template-manifest.json"
-          if [ ! -f "$MANIFEST" ]; then
-            echo "::notice::$MANIFEST が無いためスキップします(テンプレート同期に未対応のリポジトリ)"
-            exit 0
+          BASE=$(jq -r '.baseBranch // "main"' .claude/branch-policy.json 2>/dev/null || echo main)
+          BRANCH="chore/sync-template-${{ steps.sync.outputs.to }}"
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "同じ同期先の PR ブランチが既にあります($BRANCH)"; exit 0
           fi
-
-          TEMPLATE_REPO=$(jq -r '.templateRepo' "$MANIFEST")
-          TEMPLATE_BRANCH=$(jq -r '.templateBranch // "main"' "$MANIFEST")
-          SYNCED_AT=$(jq -r '.syncedAt // ""' "$MANIFEST")
-
-          # テンプレート本体では実行しない
-          ORIGIN_URL=$(git remote get-url origin)
-          if [ "${ORIGIN_URL%.git}" = "${TEMPLATE_REPO%.git}" ]; then
-            echo "::notice::ここはテンプレート本体のためスキップします"
-            exit 0
-          fi
-
-          if [ -z "$SYNCED_AT" ] || [ "$SYNCED_AT" = "null" ]; then
-            echo "::warning::syncedAt が未設定です。ローカルで /sync-template を一度実行して基準 SHA を記録してください"
-            exit 0
-          fi
-
-          git remote add template "$TEMPLATE_REPO"
-          if ! git fetch --quiet template "$TEMPLATE_BRANCH"; then
-            echo "::warning::テンプレートリポジトリを取得できませんでした($TEMPLATE_REPO)"
-            exit 0
-          fi
-
-          HEAD_SHA=$(git rev-parse "template/$TEMPLATE_BRANCH")
-          if [ "$HEAD_SHA" = "$SYNCED_AT" ]; then
-            echo "テンプレートは最新です($HEAD_SHA)"
-            exit 0
-          fi
-
-          # 同期対象(owned + merge)のパスに絞って差分を数える
-          mapfile -t PATHS < <(jq -r '(.owned + .merge)[]' "$MANIFEST")
-          COMMITS=$(git log --no-merges --format='- %h %s' \
-            "${SYNCED_AT}..template/${TEMPLATE_BRANCH}" -- "${PATHS[@]}" || true)
-
-          if [ -z "$COMMITS" ]; then
-            echo "同期対象パスに変更はありません(テンプレート側の更新はプロジェクトに無関係)"
-            exit 0
-          fi
-
-          FILES=$(git diff --name-only "${SYNCED_AT}..template/${TEMPLATE_BRANCH}" -- "${PATHS[@]}" | head -50)
-
-          # ヒアドキュメントはインデントがそのまま本文に入るため printf で組み立てる
-          BODY=$(printf '%s\n' \
-            "テンプレート(${TEMPLATE_REPO%.git})に未取り込みの更新があります。" \
-            "" \
-            "- 前回同期: \`${SYNCED_AT}\`" \
-            "- 最新: \`${HEAD_SHA}\`" \
-            "" \
-            "## 取り込み方法" \
-            "" \
-            "ローカル(または Claude Code のセッション)で **\`/sync-template\`** を実行してください。差分の提示 → 適用 → \`/check\` → PR 作成まで案内されます。" \
-            "" \
-            "## 同期対象パスに触れているコミット" \
-            "" \
-            "${COMMITS}" \
-            "" \
-            "## 変更ファイル(最大50件)" \
-            "" \
-            '```' \
-            "${FILES}" \
-            '```')
-
+          git switch -c "$BRANCH"
+          git add -A
+          git commit -q -m "chore: テンプレートの更新を取り込む (${{ steps.sync.outputs.to }})"
+          git push -q origin "$BRANCH"
           gh label create template-sync --color 0E8A16 --description "テンプレート更新の取り込み" 2>/dev/null || true
-
-          EXISTING=$(gh issue list --label template-sync --state open \
-            --json number --jq '.[0].number // empty')
-
-          if [ -n "$EXISTING" ]; then
-            gh issue edit "$EXISTING" --body "$BODY"
-            echo "既存 Issue #${EXISTING} を更新しました"
+          if gh pr create --base "$BASE" --head "$BRANCH" --label template-sync \
+               --title "chore: テンプレートの更新を取り込む (${{ steps.sync.outputs.to }})" \
+               --body-file "$RUNNER_TEMP/body.md"; then
+            echo "created=true" >> "$GITHUB_OUTPUT"
           else
-            gh issue create --title "テンプレートの更新を取り込む (${HEAD_SHA:0:7})" \
-              --label template-sync --body "$BODY"
+            echo "::warning::PR を作成できませんでした(リポジトリ設定で Actions からの PR 作成が無効の可能性)。Issue で知らせます"
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            printf '\n> ブランチ `%s` に取り込み済みの変更を push してあります。手動で PR を作成してください。\n' "$BRANCH" >> "$RUNNER_TEMP/body.md"
+          fi
+
+      - name: Open or update issue
+        if: steps.sync.outputs.action == 'issue' || steps.pr.outputs.created == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh label create template-sync --color 0E8A16 --description "テンプレート更新の取り込み" 2>/dev/null || true
+          EXISTING=$(gh issue list --label template-sync --state open --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            gh issue edit "$EXISTING" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh issue create --title "テンプレートの更新を取り込む (${{ steps.sync.outputs.to }})" \
+              --label template-sync --body-file "$RUNNER_TEMP/body.md"
           fi
