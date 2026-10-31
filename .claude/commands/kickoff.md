@@ -91,7 +91,7 @@ description: initial-requirements.mdを起点にプロジェクト開始フロ�
    - フェーズ1で TS 以外のスタックに置換した場合は、`package-ecosystem` と `ignore` の依存名を実態に合わせて調整する(不要なエコシステム節は削除する)
 3. **委託禁止領域をパスで具体化する**(Codex 併用時。フェーズ2 で `docs/architecture.md` / `docs/repository-structure.md` が確定した後だからここで行う):
    - 認証・決済・データ移行・ガードレールに相当するモジュールを**実際のパス**で洗い出す(例: `src/auth/**`・`src/billing/**`・`db/migrations/**`)
-   - `AGENTS.md` の `<!-- kickoff:delegation-forbidden-paths -->` 〜 `<!-- /kickoff:delegation-forbidden-paths -->` の中に**追記する**(実装者への指示)。**既存の汎用項目(`delegate-codex.sh`・`.husky/` 等)は消さない** — これらはテンプレートからすべてのプロジェクトに配布されるため、どのプロジェクトでも成立する。マーカーの行自体も消さない。**この節のパスは出口検査が委託開始時に抽出して機械的に検査する**ため、実在するパスをバックティックで囲んで書く(ディレクトリは `src/auth/` または `src/auth/**`)
+   - `AGENTS.md` の `<!-- kickoff:delegation-forbidden-paths -->` 〜 `<!-- /kickoff:delegation-forbidden-paths -->` の中に**追記する**(実装者への指示)。**既存の汎用項目(`delegate-codex.sh`・`.husky/` 等)は消さない** — これらはテンプレートからすべてのプロジェクトに配布されるため、どのプロジェクトでも成立する。マーカーの行自体も消さない。**この節のパスは出口検査が委託開始時に抽出して機械的に検査する**ため、実在するパスをバックティックで囲んで書く(ディレクトリは `src/auth/` または `src/auth/**`)。書式は `- \`パス\` — 説明` の 1 行 1 項目で、**抽出されるのは説明ダッシュ( — )より前のバックティックだけ**。説明文ではバックティックを使わない(使うと委託のたびに警告が出る)
    - **`.claude/codex-denylist.txt` には書かない。** あちらは「該当ファイルが存在するだけで委託を止める」機密送信のフェイルクローズ検査で、そこにモジュールパスを入れると全委託が常に止まる
 
 ## フェーズ5: リポジトリのプロダクト化
@@ -122,6 +122,14 @@ description: initial-requirements.mdを起点にプロジェクト開始フロ�
    - `/resume-work` や SessionStart の現在地表示が、プロダクトと無関係な作業を拾う
 
    このプロジェクトの最初の作業記録は `/next-ticket` が新しく作る。テンプレートの記録を履歴として残す必要はない(原本はテンプレートリポジトリにある)。
+9. **テンプレートの判断ログ `.harness/decisions.jsonl` を空にする**(必須。提案ではなく実行する):
+
+   ```bash
+   : > .harness/decisions.jsonl
+   ```
+
+   中身はテンプレート自身の開発で積んだ記録(委託先・往復回数・週枠の実測)で、このプロジェクトのものではない。残すと、プロジェクトの実測(`docs/template-dev/econ-measurement.md` の集計)にテンプレートの数字が混ざる。「削除禁止・追記のみ」はプロジェクトの記録が始まってからの規則で、**ここで一度だけ空にするのは例外**。ファイル自体は消さない(`record-hygiene` がチケット PR で存在を前提にする)。
+10. **`docs/template-dev/` を残す場合も `CHANGELOG.md` の追記は不要**。CI の `record-hygiene` が CHANGELOG を要求するのはテンプレート本体だけ(`templateRepo` と一致するリポジトリ)で、プロジェクト側のハーネス変更には要求しない。
 
 ## フェーズ6: 開始
 

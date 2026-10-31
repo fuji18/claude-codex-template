@@ -14,6 +14,13 @@
 
 ---
 
+## 2026-10-31 (2)
+
+- **[auto]** `record-hygiene` の CHANGELOG 検査を**テンプレート本体だけ**で行うようにしました(リポジトリ名と `templateRepo` が一致するときだけ)。これまでプロジェクト側でもハーネスを変えるたびに `docs/template-dev/CHANGELOG.md` の追記を求められ、`/kickoff` で `docs/template-dev/` を消したプロジェクトでは毎回落ちていました。
+- **[auto]** 委託禁止領域の抽出を「`-` で始まる行の、説明ダッシュ( — )より前のバックティック」だけに狭めました(lastwhen #28 で直したものの取り込み)。これまで説明文中の `npx` / `python3` なども禁止パスとして抽出されていました。書式違反は stderr に警告します。入口検査0 に `awk` を追加しています。
+- **[manual]** `AGENTS.md`(merge 対象)の委託禁止領域の節で、**説明文からバックティックを外して**ください。説明にバックティックが残っていると委託のたびに警告が出ます。節の冒頭に書式の説明段落も追加しています(テンプレートの `AGENTS.md` を参照)。
+- **[auto]** `/kickoff` フェーズ5 に「テンプレートの判断ログ `.harness/decisions.jsonl` を空にする」手順を追加しました。新規プロジェクトにテンプレート自身の実測記録が持ち込まれていました。
+
 ## 2026-10-31
 
 - **[manual]** ⚠️ `.claude/template-manifest.json` の `templateRepo` を `fuji18/claude-codex-template` に直しました。これまで旧テンプレート(`claude-template`)を指していたため、`/kickoff` が記録する `syncedAt` も旧テンプレートの SHA になり、`/sync-template` と `template-update-check` が**新テンプレートの更新を一切拾えていませんでした**。

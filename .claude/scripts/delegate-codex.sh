@@ -238,7 +238,7 @@ fi
 # 黙って通ってしまう。フェイルクローズと宣言した層が静かに素通しするのは、
 # 層が無いことより悪い。ここで明示的に落とす。
 
-for _cmd in find grep sed head tail tr sort uniq; do
+for _cmd in find grep sed awk head tail tr sort uniq; do
   if ! command -v "$_cmd" >/dev/null 2>&1; then
     echo "delegate-codex: '$_cmd' が見つかりません。入口検査が成立しないため委託しません。" >&2
     exit "$EX_UNAVAIL"
@@ -253,7 +253,7 @@ AGENTS="AGENTS.md"
 # 出口検査のヘルパー(forbidden_files / forbidden_snapshot / lifecycle_snapshot)は
 # lib-forbidden.sh に分けてある(#86)。**source 位置を動かさないこと**。前後関係が
 # そのまま防御の一部になっている:
-#   - 入口検査0(find / grep / sed の存在確認)より後 … 抽出が grep と sed を使う
+#   - 入口検査0(find / grep / sed / awk の存在確認)より後 … 抽出が grep と awk を使う
 #   - $AGENTS の代入より後                           … 抽出元のパス
 #   - --print-forbidden の分岐より前                 … あの経路は codex CLI 不在でも応答する
 #   - 入口検査5-5b より前                            … pathspec 生成が FORBIDDEN_PATHS を読む
