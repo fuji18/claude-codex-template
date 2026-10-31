@@ -14,6 +14,10 @@
 
 ---
 
+## 2026-11-01 (2)
+
+- **[auto]** `sync-template.mjs` の `process` / `console` / `Buffer` を、`/* global */` 宣言ではなく `node:` モジュールの import で取るようにしました。Node のグローバルを定義済みの ESLint 設定(omote-navi など)では `/* global */` が `no-redeclare` になり、プロジェクトの lint が落ちていました。
+
 ## 2026-11-01
 
 - **[auto]** テンプレート同期を**スクリプト化**しました(`.claude/scripts/sync-template.mjs`・新規)。owned の上書き・削除、merge の **3-way マージ**(前回同期した版を共通の祖先にする。テキストは `git merge-file`、ignore 系は行の和集合、JSON はキー単位の構造マージで配列は集合として追加・削除を両方反映)、`syncedAt` の更新までを機械的に行います。両側が同じ箇所を変えたときだけ競合として報告します。これまで手作業だった「allowlist に足す」「`.gitignore` に足す」「`autopilot.json` にキーを足す」といった `[manual]` 項目の多くは、自動で入るようになります。
