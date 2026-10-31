@@ -26,7 +26,7 @@
   | A(通常) | 司令塔がこの目視を行う + `delegate-codex.sh` 出口検査の警告 |
   | B(節約) | **draft PR を作る前に人間が目視する**(`.claude/rules/mode/econ.md`) |
   | C(縮退) | `delegate-codex.sh` を通らないため出口検査が効かない。`check-guard-integrity.sh degraded` の D4 が報告する(`.claude/rules/mode/degraded.md`) |
-- **実装中(主レビュー)**: `code-reviewer` subagent(read-only、Sonnet)を起動する。docs/ とのスペック整合もここで確認する
+- **実装中(主レビュー)**: **担当は `route.sh review` で決める**(既定は `code-reviewer` subagent(read-only、Sonnet)。`codex` なら `delegate-codex.sh review`、`claude:opus` などは `code-reviewer` を `model` 指定で起動。`auto` は実装と別ベンダー)。docs/ とのスペック整合もここで確認する
 - **PR 時(最終ゲート、自動は 1 回だけ)**: GitHub Actions は **main 向け PR のオープン時と ready_for_review 時のみ**走る。develop 等の統合ブランチ向け PR では走らない(意図的なコスト削減。feature コードの主レビューは実装中の code-reviewer が担う)。push ごとの再レビューも走らない。再レビューが必要なときは PR 上で `@claude` にメンションする
   - テンプレート既定(GitHub Flow / `baseBranch: main`)では、すべての作業 PR がこの 1 回のレビュー対象になる。`develop` 統合ブランチを採るプロジェクトに切り替えた場合は「main 向け PR = リリース単位」となり、feature の主レビューは実装中の code-reviewer だけになる点に注意する(ベースの逸脱自体は CI の `branch-policy` ジョブが検出する)
 - **200 行以上 かつ 重要変更(認証・決済・データ移行・アーキテクチャ変更)のレビュー**(**この判断の単一ソース**。`delegation-policy.md` の粒度表からは 1 行で参照される): **既定は `delegate-codex.sh review`**。`/code-review ultra` と Agent Teams 並行レビューは**昇格先**であって、既定と併用しない(同じ発動条件に 2 つの手段を割り当てると両方回す運用崩れになる。#60 / C4)

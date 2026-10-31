@@ -150,6 +150,13 @@ jobs:
             bash .claude/scripts/test-sync-template.sh
           fi
 
+      # 担当AIの判定(route.sh)の動作確認(一時ディレクトリ内で完結)
+      - name: Test AI routing
+        run: |
+          if [ -f .claude/scripts/test-route.sh ]; then
+            bash .claude/scripts/test-route.sh
+          fi
+
       # 委託禁止領域の単一ソース(delegate-codex.sh の FORBIDDEN_PATHS)と
       # .claude/rules/lead/delegation-policy.md の一覧のずれを**双方向**で検出する。
       # マーカーを持たない旧版の delegation-policy.md を抱えた下流プロジェクトで

@@ -26,6 +26,7 @@
     ".claude/settings.json",
     ".claude/branch-policy.json",
     ".claude/autopilot.json",
+    ".claude/routing.json",
     ".claude/codex-denylist.txt",
     ".claude/template-manifest.json",
     ".github/dependabot.yml",
