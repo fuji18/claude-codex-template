@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-/* global process, console, Buffer */
 // テンプレートの更新をこのプロジェクトへ取り込む(/sync-template と月次の
 // template-update-check が呼ぶ機械処理の実体)。
 //
@@ -31,7 +30,13 @@
 // られているもの**を列挙するだけ(何も変更しない)。次の同期で上書きされて
 // 失われる変更の早期発見に使う。該当があれば終了コード 3。
 
+// process / console / Buffer はグローバル宣言ではなく import で取る。プロジェクトごとに
+// ESLint の globals 設定が違い(未定義なら no-undef、定義済みなら /* global */ が
+// no-redeclare)、どちらの設定でも通るのは import だけのため。
+import { Buffer } from 'node:buffer';
 import { spawnSync } from 'node:child_process';
+import console from 'node:console';
+import process from 'node:process';
 import {
   chmodSync,
   existsSync,
