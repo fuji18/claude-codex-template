@@ -139,14 +139,14 @@ TRUSTED_ASSOC='["OWNER","MEMBER","COLLABORATOR"]'
 jq --argjson ta "$TRUSTED_ASSOC" '[.[] | {number, state, title, pull_request,
             trusted: ((.author_association // "OWNER") as $a | $ta | index($a) != null),
             labels: [.labels[]? | (.name? // .)],
-            deps: [(.body // "") | scan("depends:[^\\n]*"; "i") | scan("#(\\d+)") | .[0] | tonumber] | unique}]' \
+            deps: [(.body // "") | match("depends:[^\\n]*"; "gi").string | scan("#(\\d+)") | .[0] | tonumber] | unique}]' \
   "$TMP/issues.raw" >"$TMP/issues.json" || die "Issue 一覧の整形に失敗した"
 # fork(head が別リポジトリ)の PR は信頼しない。本文に Closes #N と書くだけで誰でも「チケットの PR」を
 # 名乗れるため、通すと autopilot が外部コードに /fix-pr を回す(手元で npm ci / npm test = 任意コード実行)。
 # head.repo は fork が消えると null になるので、その場合も信頼しない。フィクスチャは両方欠けていて一致する
 jq '[.[] | {number, draft: (.draft // false), head: (.head.ref // ""), sha: (.head.sha // ""),
             trusted: ((.head.repo.full_name? // null) == (.base.repo.full_name? // null)),
-            links: [(.body // "") | scan("\\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\\s+#(\\d+)"; "i") | .[0] | tonumber] | unique}]' \
+            links: [(.body // "") | (match("\\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\\s+#(\\d+)"; "gi") | [.captures[].string]) | .[0] | tonumber] | unique}]' \
   "$TMP/prs.raw" >"$TMP/prs.json" || die "PR 一覧の整形に失敗した"
 
 # --- 1 段目: チケットと PR の対応づけ(詳細取得の対象を絞るため先に計算する) ---
