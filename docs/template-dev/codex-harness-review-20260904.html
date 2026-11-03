@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Codex 併用ハーネス実装レビュー(2026-09-04)</title>
+<style>
+  :root {
+    --bg: #faf9f7; --fg: #1f2328; --muted: #656d76; --card: #ffffff;
+    --border: #d8dee4; --accent: #0969da;
+    --high-bg: #ffebe9; --high-fg: #cf222e; --high-bd: #ffb3ad;
+    --med-bg: #fff8c5; --med-fg: #9a6700; --med-bd: #eed888;
+    --low-bg: #ddf4ff; --low-fg: #0969da; --low-bd: #a8d4f7;
+    --ok-bg: #dafbe1; --ok-fg: #1a7f37; --ok-bd: #a5e8b2;
+    --code-bg: #f0f1f3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14171b; --fg: #e6e9ec; --muted: #98a1ab; --card: #1c2128;
+      --border: #363c44; --accent: #539bf5;
+      --high-bg: #3a1d20; --high-fg: #ff8182; --high-bd: #6b2b2f;
+      --med-bg: #372e12; --med-fg: #e3b341; --med-bd: #5d4e1e;
+      --low-bg: #12293e; --low-fg: #6cb6ff; --low-bd: #204a72;
+      --ok-bg: #133a1e; --ok-fg: #57ab5a; --ok-bd: #245a30;
+      --code-bg: #262c34;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;
+    line-height: 1.75; font-size: 15px;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.6em; margin: 0 0 4px; line-height: 1.4; }
+  .sub { color: var(--muted); margin-bottom: 32px; font-size: .92em; }
+  h2 {
+    font-size: 1.25em; margin: 48px 0 16px; padding-bottom: 8px;
+    border-bottom: 2px solid var(--border);
+  }
+  h3 { font-size: 1.05em; margin: 28px 0 8px; }
+  p { margin: 10px 0; }
+  code {
+    background: var(--code-bg); padding: 1px 6px; border-radius: 4px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .86em;
+  }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px; overflow-x: auto; font-size: .84em; line-height: 1.6;
+  }
+  pre code { background: none; padding: 0; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 22px; margin: 14px 0;
+  }
+  .badge {
+    display: inline-block; padding: 1px 10px; border-radius: 999px;
+    font-size: .78em; font-weight: 700; vertical-align: 2px; margin-right: 8px;
+    border: 1px solid; white-space: nowrap;
+  }
+  .b-high { background: var(--high-bg); color: var(--high-fg); border-color: var(--high-bd); }
+  .b-med  { background: var(--med-bg);  color: var(--med-fg);  border-color: var(--med-bd); }
+  .b-low  { background: var(--low-bg);  color: var(--low-fg);  border-color: var(--low-bd); }
+  .b-ok   { background: var(--ok-bg);   color: var(--ok-fg);   border-color: var(--ok-bd); }
+  .finding-title { font-weight: 700; font-size: 1.02em; }
+  .meta { color: var(--muted); font-size: .85em; margin: 4px 0 12px; }
+  .label { font-weight: 700; font-size: .88em; color: var(--muted); margin-top: 14px; margin-bottom: 2px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: .92em; }
+  th, td { border: 1px solid var(--border); padding: 7px 11px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 700; }
+  .tbl-wrap { overflow-x: auto; }
+  ul, ol { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  .lead { font-size: 1.02em; }
+  .note { border-left: 3px solid var(--accent); padding-left: 14px; color: var(--muted); margin: 16px 0; }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 40px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Codex 併用ハーネス 実装レビュー</h1>
+<div class="sub">
+2026-09-04 / 対象: <code>codex-delegation-plan.md</code> に基づく実装一式<br>
+読んだ範囲: <code>.claude/scripts/*.sh</code>(3,100 行)/ <code>.claude/hooks/session-start.sh</code> /
+<code>.husky/*</code> / <code>.github/workflows/*</code> / <code>AGENTS.md</code> / <code>CLAUDE.md</code> /
+<code>.claude/rules/**</code> / <code>.codex/config.toml</code> / <code>.claude/codex-denylist.txt</code>
+</div>
+
+<h2>総評</h2>
+
+<p class="lead">
+計画文書と実装の対応は非常に良く、脅威モデル(<strong>「サンドボックスの中で書かれたものが、後でサンドボックスの外で実行される」</strong>)の把握も的確です。
+入口検査 5 系統・出口検査 2 系統・ナンス付き標識ブロック・自己コピー exec・許可リスト方式のプローブ形式検査は、
+どれも一般的なテンプレートの水準を大きく超えています。#56〜#72 の一連の修正で、
+<strong>「注入される実体」「実行される実体」「全層が読む判定データ」という 3 系統の整理</strong>に到達しているのも妥当です。
+</p>
+
+<p>
+そのうえで、<strong>今回の指摘の中心は 1 点</strong>です ―
+禁止領域の列挙が「git 追跡下のファイル」を暗黙の前提にしており、
+<strong><code>.gitignore</code> 済みだがホストが実行する経路</strong>が丸ごと抜けています。
+最も重いのが <code>.husky/_/</code>(= <code>core.hooksPath</code> の実体)で、
+ここは<strong>出口検査・<code>git diff</code>・<code>check-guard-integrity.sh</code>・CI のすべてが同時に素通しします</strong>。
+</p>
+
+<div class="tbl-wrap">
+<table>
+  <tr><th>#</th><th>分類</th><th>重大度</th><th>要旨</th></tr>
+  <tr><td>S1</td><td>セキュリティ</td><td><span class="badge b-high">High</span></td><td><code>.husky/_/</code> が禁止領域外かつ gitignore 済み。ガードレールの無音化とホストコード実行が全層に見えない</td></tr>
+  <tr><td>S2</td><td>セキュリティ</td><td><span class="badge b-high">High</span></td><td>検証プローブ P2 形式がワークツリーの実行ファイルをホスト実行する。代償措置とされている層が実際には <code>node_modules/</code> を見ていない</td></tr>
+  <tr><td>S3</td><td>セキュリティ</td><td><span class="badge b-med">Medium</span></td><td><code>.claude/settings.local.json</code> が禁止領域外。hooks 定義 = ホスト実行の宣言</td></tr>
+  <tr><td>S4</td><td>セキュリティ</td><td><span class="badge b-med">Medium</span></td><td>モード C の監査が、監査される側が自己申告するトレーラーに依存している</td></tr>
+  <tr><td>B1</td><td>動作欠陥</td><td><span class="badge b-med">Medium</span></td><td>explore / review の並行実行が impl の出口検査を誤爆させ、正常な成果を <code>failed</code> にする</td></tr>
+  <tr><td>C1</td><td>コスト</td><td><span class="badge b-med">Medium</span></td><td><code>CLAUDE.md</code> の 49% が司令塔専用の説明で、全サブエージェント spawn に課金されている</td></tr>
+  <tr><td>C2</td><td>コスト</td><td><span class="badge b-low">Low</span></td><td>司令塔ルール 25.6KB を SessionStart / compact ごとに注入。意図的な重複記述あり</td></tr>
+  <tr><td>D1</td><td>構成</td><td><span class="badge b-low">Low</span></td><td>禁止領域が 3 箇所に分散し、乖離検査が片方向・警告のみ</td></tr>
+  <tr><td>D2</td><td>構成</td><td><span class="badge b-low">Low</span></td><td><code>delegate-codex.sh</code> 1,580 行の単一ファイル化。自己コピー exec が分割を阻んでいる</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>1. セキュリティ</h2>
+
+<div class="card">
+<div><span class="badge b-high">High</span><span class="finding-title">S1. <code>.husky/_/</code> が禁止領域から抜けている(ガードレールの無音化 + ホストコード実行)</span></div>
+<div class="meta"><code>.claude/scripts/delegate-codex.sh:271-272</code>(FORBIDDEN_PATHS)</div>
+
+<div class="label">事実</div>
+<p>
+このリポジトリの <code>core.hooksPath</code> は <code>.husky/_</code> です。git が実際に起動するのは
+<code>.husky/_/pre-commit</code> であり、それが <code>.husky/_/h</code> を source し、<code>h</code> が最後に
+<code>sh -e ".husky/pre-commit"</code> を呼びます。つまり<strong>守られている <code>.husky/pre-commit</code> は
+チェーンの末端で、実際の入口は <code>.husky/_/</code> の側</strong>です。
+</p>
+<pre><code>$ git config --get core.hooksPath
+.husky/_
+$ cat .husky/_/pre-commit
+#!/usr/bin/env sh
+. "$(dirname "$0")/h"
+$ cat .husky/_/.gitignore
+*                          # ← .husky/_/ 配下は丸ごと git 追跡外</code></pre>
+
+<div class="label">なぜ全層が素通しするか</div>
+<div class="tbl-wrap">
+<table>
+  <tr><th>層</th><th>結果</th><th>理由</th></tr>
+  <tr><td>出口検査 <code>forbidden_snapshot()</code></td><td>素通し</td><td><code>FORBIDDEN_PATHS</code> は <code>.husky/pre-commit</code> と <code>.husky/prepare-commit-msg</code> の 2 ファイルのみ。<code>.husky/_/*</code> は列挙されない</td></tr>
+  <tr><td><code>git diff</code> / <code>git status</code> / <code>tree_snapshot()</code></td><td>素通し</td><td><code>.husky/_/.gitignore</code> = <code>*</code> で追跡外。<code>--untracked-files=all</code> でも出ない</td></tr>
+  <tr><td><code>check-guard-integrity.sh</code> D1</td><td>素通し</td><td><code>core.hooksPath</code> は <code>.husky/_</code> のまま = <code>.husky/*</code> の case に一致して健全判定</td></tr>
+  <tr><td>同 検査 3・4</td><td>素通し</td><td><code>.husky/pre-commit</code> は存在し、<code>check-protected-branch.sh</code> も呼んでいる(呼ばれなくなっただけ)</td></tr>
+  <tr><td>同 D2</td><td>素通し</td><td>見るのは物理 <code>.git/hooks/</code> のみ</td></tr>
+  <tr><td>CI <code>harness-integrity</code></td><td>素通し</td><td>fresh checkout に <code>.husky/_</code> は存在せず、<code>npm ci</code> が再生成する。ローカルの改変は CI に一切現れない</td></tr>
+</table>
+</div>
+
+<div class="label">成立する 2 つの攻撃</div>
+<ol>
+  <li><strong>ガードレールの無音化</strong> — impl 委託中に <code>.husky/_/pre-commit</code> を <code>exit 0</code> の 2 行に置き換える。以後、保護ブランチへの直接コミットを止める<strong>ベンダー非依存の層(Codex・手動 git に効く唯一の層)</strong>が消えるが、<code>check-guard-integrity.sh</code> は健全と報告し続ける。</li>
+  <li><strong>ホストコード実行</strong> — <code>.husky/_/h</code> は<strong>人間や Claude が <code>git commit</code> を叩くたびにホスト上・ネットワーク有効・サンドボックス外で実行される</strong>。1 行足せば恒久的な実行経路になる。<code>package.json</code> のライフサイクル警告(§9)が塞ごうとしているのと同じ性質の穴が、警告すら無い状態で残っている。</li>
+</ol>
+
+<div class="label">根本原因</div>
+<p>
+<code>CLAUDE.md</code> は「<em>個別列挙はスクリプトが増えるたびに漏れるのでディレクトリ単位で禁止する</em>」と <code>.claude/scripts/</code> について明言しています。
+<strong>その原則が <code>.husky/</code> にだけ適用されていません。</strong>
+さらに <code>CLAUDE.md</code> の「3 系統」の説明では実体を <code>.husky/*</code> と書いており、
+<strong>散文(ディレクトリ)と配列(2 ファイル)がすでに食い違っています</strong>。
+<code>check-forbidden-paths-doc.sh</code> は「配列 → CLAUDE.md」の片方向しか見ないため、この乖離は検出できません(D1 参照)。
+</p>
+
+<div class="label">修正案</div>
+<pre><code># delegate-codex.sh の FORBIDDEN_PATHS
+-  ".husky/pre-commit"
+-  ".husky/prepare-commit-msg"
++  ".husky/"</code></pre>
+<p>
+<code>forbidden_files()</code> の <code>*/)</code> 分岐は <code>find .husky -type f</code> なので gitignore を無視して列挙し、
+<code>git hash-object</code> は追跡外ファイルにも効きます。<strong>1 行の変更で S1 は閉じます</strong>(追加で約 20 ファイルのハッシュ。#65 のバッチ化後は誤差)。
+併せて <code>check-guard-integrity.sh</code> に「<code>.husky/_/pre-commit</code> が <code>h</code> を source しているか」の検査を足すと、
+委託経路を通らないモード C / 手動改変も拾えます。
+</p>
+</div>
+
+<div class="card">
+<div><span class="badge b-high">High</span><span class="finding-title">S2. 検証プローブ P2 形式のホスト実行に、実効する代償措置が無い</span></div>
+<div class="meta"><code>.claude/scripts/delegate-codex.sh:487-493</code>(コメント)/ <code>:657</code>(<code>env -i ... bash -c "$PROBE"</code>)/ <code>AGENTS.md:2</code></div>
+
+<div class="label">事実</div>
+<p>
+入口検査3 は許可形式の <code>npx --no-install &lt;pkg&gt; --version</code> をホスト上で実行します。
+現在のマーカーは <code>npx --no-install eslint --version</code> = <strong><code>node_modules/.bin/eslint</code> を解決して実行</strong>します。
+<code>node_modules/</code> はワークツリー内なので <code>workspace-write</code> の委託先が書き換えられ、
+<strong>その改変は「次回の委託の入口検査」でホスト実行されます</strong>(サンドボックス内で書く → 次回起動でサンドボックス外実行)。
+</p>
+
+<div class="label">コメントに書かれた代償措置が実在しない</div>
+<p>スクリプトのコメントはこう書いています:</p>
+<pre><code>「ワークツリーの完全性は出口ハッシュ検査・check-guard-integrity.sh degraded が
+  受け持つ別の層。」</code></pre>
+<p>
+<strong>どちらも <code>node_modules/</code> を見ていません。</strong>
+出口ハッシュ検査は <code>FORBIDDEN_PATHS</code> に列挙されたパスだけを走査し、<code>node_modules/</code> は入っていません(入れれば数万ファイルのハッシュで現実的でない)。
+<code>degraded</code> 検査は <code>git log</code> 起点で、<code>node_modules/</code> は gitignore 済みです。
+つまり<strong>「別の層が受け持つ」という前提だけが記述されていて、その層は存在しない</strong>状態です。
+S1 と同じ「gitignore 済みだがホストが実行する経路」の系統です。
+</p>
+
+<div class="label">修正案(推奨は 1)</div>
+<ol>
+  <li><strong>プローブから exec を無くす。</strong> このプローブの仕事は「依存が入っているか」の確認であって、コードの実行ではありません。マーカーに非実行形式を足し、ホスト側は <code>[ -x node_modules/.bin/eslint ]</code> 相当の <strong>stat だけ</strong>で判定する:
+    <pre><code>&lt;!-- verify-probe: exists node_modules/.bin/eslint --&gt;</code></pre>
+    形式検査は現行の文字集合検査をそのまま流用でき、<strong>ホスト実行の経路自体が消えます</strong>。既存の P1〜P3 は後方互換として残せます。</li>
+  <li><strong>実行を残すなら指紋を取る。</strong> P2 のとき解決先(<code>node_modules/.bin/&lt;pkg&gt;</code> とその実体)を <code>git hash-object</code> し、前回値と違えば警告する。追跡外ファイルにも効きます。</li>
+</ol>
+<p class="note">
+なお <code>npm</code> / <code>npx</code> を許可コマンドに残していること自体は、<code>.npmrc</code> が denylist にあり
+<strong>入口検査1(フェイルクローズ)が検査3 より先に走る</strong>ため、<code>.npmrc</code> 経由の乗っ取りは塞がれています。順序は正しいです。
+</p>
+</div>
+
+<div class="card">
+<div><span class="badge b-med">Medium</span><span class="finding-title">S3. <code>.claude/settings.local.json</code> が禁止領域に入っていない</span></div>
+<div class="meta"><code>.claude/scripts/delegate-codex.sh:258-273</code> / <code>.gitignore:52</code></div>
+<p>
+<code>.claude/settings.json</code> は禁止領域にありますが、<strong><code>.claude/settings.local.json</code> はありません</strong>。
+このファイルも hooks と permissions を定義でき、<code>.gitignore</code> 済みなので <code>git diff</code> にも出ません。
+委託先がこれを新規作成すると、<strong>次に人間が Claude セッションを開いた瞬間に SessionStart hook としてホストコマンドが走ります</strong>。
+</p>
+<p>
+緩和はあります ― denylist に <code>.claude/settings.local.json</code> が入っているため、<strong>次回の委託</strong>は入口検査1 で止まります。
+ただし止まるのは「次の委託」であって「次のセッション開始」ではありません。時間順では<strong>セッション開始のほうが先に来ます</strong>。
+</p>
+<div class="label">修正案</div>
+<pre><code>  ".claude/settings.json"
++ ".claude/settings.local.json"</code></pre>
+<p>S1 の修正(<code>.claude/</code> 配下は既にディレクトリ単位が原則)と同時に入れるのが自然です。</p>
+</div>
+
+<div class="card">
+<div><span class="badge b-med">Medium</span><span class="finding-title">S4. モード C の監査が、監査される側の自己申告に依存している</span></div>
+<div class="meta"><code>.claude/scripts/check-guard-integrity.sh:299,341</code>(D3 / D4)</div>
+<p>
+D3(禁止領域への差分)と D4(<code>package.json</code> 変更)は、いずれも
+<code>git log --grep='Codex-authored'</code> で対象コミットを選びます。
+このトレーラーは <strong>Codex 自身が付けるもの</strong>なので、付けなければ両検査の対象から外れます。
+設計としては「上限で殺されても各コミットが自分で名乗る」という<strong>可用性</strong>の要件から来たもので、その目的には適合していますが、
+<strong>敵対的な相手に対する識別子としては機能しません</strong>。
+</p>
+<div class="label">修正案(安価)</div>
+<p>
+モード C では定義上 Claude はコミットしません。したがって範囲内の<strong>全コミット</strong>がトレーラーを持つのが正常です。
+逆向きの検査 ― <code>&lt;base&gt;..HEAD</code> でトレーラーを<strong>持たない</strong>コミットを列挙して報告する ― を D3 の直前に足せば、
+「名乗らずに紛れ込んだコミット」を検出できます。既存の <code>git log</code> の引数を変えるだけで、
+D3 / D4 のループ本体には手を入れずに済みます。
+</p>
+</div>
+
+<hr>
+
+<h2>2. 動作上の欠陥</h2>
+
+<div class="card">
+<div><span class="badge b-med">Medium</span><span class="finding-title">B1. explore / review の並行実行が impl の出口検査を誤爆させる</span></div>
+<div class="meta"><code>.claude/scripts/delegate-codex.sh:273</code>(<code>.harness/codex-runs/</code>)/ <code>:1137-1157</code>(<code>forbidden_files</code>)/ <code>:1424</code></div>
+
+<div class="label">連鎖</div>
+<ol>
+  <li><code>.harness/codex-runs/</code> が <code>FORBIDDEN_PATHS</code> に含まれる。</li>
+  <li><code>forbidden_files()</code> は <code>find .harness/codex-runs -type f</code> で<strong>全 run record を列挙</strong>し、除外するのは<strong>今回の委託自身の 3 ファイルだけ</strong>(<code>$REC</code> / <code>$LOG</code> / <code>$LAST</code>)。</li>
+  <li>一方 <code>delegation-policy.md</code> は「<em>read-only の explore / review はこの検査(5-5)を通らず並行できる</em>」と明記しており、<strong>これは意図された運用</strong>。</li>
+  <li>impl の実行中に explore / review を 1 本起動すると、そちらが <code>.harness/codex-runs/</code> に新しい <code>.json</code> / <code>.log</code> / <code>.last.txt</code> を作り、<code>.log</code> は実行中ずっと成長する。</li>
+  <li>impl の <code>FORBIDDEN_AFTER</code> が <code>FORBIDDEN_BEFORE</code> と一致しなくなる。</li>
+</ol>
+
+<div class="label">帰結</div>
+<p>
+impl が<strong>正常に完了していても</strong> <code>status=failed</code> / <code>exit 2</code> になり、
+「委託禁止領域が変更されました」という<strong>セキュリティ違反の見た目</strong>で返ります。
+同じことは、impl の実行中に人間が <code>codex-run.sh accept &lt;id&gt;</code> や <code>set-status</code> を叩いた場合にも起きます。
+</p>
+<p>
+実害は失われた作業と枠だけではありません。<strong>この層は「鳴ったら本物」であることに価値があります。</strong>
+運用上ありうる操作で偽陽性が出ると、次に本物が鳴ったときに無視されます ― セキュリティ層としては最悪の壊れ方です。
+</p>
+
+<div class="label">修正案</div>
+<p>
+<code>.harness/codex-runs/</code> を<strong>内容ハッシュ比較の対象から外し</strong>、別の軸で守るのが筋です。
+このディレクトリで守りたいのは「委託先が自分の結果を <code>accepted: true</code> に書き換えないこと」であって、
+「ファイルが 1 バイトも変わらないこと」ではありません。
+</p>
+<pre><code># 案: forbidden_snapshot() は BEFORE 時点に存在した record だけを対象にし、
+#     かつ .log を除外する(ログは実行中に成長するのが正常)。
+#     accepted / status の書き換えは rec_field で個別に突き合わせる。</code></pre>
+<p>
+最小の応急処置としては、<code>forbidden_files()</code> の除外を「自分の 3 ファイル」から
+「<strong>BEFORE スナップショット取得時に存在しなかったファイルすべて + 全 <code>.log</code></strong>」に広げるだけでも誤爆は止まります。
+</p>
+</div>
+
+<hr>
+
+<h2>3. コストパフォーマンス</h2>
+
+<div class="card">
+<div><span class="badge b-med">Medium</span><span class="finding-title">C1. <code>CLAUDE.md</code> の 49% が司令塔専用の説明で、全サブエージェント spawn に課金されている</span></div>
+<div class="meta"><code>CLAUDE.md</code>「Codex への委託禁止領域(パス)」節</div>
+
+<div class="tbl-wrap">
+<table>
+  <tr><th>範囲</th><th>サイズ</th><th>読まれる場所</th></tr>
+  <tr><td><code>CLAUDE.md</code> 全体</td><td>10,452 B</td><td>司令塔 + <strong>全サブエージェント spawn ごと</strong></td></tr>
+  <tr><td>うち「委託禁止領域」節</td><td><strong>5,085 B(49%)</strong></td><td>同上</td></tr>
+</table>
+</div>
+
+<p>
+この節は<strong>「どのチケットを Codex に渡すか」という司令塔の振り分け判断</strong>の説明です。
+<code>code-reviewer</code>・<code>test-runner</code>・<code>implementer</code>・<code>doc-reviewer</code> のいずれもこの判断を行いません
+(実装者向けの規約は <code>AGENTS.md</code> §4 にあり、機械検査は <code>delegate-codex.sh</code> にあります)。
+</p>
+<p>
+これは<strong>このプロジェクト自身のルールに違反しています。</strong>
+<code>context-management.md</code>「ルールを追記するときの置き場所」はこう定めています:
+</p>
+<pre><code>司令塔だけが使う内容(モデル選択・/clear・レビュー起動・チケット運用・計画フェーズ)
+  → .claude/rules/lead/
+判断の根拠・実測値・背景説明
+  → docs/template-dev/(読み込み対象外)</code></pre>
+<p>
+5KB の禁止領域解説は前者に該当します。かつ各項目に付いた<strong>「なぜ禁止か」の理由(#15 / #40 / #56 / S1 への言及を含む)は後者</strong>で、
+<code>delegate-codex.sh</code> の <code>FORBIDDEN_PATHS</code> 直上のコメントに<strong>ほぼ同じ文章が既に存在します</strong>。
+</p>
+
+<div class="label">修正案</div>
+<ul>
+  <li>禁止領域の<strong>パス一覧と 1 行の理由</strong>だけを <code>.claude/rules/lead/delegation-policy.md</code> へ移す。</li>
+  <li><strong>詳細な根拠</strong>(#番号への言及、実測値、代替案の却下理由)は <code>docs/template-dev/codex-delegation-plan.md</code> §9 へ移す。</li>
+  <li><code>CLAUDE.md</code> には<strong>「単一ソースは <code>delegate-codex.sh</code> の <code>FORBIDDEN_PATHS</code> と <code>AGENTS.md</code> §4」という 2〜3 行のポインタだけ</strong>を残す。</li>
+</ul>
+<p>
+効果は<strong>サブエージェント spawn ごとに約 5KB(日本語で約 1,700 トークン)</strong>。
+実装 1 チケットで <code>code-reviewer</code> + <code>test-runner</code> + <code>implementer</code> が動く前提なら、チケットあたり約 5,000 トークンの純減です。
+<code>check-forbidden-paths-doc.sh</code> の <code>HEADING</code> も併せて更新が必要です(D1 参照)。
+</p>
+</div>
+
+<div class="card">
+<div><span class="badge b-low">Low</span><span class="finding-title">C2. 司令塔ルール 25.6KB を SessionStart / compact ごとに注入</span></div>
+<div class="meta"><code>.claude/hooks/session-start.sh:95-107</code></div>
+<div class="tbl-wrap">
+<table>
+  <tr><th>ファイル</th><th>サイズ</th></tr>
+  <tr><td><code>lead/delegation-policy.md</code></td><td>7,606 B</td></tr>
+  <tr><td><code>lead/review-policy.md</code></td><td>4,918 B</td></tr>
+  <tr><td><code>lead/model-strategy.md</code></td><td>4,248 B</td></tr>
+  <tr><td><code>lead/branch-and-tickets.md</code></td><td>4,122 B</td></tr>
+  <tr><td><code>lead/planning.md</code></td><td>2,462 B</td></tr>
+  <tr><td><code>lead/context-management.md</code></td><td>2,230 B</td></tr>
+  <tr><td><strong>合計</strong></td><td><strong>25,586 B ≒ 8,000 トークン</strong></td></tr>
+</table>
+</div>
+<p>
+注入は <code>startup</code> だけでなく <code>resume</code> / <code>clear</code> / <strong><code>compact</code></strong> でも走ります。
+つまり「150k を超えたら <code>/compact</code>」という運用ルール自体が、8k トークンの再注入を伴います。設計として妥当ですが、量は把握しておく価値があります。
+</p>
+<p>
+<strong>意図的な重複が 1 箇所あります。</strong>
+<code>delegation-policy.md</code> と <code>review-policy.md</code> が「200 行以上の重要変更のレビューは <code>delegate-codex.sh review</code> が既定、
+<code>/code-review ultra</code> は昇格先」という同じ議論を<strong>両方フルで</strong>持ち、
+「<em>同じ結論を review-policy.md にも書いてある。片方だけ直さないこと。</em>」という注記が付いています。
+</p>
+<p>
+「片方だけ直さないこと」という注記が必要になっている時点で、これは<strong>解決ではなく回避</strong>です。
+判断の実体を <code>review-policy.md</code> に一本化し、<code>delegation-policy.md</code> の表の当該行からは<strong>1 行のポインタ</strong>にするのが正しい形です
+(<code>delegation-policy.md</code> が「どの単位で渡すか」、<code>review-policy.md</code> が「どのレビュー手段を使うか」という既存の役割分担にも合致します)。約 1KB の削減と、乖離リスクの解消。
+</p>
+</div>
+
+<div class="card">
+<div><span class="badge b-low">Low</span><span class="finding-title">C3. 出口検査の走査対象が単調増加する</span></div>
+<div class="meta"><code>.claude/scripts/delegate-codex.sh:1006-1013</code></div>
+<p>
+<code>.harness/codex-runs/</code> は 1 委託につき 3 ファイル増え、<strong>自動削除しない</strong>設計です(#29 / §12.8 — 未検収 record は検収キューなので妥当)。
+出口検査は impl 1 回につきこのディレクトリ全体を<strong>2 回</strong>ハッシュします。
+#65 で <code>git hash-object --stdin-paths</code> の 1 プロセスに畳んであるためプロセス起動は定数化されましたが、
+<strong>I/O とハッシュ計算はファイル数に比例</strong>します(<code>.log</code> は数百 KB になりうる)。閾値 50 の警告は妥当ですが、
+B1 の修正で <code>.log</code> を対象外にすれば、この問題も同時に大きく縮みます。
+</p>
+</div>
+
+<hr>
+
+<h2>4. 構成の適正化</h2>
+
+<div class="card">
+<div><span class="badge b-low">Low</span><span class="finding-title">D1. 禁止領域が 3 箇所に分散し、乖離検査が片方向・警告のみ</span></div>
+<div class="meta"><code>.claude/scripts/check-forbidden-paths-doc.sh</code></div>
+<p>現状の分散:</p>
+<div class="tbl-wrap">
+<table>
+  <tr><th>場所</th><th>役割</th><th>検査</th></tr>
+  <tr><td><code>delegate-codex.sh</code> <code>FORBIDDEN_PATHS</code></td><td>汎用項目の単一ソース</td><td>—</td></tr>
+  <tr><td><code>AGENTS.md</code> §4 マーカー内</td><td>プロジェクト固有パスの単一ソース + 委託先向け散文</td><td>出口ハッシュ検査(自身の改ざん)</td></tr>
+  <tr><td><code>CLAUDE.md</code> 該当節</td><td>司令塔向けの説明(手動同期)</td><td>片方向・警告のみ</td></tr>
+</table>
+</div>
+<p>
+<code>check-forbidden-paths-doc.sh</code> が見るのは<strong>「一覧にあって CLAUDE.md に無い」方向だけ</strong>です。
+逆向き ―<strong>CLAUDE.md にあって一覧に無い</strong>― は検出されません。
+<strong>S1 がまさにこの穴です</strong>: <code>CLAUDE.md</code> は「3 系統」の説明で実体を <code>.husky/*</code>(ディレクトリ)と書いているのに、
+配列は 2 ファイルしか持っていません。片方向の検査では永久に気づけません。
+</p>
+<p>
+C1 で <code>CLAUDE.md</code> の該当節をポインタに縮めれば、この検査自体が不要になります(3 箇所目が消える)。
+残すなら<strong>双方向にする</strong>のが最低条件です。
+</p>
+<p>
+細部として、<code>--print-forbidden</code> の出力に<strong>重複と非パス</strong>が混ざります
+(<code>AGENTS.md</code> のバックティック抽出由来で <code>delegate-codex.sh</code> や <code>&lt;!-- verify-probe: ... --&gt;</code> が出る)。
+消費側が実在検査で落とすため無害ですが、<code>check-guard-integrity.sh</code> の <code>is_forbidden()</code> は
+<strong>コミット × 変更ファイル × 一覧行</strong>の三重ループでこの雑音を毎回舐めます。出力側で <code>sort -u</code> + 実在検査をしておくのが素直です。
+</p>
+</div>
+
+<div class="card">
+<div><span class="badge b-low">Low</span><span class="finding-title">D2. <code>delegate-codex.sh</code> の単一ファイル化と、自己コピー exec の制約</span></div>
+<div class="meta"><code>.claude/scripts/delegate-codex.sh:76-79</code></div>
+<div class="tbl-wrap">
+<table>
+  <tr><th>ファイル</th><th>総行数</th><th>コメント</th><th>コード</th></tr>
+  <tr><td><code>delegate-codex.sh</code></td><td>1,580</td><td>645(41%)</td><td>781</td></tr>
+  <tr><td><code>check-guard-integrity.sh</code></td><td>349</td><td>152(44%)</td><td>170</td></tr>
+  <tr><td><code>codex-run.sh</code></td><td>451</td><td>86(19%)</td><td>311</td></tr>
+</table>
+</div>
+<p>
+コメント率の高さ自体は<strong>この種のセキュリティ層では正しい判断</strong>です(「なぜこの形でないと駄目か」を実測付きで残さないと、次の変更で必ず戻される)。
+問題は 1 ファイルに<strong>入口検査 5 系統・出口検査 2 系統・プロンプト構築・環境許可リスト・record I/O</strong>が同居していることで、
+今回のような監査で「どの層がどこを守っているか」を追うのに全文読解が要ります。
+</p>
+<p>
+分割を阻んでいるのは自己コピー exec です。共有ファイルのコピーが<strong>ファイル名でハードコードされています</strong>:
+</p>
+<pre><code>cp "$_self_dir/lib-record.sh" "$_copy_dir/lib-record.sh" 2>/dev/null</code></pre>
+<p>
+ここを <code>lib-*.sh</code> のグロブに一般化すれば、<code>lib-forbidden.sh</code>(禁止領域の配列と <code>forbidden_*()</code>)・
+<code>lib-probe.sh</code>(プローブ形式検査)を切り出せます。<code>lib-*.sh</code> は既に
+CI(非実行 + shebang 無し)と SessionStart hook が機械検査する規約を持っているので、<strong>新しい約束事は要りません</strong>。
+これは今回の指摘の中で唯一「壊れていないもの」への提案なので、S1 / B1 の後で構いません。
+</p>
+</div>
+
+<hr>
+
+<h2>5. 妥当と確認した設計判断(変更不要)</h2>
+
+<div class="card">
+<ul>
+  <li><span class="badge b-ok">OK</span><strong>フェイルクローズ / フェイルオープンの非対称</strong> — 委託経路は止める側(fork がある)、保護ブランチ検査は通す側(止めるとコミット不能)。判断が明示され、各所で一貫しています。</li>
+  <li><span class="badge b-ok">OK</span><strong>自己コピー exec(#15)</strong> — <code>--print-forbidden</code> だけ短絡し、かつ <code>CODEX_DELEGATE_NO_SELF_COPY=1</code> の無効化を必ずログに残す形は正しい。「明示的な無効化だけが黙って通るのは非対称」という理由付けも妥当です。</li>
+  <li><span class="badge b-ok">OK</span><strong>環境変数の許可リスト(<code>env -i</code>)</strong> — <code>CODEX_DELEGATE_*</code> を除外し、特に <code>ACK_SECRETS</code> の事実を委託先から観測させない配慮まで入っています。<code>compgen -e</code>(<code>-v</code> でない)の選択も正しい。</li>
+  <li><span class="badge b-ok">OK</span><strong>レート上限判定の範囲限定(#62)</strong> — 「成功時は判定しない」「構造化識別子はトップレベルのエラーイベント行だけ」の 2 段は、自己参照リポジトリの誤判定という実測に基づいた正しい修正です。</li>
+  <li><span class="badge b-ok">OK</span><strong>ナンス付き標識ブロック(#61)+ ホスト警告の分離(#72)</strong> — ナンスを本文確定後に生成する順序、<code>emit</code> を全 8 終端経路の共通位置に置く設計、ESC / CR の除去理由まで正確です。</li>
+  <li><span class="badge b-ok">OK</span><strong>プローブ形式検査の許可リスト方式</strong> — <code>yarn</code> / <code>mvn</code> / <code>pnpm</code> を実測で外し、裸の <code>version</code> と <code>-v</code> を拒否し、<code>python3 -I</code> を必須にした判断はすべて正しい。<strong>形式検査の設計自体には問題がありません</strong>(S2 は形式検査ではなく、実行してよいかという上位の問題)。</li>
+  <li><span class="badge b-ok">OK</span><strong>GitHub Actions</strong> — <code>pull_request</code>(<code>pull_request_target</code> でない)、<code>author_association</code> による絞り込み、<code>permissions: contents: read</code>、シークレット未設定時の <code>::warning::</code> 可視化。いずれも妥当です。</li>
+  <li><span class="badge b-ok">OK</span><strong><code>.husky/*</code> を <code>sh -e</code> で実行する制約への対応</strong> — 終了コードを必ず <code>&amp;&amp; / ||</code> のリストで受ける形と、その理由のコメントは正確です。<code>prepare-commit-msg</code> で <code>$2</code> ではなく <code>.git/MERGE_HEAD</code> を見る判断も実測に裏付けられています。</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>6. 対応順序の提案</h2>
+
+<div class="tbl-wrap">
+<table>
+  <tr><th>順</th><th>項目</th><th>規模</th><th>理由</th></tr>
+  <tr><td>1</td><td><a href="https://github.com/fuji18/claude-codex-template/issues/80">#80</a> <strong>S1</strong> <code>.husky/</code> をディレクトリ単位に + <strong>S3</strong> <code>settings.local.json</code> 追加</td><td>配列 3 行</td><td>最も重い穴が最も安く塞がる。同じ配列への変更なので 1 コミット</td></tr>
+  <tr><td>2</td><td><a href="https://github.com/fuji18/claude-codex-template/issues/81">#81</a> <strong>B1</strong> 出口検査から <code>.log</code> と新規 record を除外</td><td>関数 1 つ</td><td>偽陽性を放置すると S1 修正後の層まで信用されなくなる</td></tr>
+  <tr><td>3</td><td><a href="https://github.com/fuji18/claude-codex-template/issues/82">#82</a> <strong>S2</strong> プローブに非実行形式を追加し、テンプレート既定をそちらへ</td><td>形式検査 1 分岐 + <code>AGENTS.md</code></td><td>唯一残る「委託先 → ホスト実行」の設計上の経路</td></tr>
+  <tr><td>4</td><td><a href="https://github.com/fuji18/claude-codex-template/issues/83">#83</a> <strong>C1</strong> <code>CLAUDE.md</code> 該当節をポインタ化(<strong>D1</strong> も同時に解消)</td><td>文書移動</td><td>サブエージェント spawn ごとに約 1,700 トークン。3 箇所目の単一ソースが消える</td></tr>
+  <tr><td>5</td><td><a href="https://github.com/fuji18/claude-codex-template/issues/84">#84</a> <strong>S4</strong> D3 に「トレーラー無しコミット」の逆向き検査</td><td><code>git log</code> 1 本</td><td>モード C の監査の前提を閉じる</td></tr>
+  <tr><td>6</td><td><a href="https://github.com/fuji18/claude-codex-template/issues/85">#85</a> <strong>C2</strong> レビュー方針の重複解消 / <a href="https://github.com/fuji18/claude-codex-template/issues/86">#86</a> <strong>D2</strong> <code>lib-*.sh</code> への分割</td><td>中</td><td>壊れてはいない。上記が落ち着いてから</td></tr>
+</table>
+</div>
+
+<p class="note">
+1〜3 はいずれも <code>docs/template-dev/CHANGELOG.md</code> と <code>.harness/decisions.jsonl</code> の記録対象です
+(<code>.claude/</code> と <code>AGENTS.md</code> を触るため <code>record-hygiene</code> が発火します)。
+また 1〜3 の変更対象は<strong>すべて委託禁止領域そのもの</strong>なので、Codex には委託せず司令塔または <code>implement-ticket</code> の fork が直接書く必要があります。
+</p>
+
+</div>
+</body>
+</html>
