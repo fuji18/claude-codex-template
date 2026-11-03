@@ -18,7 +18,7 @@
 #
 # 信頼の境界(公開リポジトリで外部の人に止められないため):
 #   - fork からの PR(head のリポジトリが base と違う)は、Closes #N があってもチケットに紐づけない。
-#     判定・枠・要対応のどれにも数えず externalPrs に出すだけ(/fix-pr はブランチを取得できず、
+#     判定・枠・要対応のどれにも数えず untrustedPrs に出すだけ(/fix-pr はブランチを取得できず、
 #     外部のコードを無人で実行することにもなる)
 #   - 変更要求は書き込み権限のあるレビュアー(OWNER / MEMBER / COLLABORATOR)と
 #     .claude/autopilot.json の trustedReviewBots に載ったボットのものだけを数える
