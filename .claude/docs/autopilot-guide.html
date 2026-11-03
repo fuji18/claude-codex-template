@@ -769,9 +769,21 @@ export AUTOPILOT_NOTIFY_CMD="$HOME/autopilot-notify.sh"</pre></div>
                   <td>—</td>
                 </tr>
                 <tr>
+                  <td><code>trustedBots</code></td>
+                  <td>["claude[bot]", "github-actions[bot]"]</td>
+                  <td>
+                    信頼するボットのログイン名。<code>trustedReviewBots</code> と<b>和集合</b>で扱われるので、<b>どちらに書いても両方で効く</b>(キー名は由来の違いだけで、こちらは <code>/fix-pr</code> が<b>本文まで読む</b> Bot)
+                  </td>
+                  <td>—</td>
+                </tr>
+                <tr>
                   <td><code>trustedReviewBots</code></td>
                   <td>[]</td>
-                  <td>変更要求を信頼するレビューボットのログイン名(例: GitHub 上の Codex レビュー)。人は書き込み権限で判定し、それ以外の変更要求と fork の PR は判定に数えない</td>
+                  <td>
+                    同じ「信頼するボット」(こちらは<b>変更要求</b>を数える Bot という由来)。ボット(例: GitHub 上の Codex レビュー
+                    <code>chatgpt-codex-connector[bot]</code>)は<b>どちらか片方に足せばよく</b>、要対応の検出と <code>/fix-pr</code> が読む本文が揃って効く。名前の一致だけでは信頼せず Bot
+                    種別も確認する。人は書き込み権限で判定し、それ以外の変更要求と fork の PR は判定に数えない
+                  </td>
                   <td>—</td>
                 </tr>
                 <tr>
@@ -910,7 +922,7 @@ export AUTOPILOT_NOTIFY_CMD="$HOME/autopilot-notify.sh"</pre></div>
           <details>
             <summary>コメントだけのレビュー指摘は拾われる?</summary>
             <p>
-              ローカルでは拾わない。直してほしい指摘は GitHub で <b>Request changes</b> にする(🔧 要対応になる)か、PR で <code>@claude</code> にメンションする。クラウドの子セッションは PR のイベントで拾う。レビューボット(GitHub 上の Codex レビュー等)の指摘も同じで、コメントとして投稿されるものは拾わない。ボットの Request changes を拾うには <code>trustedReviewBots</code> にログイン名を足す。</p>
+              ローカルでは拾わない。直してほしい指摘は GitHub で <b>Request changes</b> にする(🔧 要対応になる)か、PR で <code>@claude</code> にメンションする。クラウドの子セッションは PR のイベントで拾う。レビューボット(GitHub 上の Codex レビュー等)の指摘も同じで、コメントとして投稿されるものは拾わない。ボットの Request changes を拾うには <code>trustedReviewBots</code>(または <code>trustedBots</code>)にログイン名を足す —— <b>2 キーは 1 つの概念で、どちらに書いても和集合として両方で効く</b>ので、要対応の検出と <code>/fix-pr</code> が読む本文が揃う。</p>
           </details>
           <details>
             <summary>外部の人(fork)の PR が Closes #N を書いていたら?</summary>

@@ -112,8 +112,15 @@ autopilot の子セッションとして動く。親セッション: [親のセ�
 | `maxRuns` | 20 | ローカルループが `claude -p` を起動する回数の上限 |
 | `board` | true | 全体管理 Issue を作成・更新するか |
 | `econ.maxInFlight` | 4 | econ(モード B)での同時進行の上限(draft PR を積む) |
-| `trustedBots` | `["claude[bot]", "github-actions[bot]"]` | `/fix-pr` が**本文まで読む** Bot(`pr-feedback.sh`)。人間は書き込み権限(OWNER / MEMBER / COLLABORATOR)で判定し、それ以外の本文は読まない |
-| `trustedReviewBots` | `[]` | 変更要求(Request changes)を信頼するレビューボットのログイン名(例: `"chatgpt-codex-connector[bot]"`)。人間は書き込み権限(OWNER / MEMBER / COLLABORATOR)で判定し、それ以外の人・ここに無いボットの変更要求は数えない |
+| `trustedBots` | `["claude[bot]", "github-actions[bot]"]` | 信頼するボットのログイン名。`/fix-pr` が**本文まで読む** Bot(`pr-feedback.sh`)という由来のキー |
+| `trustedReviewBots` | `[]` | 同じ「信頼するボット」。**変更要求**(Request changes)を数える Bot(`autopilot-next.sh`)という由来のキー |
+
+**この 2 キーは 1 つの概念で、どちらに書いても両方で効く。** `pr-feedback.sh` と `autopilot-next.sh` は
+両キーの**和集合**を読む。ボット(例: `"chatgpt-codex-connector[bot]"`)は**どちらか片方に足せばよく**、
+変更要求の検出(要対応)と本文の受け渡し(`/fix-pr` が直す対象)が揃って効く。
+どちらのキーも無いときの既定は `["claude[bot]", "github-actions[bot]"]`。
+名前の一致だけでは信頼せず、Bot 種別(`user.type == "Bot"`)も確認する。
+人間は書き込み権限(OWNER / MEMBER / COLLABORATOR)で判定し、それ以外の人・ここに無いボットの本文は読まず、変更要求も数えない。
 
 **チケットの完了は Issue の closed で判定する。** PR の `Closes #N` で Issue が自動クローズされるのは**デフォルトブランチへのマージ時だけ**なので、`baseBranch` が `develop` のプロジェクトでは、マージ後に Issue を手で閉じないと依存が解けず `blocked` / `stalled` が残る。
 
