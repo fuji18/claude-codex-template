@@ -47,6 +47,7 @@
       "Bash(bash .claude/scripts/autopilot-loop.sh:*)",
       "Bash(bash .claude/scripts/harness-mode.sh:*)",
       "Bash(bash .claude/scripts/delegate-codex.sh impl:*)",
+      "Bash(bash .claude/scripts/delegate-codex.sh review:*)",
       "Bash(bash .claude/scripts/codex-run.sh list:*)",
       "Bash(bash .claude/scripts/codex-run.sh show:*)",
       "mcp__context7__resolve-library-id",
