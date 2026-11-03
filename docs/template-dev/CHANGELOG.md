@@ -33,6 +33,12 @@
   (OWNER / MEMBER / COLLABORATOR)だけを数えたうえで、ここに載せたボットのログイン名(GitHub 上の Codex レビュー等)を例外として数えます。`/fix-pr` も同じキーで判断します。
   **既存の `trustedBots`(`/fix-pr` が本文まで読む Bot。`pr-feedback.sh`)とは別のキー**で、両方が併存します。`autopilot-preflight.sh` は両方を「文字列の配列か」で検証します。
   **取り込む側の作業**: `.claude/autopilot.json`(merge 対象)に `"trustedReviewBots": []` を足し、GitHub 上の Codex レビュー等を使うならボットのログイン名を入れてください
+- **[auto]** **`trustedBots` と `trustedReviewBots` を「信頼するボット」という 1 つの概念にまとめ、`pr-feedback.sh` と `autopilot-next.sh` の両方が 2 キーの和集合を読むようにしました。**
+  従来は Codex ボット(例: `chatgpt-codex-connector[bot]`)を `trustedReviewBots` にだけ入れると、`autopilot-next.sh` が変更要求を要対応と数えて `/fix-pr` を起動するのに、
+  `pr-feedback.sh` がそのボットの本文を `untrusted` に回すため、`/fix-pr` が直す対象を受け取れず何も push せずに終わっていました(`review-policy.md` の案内どおりに設定すると必ずこの状態になっていました)。
+  **ボットはどちらのキーに足しても両方で効きます。** キーは互換のため 2 つとも残し、既定値も変えていません(`trustedReviewBots` は `[]` のまま)。
+  あわせて `autopilot-next.sh` の `trustedBots` にも `trustedReviewBots` と同じ型検査(文字列の配列でなければ `exit 2`)と、同じ既定値(キーが無ければ `claude[bot]` / `github-actions[bot]`)を入れました。
+  Bot 種別(`user.type == "Bot"`)の確認はそのまま残しているので、名前が一致するだけの人間のアカウントは信頼されません
 - **[auto]** `/fix-pr` が **fork からの PR を触らない**ようにしました(`isCrossRepository` が `true` なら早期終了。ブランチを取得できず、外部のコードを無人でテスト実行することになるため)。
   判定側(`autopilot-next.sh`)が fork の PR を枠・要対応に数えないのは 2026-10-08 のとおりで、`--summary` には「⚠️ fork の PR は対象外」、JSON では `untrustedPrs` に出ます
 - **[auto]** `/fix-pr` が PR のブランチに移った直後に `git merge --ff-only origin/[head]` で追いつくようにしました(GitHub の画面で修正案をコミットされると push が拒否されていた)
