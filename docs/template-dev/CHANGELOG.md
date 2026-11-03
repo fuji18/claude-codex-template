@@ -42,6 +42,9 @@
   `/autopilot` もクラウドで子セッションを起動できないときはローカル経路に落とさず止まります
 - **[auto]** econ の自動進行が tasklist の検収・振り返り項目(Codex が閉じられない `- [ ]`)で毎回止まる問題に対し、`/next-ticket --plan-only` と `econ.md` に
   「それらは `- [x] ~~…~~（econ: 理由）` で閉じる」規則を足しました。停止メッセージにも原因の候補を出します
+- **[manual]** `.codex/config.toml` に `[mcp_servers.context7]` を足しました。Claude 側の `.mcp.json` と同じ構成で、**版も同じ `@4.1.1` に固定**しています
+  (`npx -y` の未固定取得を避けるため。2026-10-08 で `.mcp.json` に入れたのと同じ方針)。版を上げるときは両方直してください。
+  **取り込む側の作業**: `.codex/config.toml`(merge 対象)に同じブロックを足すか、Codex から context7 を使わないなら足さないでください
 - **[manual]** `.codex/hooks.json` の SessionStart に**特定マシンの絶対パス**(`C:\Project\...`)が入っていたのを直し、各 hook を `${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}` 起点にしました
   (`delegate-codex.sh` は `env -i` で Codex を起動するため `CLAUDE_PROJECT_DIR` が渡らない)。あわせて `.codex/agents/`(Codex 側のサブエージェント定義 5 本)と `.codex/hooks/session-start.sh` を追加し、
   `template-manifest.json` に `.codex/agents/`・`.codex/hooks/`(owned)と `.codex/hooks.json`(merge)を足しました。
