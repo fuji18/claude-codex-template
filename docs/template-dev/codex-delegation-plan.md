@@ -202,7 +202,7 @@ skip すると run の annotation(`::warning`)と job summary に「レビュー
 | --- | --- | --- | --- | --- |
 | `impl` | `.steering/[dir]` | `workspace-write` | tasklist の消化(実装フェーズ本体) | **実装済み**(段階3) |
 | `explore` | 調査指示の文字列 or ファイル | `read-only` | 広域コード探索。サマリーのみ返す | **実装済み**(段階2) |
-| `review` | `<base-ref>` | `read-only` | 敵対的レビュー。指摘リストを返す | **実装済み**(段階2) |
+| `review` | `<base-ref> [.steering/dir]` | `read-only` | 敵対的レビュー。分岐点から作業ツリーまで(未コミット・未追跡を含む)の指摘リストを返す。差分が無ければ起動しない / 出力が形式外なら exit 2(2026-10-31) | **実装済み**(段階2) |
 | `fix-ci` | CI ログのパス | `workspace-write` | CI 失敗の機械的修正 | **未実装**(段階外。スクリプトは「未実装です」と返して exit 2) |
 
 **`--background` は実装していない。** 委託は前景で 1 本ずつ流す(§6)。スクリプトは `--background` を

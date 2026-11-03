@@ -14,6 +14,41 @@
 
 ---
 
+## 2026-11-03
+
+- **[auto]** ⚠️ **`delegate-codex.sh review` が未コミットの変更を見ていなかった不具合を直しました。** 従来は `git diff <base>...HEAD`(コミット済みだけ)をレビューさせており、
+  コミット前に回す運用(`/add-feature` ステップ6)では対象が空のまま「指摘なし」で完了していました。対象を**分岐点から作業ツリーまで**(コミット済み + 未コミット + 未追跡)に変え、
+  あわせて次を足しました:
+  - 差分が無ければ codex を起動せず `exit 2`(枠を使わない)。base-ref がコミットを指さなければ `exit 2`、ローカルの base が origin とずれていれば警告
+  - 出力に指摘行(`[Critical|Major|Minor]`)も「指摘なし」も無い・空なら `exit 2`(結果として扱わない)。`exit 0` のときはホストが数えた件数を `findings: critical=N major=M minor=L` で出す
+  - 第 2 引数にステアリング(`review <base-ref> .steering/[dir]/`)を渡すと design.md / requirements.md を仕様の正として突き合わせる。観点を `code-reviewer` と揃え、重大度ラベルを Critical / Major / Minor に統一
+  - review のサマリー上限を 2000B → 8000B にし、切ったときはホスト警告に全文(`.last.txt`)のパスを出す(マルチバイト文字の途中で切らない)
+  - read-only(explore / review)の前後で作業ツリーの内容を比べ、変わっていれば `exit 2`(sandbox が効いていない場合の多重防御。並行する impl があるときは比べない)。explore も出力が空なら `exit 2`
+- **[manual]** `AGENTS.md` に読み取り専用委託の扱い(§1 冒頭: 1-1 以外を停止条件にしない・§7 の報告形式を使わない)と **§8 Review guidelines** を足しました(GitHub 上の Codex レビューもこの節を読みます)。
+  **取り込む側の作業**: `AGENTS.md`(merge 対象)に §1 冒頭の注記と §8 を写してください
+- **[manual]** 無人実行(autopilot)で重要変更のレビューを回せるよう、`.claude/settings.json` の allow に `Bash(bash .claude/scripts/delegate-codex.sh review:*)` を足しました(review は引数が ref だけの read-only)。
+  **取り込む側の作業**: `.claude/settings.json`(merge 対象)の allow に同じ行を足してください(足さないと事前チェックが ⚠️ で知らせます)
+- **[auto]** `review-policy.md` / `delegation-policy.md` / `/add-feature` ステップ6 に `delegate-codex.sh review` の呼び方と分岐(`findings:` 行・`exit 2` は結果として扱わない)を書きました
+- **[manual]** autopilot の**変更要求**の判定に `.claude/autopilot.json` の新キー `trustedReviewBots` を足しました。従来どおり書き込み権限のあるレビュアー
+  (OWNER / MEMBER / COLLABORATOR)だけを数えたうえで、ここに載せたボットのログイン名(GitHub 上の Codex レビュー等)を例外として数えます。`/fix-pr` も同じキーで判断します。
+  **既存の `trustedBots`(`/fix-pr` が本文まで読む Bot。`pr-feedback.sh`)とは別のキー**で、両方が併存します。`autopilot-preflight.sh` は両方を「文字列の配列か」で検証します。
+  **取り込む側の作業**: `.claude/autopilot.json`(merge 対象)に `"trustedReviewBots": []` を足し、GitHub 上の Codex レビュー等を使うならボットのログイン名を入れてください
+- **[auto]** `/fix-pr` が **fork からの PR を触らない**ようにしました(`isCrossRepository` が `true` なら早期終了。ブランチを取得できず、外部のコードを無人でテスト実行することになるため)。
+  判定側(`autopilot-next.sh`)が fork の PR を枠・要対応に数えないのは 2026-10-08 のとおりで、`--summary` には「⚠️ fork の PR は対象外」、JSON では `untrustedPrs` に出ます
+- **[auto]** `/fix-pr` が PR のブランチに移った直後に `git merge --ff-only origin/[head]` で追いつくようにしました(GitHub の画面で修正案をコミットされると push が拒否されていた)
+- **[auto]** `autopilot-loop.sh`: `claude -p` を `--output-format json` で起動し、**許可されず実行できなかった操作**(`permission_denials`)をログと停止理由に出すようにしました
+  (「状態が変わっていない」で止まったとき、allow に何を足せばよいかが分かる)。判定の一時的な失敗は 2 回まで待って取り直します。
+  **クラウドセッション(`CLAUDE_CODE_REMOTE=true`)では起動を拒否します**(ターン終了後に裏のプロセスが回収されうるため。`AUTOPILOT_ALLOW_REMOTE=1` で強行可)。
+  `/autopilot` もクラウドで子セッションを起動できないときはローカル経路に落とさず止まります
+- **[auto]** econ の自動進行が tasklist の検収・振り返り項目(Codex が閉じられない `- [ ]`)で毎回止まる問題に対し、`/next-ticket --plan-only` と `econ.md` に
+  「それらは `- [x] ~~…~~（econ: 理由）` で閉じる」規則を足しました。停止メッセージにも原因の候補を出します
+- **[manual]** `.codex/hooks.json` の SessionStart に**特定マシンの絶対パス**(`C:\Project\...`)が入っていたのを直し、各 hook を `${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}` 起点にしました
+  (`delegate-codex.sh` は `env -i` で Codex を起動するため `CLAUDE_PROJECT_DIR` が渡らない)。あわせて `.codex/agents/`(Codex 側のサブエージェント定義 5 本)と `.codex/hooks/session-start.sh` を追加し、
+  `template-manifest.json` に `.codex/agents/`・`.codex/hooks/`(owned)と `.codex/hooks.json`(merge)を足しました。
+  **取り込む側の作業**: `.claude/template-manifest.json` と `.codex/hooks.json`(どちらも merge 対象)を同じ形にしてください
+
+---
+
 ## 2026-11-01 (3)
 
 - **[auto]** **担当AIの切り替え**を追加しました。実装・レビューをどの AI に任せるかを `.claude/scripts/route.sh`(新規)が決めます。優先順位は「コマンドの記載(`/next-ticket 12 実装=sonnet レビュー=codex`)> Issue の『担当AI』チェック > `delegate:codex` ラベル > `.claude/routing.json` > 既定(実装 = Codex / レビュー = Sonnet)」。担当名は `codex` / `sonnet` / `opus` / `haiku`、レビューは `auto`(実装と別ベンダー)も可。`/add-feature` `/next-ticket` `/fix-issue` の実装・レビュー手順、ルール(`model-strategy.md` / `review-policy.md`)を `route.sh` 経由に書き換えました。
