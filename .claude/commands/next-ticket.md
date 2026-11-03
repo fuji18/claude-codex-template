@@ -10,6 +10,7 @@ GitHub Issues のチケット(`ticket` ラベル付き Issue)を消化するた�
 
 > **`--plan-only`(econ の自動進行用。`autopilot-loop.sh` が付ける)**: ステップ1〜2 と、ステップ3 のブランチ準備・steering 計画(`/add-feature` ステップ1〜4)だけを行う。`design.md` を書き切って冒頭を `<!-- status: ready -->` にし、`.steering/` を `Skill('commit')` でコミット・push して**終了する**(実装の委託はループがシェルから `delegate-codex.sh impl` で行い、PR は `/ship-ticket` が作る。.claude/rules/mode/econ.md の 1・3・4)。
 > - すでに `.steering/*-issue[番号]-*` がある場合は計画のやり直し: Codex の判断待ち(exit 1)なら `bash .claude/scripts/codex-run.sh list` → `show [id]` で直近の run の判断待ち内容を読み、判断を `design.md` に追記する。計画未完成(exit 5)なら書き切って印を `ready` に変える。どちらもコミットして終了する
+> - **tasklist には Codex が実装できる項目だけを `- [ ]` で残す。** ループは `- [ ]` が 1 つでも残る限り委託を繰り返すが、Codex は検収・振り返り系の項目を閉じられない(econ では検収をしないため)。steering テンプレート由来の「`/check` の全チェックがパス」「README.md を更新(必要に応じて)」「実装後の振り返り」は、`- [x] ~~/check の全チェックがパス~~（econ: 検収は CI に委ねる）` のように取り消し線と理由付きで閉じておく(README の更新が本当に要るなら実装項目として書く)
 > - 担当AIの判定はループが行う(`route.sh implement --issue [番号]` が `codex` 以外のチケットは、ループが `autopilot:manual` を付けて候補から外す)。委託禁止領域に触れる・新規依存が要るチケットなら計画せず、`in-progress` を外して **`autopilot:manual` ラベルを付け**、Issue に理由をコメントして終了する(判定はこのラベルのチケットを自動着手の候補から外すので、ループは次のチケットへ進む。人間が通常モードで `/next-ticket [番号]` を回す)
 
 ---

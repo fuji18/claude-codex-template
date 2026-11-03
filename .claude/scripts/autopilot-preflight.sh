@@ -57,6 +57,13 @@ case "$MODE" in
   *) ng "ハーネスモード: $MODE(自動進行しないモード)" ".harness/mode を normal か econ に戻す(切り替えは人が判断する)" ;;
 esac
 
+# --- 実行環境 ---
+# クラウドセッションではローカルループ(autopilot-loop.sh)が起動を拒否する(ターン終了後に回収されうるため)。
+# /autopilot は子セッションを起動できるときだけクラウド経路で動く
+if [ "${CLAUDE_CODE_REMOTE:-}" = true ]; then
+  info "実行環境: クラウドセッション。ローカルループは起動しない(autopilot-loop.sh が拒否する)" "/autopilot の子セッション方式を使う(子セッションを起動できない環境なら、ローカルの端末から回す)"
+fi
+
 # --- 設定ファイル ---
 CONF=.claude/autopilot.json
 if [ -f "$CONF" ]; then
@@ -70,8 +77,12 @@ if [ -f "$CONF" ]; then
     done
     v="$(jq -r 'if (.econ | type) == "object" and (.econ | has("maxInFlight")) then .econ.maxInFlight | tostring else "" end' "$CONF")"
     case "$v" in '' | *[!0-9]* | 0) [ -n "$v" ] && BAD="$BAD econ.maxInFlight=$v" ;; esac
+    for k in trustedBots trustedReviewBots; do
+      jq -e --arg k "$k" 'if has($k) then (.[$k] | type == "array" and all(.[]; type == "string")) else true end' "$CONF" >/dev/null 2>&1 ||
+        BAD="$BAD $k(文字列の配列にする)"
+    done
     if [ -n "$BAD" ]; then
-      ng "設定: 1 以上の整数でない値がある:$BAD" "$CONF を直す"
+      ng "設定: 不正な値がある:$BAD" "$CONF を直す(数値は 1 以上の整数)"
     else
       ok "設定: $(jq -r '"同時進行 \(.maxInFlight // 2)(econ \(.econ.maxInFlight // 4))/ 待機間隔 \(.pollSeconds // 300) 秒 / 起動上限 \(.maxRuns // 20) 回"' "$CONF")"
     fi
@@ -145,6 +156,7 @@ Bash(bash .claude/scripts/autopilot-next.sh:*)
 Bash(bash .claude/scripts/pr-feedback.sh:*)
 Bash(bash .claude/scripts/harness-mode.sh:*)
 Bash(bash .claude/scripts/delegate-codex.sh impl:*)
+Bash(bash .claude/scripts/delegate-codex.sh review:*)
 Bash(bash .claude/scripts/codex-run.sh list:*)
 Bash(bash .claude/scripts/codex-run.sh show:*)
 EOF

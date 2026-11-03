@@ -32,8 +32,10 @@ description: チケット消化を自動進行する。レビュー待ちの PR 
    ⚠️ と ❌ はチェックスクリプトが決める。司令塔が独自に格上げ・格下げしない。
 
 3. 実行環境で分岐する(モードの扱い: `degraded` はチェックが ❌ にする。`econ` はローカルのみ。クラウドの子セッション起動は枠を使うので econ では行わない):
-   - **ローカル**(既定)→ ステップ2
-   - **クラウド**(`CLAUDE_CODE_REMOTE=true` かつ `mcp__claude-code-remote__create_session` が使える、かつ normal)→ ステップ1
+   - **クラウド**(`CLAUDE_CODE_REMOTE=true`):
+     - `mcp__claude-code-remote__create_session` が使え、かつ normal → ステップ1
+     - それ以外(子セッションを起動できない / econ)→ **開始しない。** 「このクラウドセッションでは自動進行できない(ローカルループは裏のプロセスがターン終了後に回収されうるので使わない)。ローカルの端末で `/autopilot` を実行するか、子セッションを起動できる環境で回す」と伝えて終わる。`autopilot-loop.sh` もクラウドでは起動を拒否する
+   - **ローカル**(`CLAUDE_CODE_REMOTE` が `true` でない)→ ステップ2
 
 ## ステップ1: クラウド(司令塔 = 振り分け役、チケットは子セッション)
 
@@ -110,7 +112,11 @@ autopilot の子セッションとして動く。親セッション: [親のセ�
 | `maxRuns` | 20 | ローカルループが `claude -p` を起動する回数の上限 |
 | `board` | true | 全体管理 Issue を作成・更新するか |
 | `econ.maxInFlight` | 4 | econ(モード B)での同時進行の上限(draft PR を積む) |
+| `trustedBots` | `["claude[bot]", "github-actions[bot]"]` | `/fix-pr` が**本文まで読む** Bot(`pr-feedback.sh`)。人間は書き込み権限(OWNER / MEMBER / COLLABORATOR)で判定し、それ以外の本文は読まない |
+| `trustedReviewBots` | `[]` | 変更要求(Request changes)を信頼するレビューボットのログイン名(例: `"chatgpt-codex-connector[bot]"`)。人間は書き込み権限(OWNER / MEMBER / COLLABORATOR)で判定し、それ以外の人・ここに無いボットの変更要求は数えない |
 
 **チケットの完了は Issue の closed で判定する。** PR の `Closes #N` で Issue が自動クローズされるのは**デフォルトブランチへのマージ時だけ**なので、`baseBranch` が `develop` のプロジェクトでは、マージ後に Issue を手で閉じないと依存が解けず `blocked` / `stalled` が残る。
+
+**fork からの PR は判定に数えない。** `Closes #N` があってもチケットに紐づけず、枠・要対応のどちらにも入れない(外部の人が PR を開くだけで自動進行が止まったり、外部のコードを無人で実行したりしないため)。`--summary` の「外部(fork)PR」に出る。取り込むかどうかは人間が判断する。
 
 **独立性の判定は `depends:` 行の `#N` だけを見る。** 依存先が未マージ(PR がレビュー待ち)のチケットは着手しない(ブランチを積み重ねない)。依存を書いていないのに同じファイルを触るチケット同士はコンフリクトしうる —— 起きたら `/fix-pr` が base を取り込んで解消する。頻発するなら `/setup-tickets` で `depends:` を足す。
