@@ -33,4 +33,8 @@
   - 理由は起動主体とコスト: `/code-review ultra` は**ユーザー起動 + 課金**で司令塔からは起動できず、温存したい Claude 枠を消費する。`delegate-codex.sh review` は read-only で司令塔が自分で起動でき、別ベンダーの第二意見にもなる
   - `/code-review ultra` を**ユーザーに提案する**のは次の 2 つだけ: (1) **その差分自体を Codex が書いた**(impl 委託の成果。同じベンダーの自己レビューは第二意見にならない)、(2) **Codex が使えない**(`exit 3` / レート上限)
   - 通常の大きめ差分にはどちらも使わない(主レビューは実装中の `code-reviewer`)
+  - **呼び方**: 検証(`/add-feature` ステップ6)で `code-reviewer` と並べて `bash .claude/scripts/delegate-codex.sh review origin/[baseBranch] .steering/[dir]/` を実行する。対象は分岐点から**作業ツリーまで**(未コミット・未追跡を含む)なので、コミット前に回してよい。差分が無ければ codex を起動せず `exit 2` で返る(枠を使わない)
+  - **分岐は終了コードと `findings:` 行だけで行う**: `exit 0` なら `findings: critical=N major=M minor=L`(ホストが数えた件数)を見て、Critical / Major は `code-reviewer` の指摘と同じく修正する(ラベルは共通)。`exit 2` は出力が形式外・空・作業ツリーが変わった等で、**結果として扱わない**(「指摘なし」と読み替えない)。`exit 3` / `4` は上の (2) に当たる
+  - 出力が長いとサマリーは先頭 8000 バイトで切られ、ホスト警告に全文のパス(`.harness/codex-runs/[id].last.txt`)が出る。切られたら全文を読んでから判断する
+- **GitHub 上の Codex レビュー(`@codex review` 等)を使う場合**: そのボットのログイン名を `.claude/autopilot.json` の `trustedReviewBots` に足す。`/fix-pr` と autopilot の判定は、書き込み権限のあるレビュアーとこのリストのボットの指摘だけを扱う。ボットのレビューがコメント(COMMENTED)として投稿される場合、ローカルの autopilot はそれを「要対応」として検出しない(クラウドの子セッションは PR イベントで拾う)。ローカルで拾いたいときは `/fix-pr [PR番号]` を手で回す。Codex の GitHub レビューは `AGENTS.md` §8(Review guidelines)を読む
 - **UI/画面のレビュー**: `docs/ui-design-guidelines.md`(スタック非依存の UI 基準)を参照し、§6 のチェックリストを `code-reviewer` または Design プラグイン(`/design:critique`)で当てる。**Design プラグインは画面作成があるプロジェクトのときだけ `/kickoff` フェーズ1.5 で導入を判断する**(画面が無いプロジェクトには入れない)

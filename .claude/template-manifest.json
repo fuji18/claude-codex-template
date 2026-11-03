@@ -18,7 +18,9 @@
     ".github/workflows/record-hygiene.yml",
     ".github/pull_request_template.md",
     "docs/ui-design-request-template.md",
-    ".codex/skills/"
+    ".codex/skills/",
+    ".codex/agents/",
+    ".codex/hooks/"
   ],
   "merge": [
     ".github/workflows/ci.yml",
@@ -40,7 +42,8 @@
     ".claude/hooks/session-start.sh",
     ".claude/scripts/lint-on-edit.sh",
     ".prettierignore",
-    ".secretlintignore"
+    ".secretlintignore",
+    ".codex/hooks.json"
   ],
   "never": [
     "CLAUDE.md",

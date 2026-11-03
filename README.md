@@ -324,12 +324,12 @@ bash .claude/scripts/check-guard-integrity.sh degraded && echo "ガードレー�
 
 判定軸はモデルの賢さではなく**往復コスト**で、「仕様が書き切れているか × 途中で設計判断が発生するか」で決める。ルールの全文は `.claude/rules/lead/delegation-policy.md`(司令塔にのみ注入される)。
 
-| 粒度                                | 経路                                                                                              |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------- |
-| tasklist 1〜3 項目                  | `delegate-codex.sh impl`                                                                          |
-| **チケット 1 枚**(1 Issue = 1 PR)   | 同上 + Issue に **`delegate:codex`** ラベル。`/next-ticket` が tasklist を分割せず 1 回で委託する |
-| 行き詰まり調査 / 重要変更のレビュー | `delegate-codex.sh explore` / `review`(read-only)                                                 |
-| 委託しない                          | 委託禁止領域・新規依存の追加(sandbox はネットワーク無効)・`.git` を書き換えるタスク               |
+| 粒度                                | 経路                                                                                                    |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| tasklist 1〜3 項目                  | `delegate-codex.sh impl`                                                                                |
+| **チケット 1 枚**(1 Issue = 1 PR)   | 同上 + Issue に **`delegate:codex`** ラベル。`/next-ticket` が tasklist を分割せず 1 回で委託する       |
+| 行き詰まり調査 / 重要変更のレビュー | `delegate-codex.sh explore` / `review <base-ref> [.steering/dir]`(read-only。review は未コミットも対象) |
+| 委託しない                          | 委託禁止領域・新規依存の追加(sandbox はネットワーク無効)・`.git` を書き換えるタスク                     |
 
 > **委託は「`design.md` を書き切るコスト」<「実装ループのコスト」のときだけ得になる。** 新規パターンの 1 例目は前者が大きいので委託しない(参照実装は司令塔が書く)。
 

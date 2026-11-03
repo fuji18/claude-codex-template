@@ -128,8 +128,10 @@ description: 新機能を既存パターンに従って、完全に無停止で�
 4. 以下の**両方**に該当する場合のみ、`implementation-validator` サブエージェントも追加で起動する(トークン最適化のため通常はスキップ):
   - 変更が 200 行以上
   - 認証・決済・データ永続化・外部 API 連携など、スペック整合が特に重要な機能
+
+   同じ条件(200 行以上 かつ 重要変更)では、`.claude/rules/lead/review-policy.md` に従い `bash .claude/scripts/delegate-codex.sh review origin/[baseBranch] .steering/[dir]/` も**同じタイミングで**回す(コミット前でよい。未コミットの差分も対象)。ステップ2 で担当が既に `codex` に解決している場合は二重に回さない。その差分自体を Codex が書いた場合は第二意見にならないので回さない(review-policy.md の昇格先を参照)
 5. 両方の結果が返ったら、司令塔が対応する:
-  - レビューの `[Critical]` / `[Major]` の指摘は修正する。`[Minor]` は tasklist.md の申し送り事項に記録する
+  - レビューの `[Critical]` / `[Major]` の指摘は修正する。`[Minor]` は tasklist.md の申し送り事項に記録する。`delegate-codex.sh review` を回した場合は `findings:` 行の Critical / Major も同じ扱いにする(`exit 2` は結果として扱わない)
   - test-runner の「未解決の問題」(設計判断を伴うテスト失敗・型エラー)は司令塔が分析して修正する
 6. 修正した場合は test-runner を再起動して失敗したチェックのみ再実行させる(**修正サイクルは最大3周まで**)。テストの期待値をテストを通すためだけに書き換える、`@ts-ignore` や `eslint-disable` で隠蔽する、といった対処は禁止。3周で解消しない場合は申し送り事項に記録して次に進む。
 7. Codex に委託した場合、検収が通った時点で `bash .claude/scripts/codex-run.sh accept [run-id]` を実行し、run record の `accepted` を立てる(run-id は委託時の出力に出ている)。立て忘れると未検収の記録が残り続ける。

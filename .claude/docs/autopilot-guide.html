@@ -657,7 +657,7 @@ export AUTOPILOT_NOTIFY_CMD="$HOME/autopilot-notify.sh"</pre></div>
                 </tr>
                 <tr>
                   <td>前回の実行後も状態が変わっていない</td>
-                  <td>Claude が進めなかった(設計判断が要る・同じ失敗の繰り返し)。該当チケットの <code>.steering/</code> の <code>tasklist.md</code> と <code>design.md</code> を見て、判断を design.md に書き足してから再起動。対話で <code>/next-ticket 番号</code> を回してもよい</td>
+                  <td>Claude が進めなかった(設計判断が要る・同じ失敗の繰り返し・許可されていない操作に当たった)。停止理由に「許可されず実行できなかった操作」が並んでいれば、必要なものを <code>.claude/settings.json</code> の allow に足す。それ以外は該当チケットの <code>.steering/</code> の <code>tasklist.md</code> と <code>design.md</code> を見て、判断を design.md に書き足してから再起動。対話で <code>/next-ticket 番号</code> を回してもよい</td>
                 </tr>
                 <tr>
                   <td>in-progress だが PR もブランチも無い</td>
@@ -769,6 +769,12 @@ export AUTOPILOT_NOTIFY_CMD="$HOME/autopilot-notify.sh"</pre></div>
                   <td>—</td>
                 </tr>
                 <tr>
+                  <td><code>trustedReviewBots</code></td>
+                  <td>[]</td>
+                  <td>変更要求を信頼するレビューボットのログイン名(例: GitHub 上の Codex レビュー)。人は書き込み権限で判定し、それ以外の変更要求と fork の PR は判定に数えない</td>
+                  <td>—</td>
+                </tr>
+                <tr>
                   <td>—</td>
                   <td><code>--permission-mode acceptEdits</code></td>
                   <td><code>claude -p</code> に渡す引数</td>
@@ -871,6 +877,7 @@ export AUTOPILOT_NOTIFY_CMD="$HOME/autopilot-notify.sh"</pre></div>
           </p>
           <ul>
             <li>通常モード専用(econ では子セッションを起動しない)</li>
+            <li>子セッションを起動できない環境では開始しない。クラウドのコンテナでは裏のプロセスがターン終了後に回収されうるので、<code>autopilot-loop.sh</code> もクラウド(<code>CLAUDE_CODE_REMOTE=true</code>)では起動を拒否する</li>
             <li>変化の無い見直しが 6 回(約 6 時間)続くと親は終了する。再開は <code>/autopilot</code></li>
             <li>全体管理 Issue はローカルと共通</li>
           </ul>
@@ -903,7 +910,11 @@ export AUTOPILOT_NOTIFY_CMD="$HOME/autopilot-notify.sh"</pre></div>
           <details>
             <summary>コメントだけのレビュー指摘は拾われる?</summary>
             <p>
-              ローカルでは拾わない。直してほしい指摘は GitHub で <b>Request changes</b> にする(🔧 要対応になる)か、PR で <code>@claude</code> にメンションする。クラウドの子セッションは PR のイベントで拾う。
+              ローカルでは拾わない。直してほしい指摘は GitHub で <b>Request changes</b> にする(🔧 要対応になる)か、PR で <code>@claude</code> にメンションする。クラウドの子セッションは PR のイベントで拾う。レビューボット(GitHub 上の Codex レビュー等)の指摘も同じで、コメントとして投稿されるものは拾わない。ボットの Request changes を拾うには <code>trustedReviewBots</code> にログイン名を足す。</p>
+          </details>
+          <details>
+            <summary>外部の人(fork)の PR が Closes #N を書いていたら?</summary>
+            <p>判定には数えない(枠も要対応も変わらない)。<code>--summary</code> と <code>/autopilot status</code> に「⚠️ fork の PR は対象外」として出るので、取り込むかどうかは人が決める。
             </p>
           </details>
         </section>
