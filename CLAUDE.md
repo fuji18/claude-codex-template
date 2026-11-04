@@ -44,6 +44,7 @@
 - `.claude/rules/`: テンプレート所有の共通ルール(全エージェント共通。上記でインポート)。`/sync-template` の同期対象
   - `.claude/rules/lead/`: 司令塔専用ルール(SessionStart hook が注入。サブエージェントには載らない)
 - `.claude/docs/`: プロジェクト開始後も参照が続く判断ガイド(MCP 導入の判断 / serena 再導入の目安と手順)。`docs/template-dev/` と違い削除しない
+- `.agents/`: **生成物。直接編集しない。** Codex CLI が読むスキル置き場(Claude Code は `.claude/skills/` しか読まず、Codex は `.agents/skills/` しか読まないため、正の `.claude/skills/` から機械的に複製する)。生成・検査は `bash .claude/scripts/sync-agents-skills.sh [--check]`、乖離は CI の `harness-integrity` が止める
 - `.steering/`: 作業単位の計画とタスクリスト。作業ごとに新規作成し、**履歴としてコミットして保持する**
 
 詳細は `README.md` を参照。

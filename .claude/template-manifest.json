@@ -48,6 +48,7 @@
   "never": [
     "CLAUDE.md",
     "README.md",
+    ".agents/",
     "LICENSE",
     "docs/",
     ".steering/",

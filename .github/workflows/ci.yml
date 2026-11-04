@@ -150,6 +150,20 @@ jobs:
             bash .claude/scripts/test-sync-template.sh
           fi
 
+      # Codex 側のスキル(.agents/skills/)が .claude/skills/ と一致しているかを見る。
+      # 両者は読み手が違うだけの同じスキルで、.agents/ は生成物。手で足した・正だけ直した
+      # といったズレは、Codex からだけ古いスキルが見える形で静かに効く。
+      - name: Check generated agent skills
+        run: |
+          if [ -f .claude/scripts/sync-agents-skills.sh ]; then
+            if ! DRIFT="$(bash .claude/scripts/sync-agents-skills.sh --check)"; then
+              printf '%s\n' "$DRIFT" | while IFS= read -r line; do
+                [ -n "$line" ] && echo "::error::$line"
+              done
+              exit 1
+            fi
+          fi
+
       # 担当AIの判定(route.sh)の動作確認(一時ディレクトリ内で完結)
       - name: Test AI routing
         run: |

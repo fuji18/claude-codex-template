@@ -20,3 +20,7 @@ dist/
 
 # AGENTS.md は CLAUDE.md と同じくドキュメント扱い(表の整形差分がノイズになる)
 AGENTS.md
+
+# .claude/skills/ の生成物(sync-agents-skills.sh)。正の側が .claude/ で除外されているため
+# こちらだけ整形すると生成のたびに乖離検査が落ちる。
+.agents/
