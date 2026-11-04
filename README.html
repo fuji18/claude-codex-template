@@ -1,0 +1,4106 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>claude-codex-template</title>
+    <style>
+      :root {
+        --bg: #f7f7f5;
+        --surface: #ffffff;
+        --surface-2: #f0f0ec;
+        --text: #1f2328;
+        --muted: #5b616b;
+        --border: #dcdcd6;
+        --accent: #3b5bdb;
+        --accent-soft: #e7ecff;
+        --ok: #2b8a3e;
+        --ok-soft: #e6f4ea;
+        --warn: #b35c00;
+        --warn-soft: #fff1e0;
+        --danger: #c92a2a;
+        --danger-soft: #fdecec;
+        --code-bg: #f3f3ef;
+        --radius: 10px;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) {
+          --bg: #15171a;
+          --surface: #1d2024;
+          --surface-2: #24282d;
+          --text: #e6e8eb;
+          --muted: #a0a7b0;
+          --border: #343a41;
+          --accent: #8ea6ff;
+          --accent-soft: #232b45;
+          --ok: #69c27f;
+          --ok-soft: #1c2e22;
+          --warn: #f0a050;
+          --warn-soft: #33271a;
+          --danger: #ff8787;
+          --danger-soft: #3a1f21;
+          --code-bg: #24282d;
+        }
+      }
+      :root[data-theme='dark'] {
+        --bg: #15171a;
+        --surface: #1d2024;
+        --surface-2: #24282d;
+        --text: #e6e8eb;
+        --muted: #a0a7b0;
+        --border: #343a41;
+        --accent: #8ea6ff;
+        --accent-soft: #232b45;
+        --ok: #69c27f;
+        --ok-soft: #1c2e22;
+        --warn: #f0a050;
+        --warn-soft: #33271a;
+        --danger: #ff8787;
+        --danger-soft: #3a1f21;
+        --code-bg: #24282d;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          15px/1.75 -apple-system,
+          BlinkMacSystemFont,
+          'Hiragino Sans',
+          'Noto Sans JP',
+          'Yu Gothic UI',
+          sans-serif;
+      }
+      .wrap {
+        display: grid;
+        grid-template-columns: 236px minmax(0, 1fr);
+        gap: 32px;
+        max-width: 1160px;
+        margin: 0 auto;
+        padding: 32px 24px 80px;
+      }
+      nav {
+        position: sticky;
+        top: 24px;
+        align-self: start;
+        font-size: 13.5px;
+      }
+      nav .title {
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+      nav a {
+        display: block;
+        color: var(--muted);
+        text-decoration: none;
+        padding: 3px 0 3px 10px;
+        border-left: 2px solid var(--border);
+      }
+      nav a:hover {
+        color: var(--accent);
+        border-left-color: var(--accent);
+      }
+      main {
+        min-width: 0;
+      }
+      header h1 {
+        margin: 0 0 4px;
+        font-size: 28px;
+        line-height: 1.3;
+      }
+      header .lead {
+        margin: 0 0 16px;
+        color: var(--muted);
+      }
+      section {
+        margin-top: 44px;
+      }
+      h2 {
+        font-size: 20px;
+        margin: 0 0 12px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid var(--border);
+      }
+      h3 {
+        font-size: 16px;
+        margin: 24px 0 8px;
+      }
+      h4 {
+        font-size: 14px;
+        margin: 18px 0 6px;
+        color: var(--muted);
+      }
+      p {
+        margin: 8px 0;
+      }
+      ul,
+      ol {
+        margin: 8px 0;
+        padding-left: 22px;
+      }
+      li {
+        margin: 4px 0;
+      }
+      a {
+        color: var(--accent);
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.9em;
+        background: var(--code-bg);
+        padding: 1px 5px;
+        border-radius: 4px;
+      }
+      .cmd {
+        position: relative;
+        background: var(--code-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px 84px 12px 14px;
+        margin: 10px 0;
+        overflow-x: auto;
+      }
+      .cmd pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-all;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 13.5px;
+        line-height: 1.6;
+      }
+      .cmd .c {
+        color: var(--muted);
+      }
+      .copy {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        font: inherit;
+        font-size: 12px;
+        padding: 3px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+      }
+      .copy:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .pillars {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 10px;
+        margin: 16px 0;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 14px 16px;
+      }
+      .card .k {
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 4px;
+      }
+      .card .v {
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+      .card p {
+        margin: 0;
+        font-size: 13.5px;
+      }
+      .card.accent {
+        border-top: 3px solid var(--accent);
+      }
+      .card.sub {
+        border-top: 3px solid var(--ok);
+      }
+      .note {
+        border-radius: var(--radius);
+        padding: 10px 14px;
+        margin: 12px 0;
+        border: 1px solid var(--border);
+        background: var(--surface);
+      }
+      .note.info {
+        background: var(--accent-soft);
+        border-color: transparent;
+      }
+      .note.warn {
+        background: var(--warn-soft);
+        border-color: transparent;
+      }
+      .note.danger {
+        background: var(--danger-soft);
+        border-color: transparent;
+      }
+      .note p:first-child {
+        margin-top: 0;
+      }
+      .note p:last-child {
+        margin-bottom: 0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+        font-size: 14px;
+        margin: 10px 0;
+      }
+      th,
+      td {
+        text-align: left;
+        vertical-align: top;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border);
+      }
+      th {
+        background: var(--surface-2);
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      tr:last-child td {
+        border-bottom: 0;
+      }
+      .tablewrap {
+        overflow-x: auto;
+      }
+      .nowrap {
+        white-space: nowrap;
+      }
+      ol.steps {
+        list-style: none;
+        counter-reset: s;
+        padding: 0;
+        margin: 10px 0;
+      }
+      ol.steps > li {
+        counter-increment: s;
+        position: relative;
+        padding: 10px 14px 10px 50px;
+        margin-bottom: 8px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+      }
+      ol.steps > li::before {
+        content: counter(s);
+        position: absolute;
+        left: 14px;
+        top: 10px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: var(--accent);
+        color: var(--surface);
+        font-size: 13px;
+        font-weight: 700;
+        text-align: center;
+        line-height: 24px;
+      }
+      .flow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 8px;
+        margin: 12px 0;
+      }
+      .flow .box {
+        flex: 1 1 160px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 10px 12px;
+        font-size: 13.5px;
+      }
+      .flow .box b {
+        display: block;
+        margin-bottom: 2px;
+      }
+      .flow .box.lead {
+        border-top: 3px solid var(--accent);
+      }
+      .flow .box.sub {
+        border-top: 3px solid var(--ok);
+      }
+      .flow .box.human {
+        border-top: 3px solid var(--warn);
+      }
+      .flow .box.ci {
+        border-top: 3px solid var(--muted);
+      }
+      .flow .arrow {
+        align-self: center;
+        color: var(--muted);
+      }
+      .legend {
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+      .legend span {
+        display: inline-block;
+        margin-right: 14px;
+      }
+      .legend i {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+        margin-right: 4px;
+        vertical-align: -1px;
+      }
+      .two {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 12px;
+      }
+      details {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 8px 14px;
+        margin: 8px 0;
+      }
+      summary {
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .tree {
+        background: var(--code-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 14px;
+        overflow-x: auto;
+      }
+      .tree pre {
+        margin: 0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 13px;
+        line-height: 1.65;
+      }
+      .theme {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        font: inherit;
+        font-size: 12px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+      }
+      footer {
+        margin-top: 56px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      /* --- 章の見出しと現在地 --- */
+      .sectnum {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 25px;
+        height: 25px;
+        margin-right: 9px;
+        border-radius: 7px;
+        background: var(--accent);
+        color: var(--surface);
+        font-size: 13px;
+        font-weight: 700;
+        vertical-align: 1px;
+      }
+      .chaplead {
+        margin: 0 0 20px;
+        padding-left: 11px;
+        border-left: 3px solid var(--border);
+        color: var(--muted);
+        font-size: 13.5px;
+      }
+      nav a .sub {
+        display: block;
+        font-size: 11px;
+        line-height: 1.5;
+        opacity: 0.8;
+      }
+      nav a.active {
+        color: var(--accent);
+        border-left-color: var(--accent);
+        font-weight: 700;
+      }
+      /* --- 誰が動かすのか(アクター) --- */
+      .actors {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 14px 0 18px;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+        font-weight: 700;
+        padding: 3px 11px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        white-space: nowrap;
+      }
+      .chip::before {
+        content: '';
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--muted);
+        flex: none;
+      }
+      .chip i {
+        font-style: normal;
+        font-weight: 400;
+        color: var(--muted);
+      }
+      .chip.human::before {
+        background: var(--warn);
+      }
+      .chip.lead::before {
+        background: var(--accent);
+      }
+      .chip.sub::before {
+        background: var(--ok);
+      }
+      .chip.auto::before {
+        background: var(--muted);
+      }
+      /* --- 3 つのループ --- */
+      .loops {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 10px;
+        margin: 12px 0;
+      }
+      .loop {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-top: 3px solid var(--muted);
+        border-radius: var(--radius);
+        padding: 12px 14px;
+      }
+      .loop.human {
+        border-top-color: var(--warn);
+      }
+      .loop.lead {
+        border-top-color: var(--accent);
+      }
+      .loop.auto {
+        border-top-color: var(--muted);
+      }
+      .loop .when {
+        font-size: 11.5px;
+        color: var(--muted);
+      }
+      .loop .name {
+        font-weight: 700;
+        margin: 2px 0 6px;
+      }
+      .loop ol {
+        margin: 0;
+        padding-left: 18px;
+        font-size: 13px;
+      }
+      /* --- きっかけ / 動かす人 / すること --- */
+      .lanes {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+        background: var(--surface);
+        margin: 12px 0;
+      }
+      .lanehead,
+      .lane {
+        display: grid;
+        grid-template-columns: 196px 148px minmax(0, 1fr);
+      }
+      .lanehead {
+        background: var(--surface-2);
+        font-size: 11.5px;
+        font-weight: 700;
+        color: var(--muted);
+      }
+      .lanehead > span {
+        padding: 6px 12px;
+      }
+      .lane {
+        border-top: 1px solid var(--border);
+      }
+      .lane > div {
+        padding: 10px 12px;
+      }
+      .lane .trig {
+        font-size: 13px;
+        color: var(--muted);
+        border-left: 4px solid var(--muted);
+      }
+      .lane.human .trig {
+        border-left-color: var(--warn);
+      }
+      .lane.lead .trig {
+        border-left-color: var(--accent);
+      }
+      .lane.sub .trig {
+        border-left-color: var(--ok);
+      }
+      .lane .ph {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 5px;
+        margin-right: 7px;
+        border-radius: 6px;
+        background: var(--surface-2);
+        color: var(--text);
+        font-size: 11.5px;
+      }
+      .lane .who {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        align-content: start;
+      }
+      .lane .who .chip {
+        font-size: 11.5px;
+        padding: 2px 9px;
+      }
+      .lane .do {
+        font-size: 13.5px;
+      }
+      /* --- 分岐 --- */
+      .branches {
+        display: grid;
+        gap: 8px;
+        margin: 10px 0;
+      }
+      .branchrow {
+        display: grid;
+        grid-template-columns: 132px minmax(0, 1fr);
+        gap: 12px;
+        align-items: start;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--muted);
+        border-radius: var(--radius);
+        padding: 9px 13px;
+        font-size: 13.5px;
+      }
+      .branchrow .cond {
+        font-weight: 700;
+      }
+      .branchrow.ok {
+        border-left-color: var(--ok);
+      }
+      .branchrow.warn {
+        border-left-color: var(--warn);
+      }
+      .branchrow.danger {
+        border-left-color: var(--danger);
+      }
+      .branchrow.sub {
+        border-left-color: var(--ok);
+      }
+      .branchrow.lead {
+        border-left-color: var(--accent);
+      }
+      .tag {
+        display: inline-block;
+        font-size: 11.5px;
+        font-weight: 700;
+        padding: 1px 8px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        margin-right: 5px;
+      }
+      .tag.ok {
+        background: var(--ok-soft);
+        color: var(--ok);
+      }
+      .tag.warn {
+        background: var(--warn-soft);
+        color: var(--warn);
+      }
+      .tag.off {
+        background: var(--surface-2);
+        color: var(--muted);
+      }
+      /* --- 判定(はい / いいえ) --- */
+      .decide {
+        display: grid;
+        gap: 8px;
+        margin: 12px 0;
+      }
+      .q {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 10px 13px;
+      }
+      .q .ask {
+        font-weight: 700;
+        font-size: 13.5px;
+        margin-bottom: 7px;
+      }
+      .q .outs {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 8px;
+      }
+      .q .ans {
+        font-size: 13px;
+        border-radius: 8px;
+        padding: 6px 11px;
+      }
+      .q .ans.stop {
+        background: var(--danger-soft);
+      }
+      .q .ans.go {
+        background: var(--ok-soft);
+      }
+      /* --- パス一覧 --- */
+      .pathgroup {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+        background: var(--surface);
+        margin: 10px 0;
+      }
+      .pathhead {
+        padding: 8px 12px;
+        background: var(--surface-2);
+        font-size: 12.5px;
+        color: var(--muted);
+        border-left: 4px solid var(--muted);
+      }
+      .pathhead b {
+        color: var(--text);
+        margin-right: 10px;
+      }
+      .pathhead.danger {
+        border-left-color: var(--danger);
+      }
+      .pathhead.warn {
+        border-left-color: var(--warn);
+      }
+      .pathhead.accent {
+        border-left-color: var(--accent);
+      }
+      .pathrow {
+        display: grid;
+        grid-template-columns: 252px minmax(0, 1fr);
+        gap: 12px;
+        padding: 7px 12px;
+        border-top: 1px solid var(--border);
+        font-size: 13px;
+      }
+      .pathrow > span {
+        color: var(--muted);
+      }
+      /* --- 選べるモデル --- */
+      .picks {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(235px, 1fr));
+        gap: 10px;
+        margin: 12px 0;
+      }
+      .pick {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-top: 3px solid var(--muted);
+        border-radius: var(--radius);
+        padding: 12px 14px;
+      }
+      .pick.codex {
+        border-top-color: var(--ok);
+      }
+      .pick.claude {
+        border-top-color: var(--accent);
+      }
+      .pick.pick-auto {
+        border-top-color: var(--warn);
+      }
+      .pick .v {
+        font-weight: 700;
+        font-size: 15px;
+        margin-bottom: 5px;
+      }
+      .pick .tags {
+        margin-bottom: 7px;
+      }
+      .pick .boot {
+        font-size: 12.5px;
+        color: var(--muted);
+        margin: 0 0 4px;
+      }
+      .pick p {
+        margin: 4px 0 0;
+        font-size: 13px;
+      }
+      @media (max-width: 860px) {
+        .pathrow {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 2px;
+        }
+        .lanehead {
+          display: none;
+        }
+        .lane {
+          grid-template-columns: minmax(0, 1fr);
+          border-left: 4px solid var(--muted);
+        }
+        .lane.human {
+          border-left-color: var(--warn);
+        }
+        .lane.lead {
+          border-left-color: var(--accent);
+        }
+        .lane.sub {
+          border-left-color: var(--ok);
+        }
+        .lane .trig {
+          border-left: 0;
+          padding-bottom: 2px;
+        }
+        .lane .who {
+          padding-top: 0;
+          padding-bottom: 2px;
+        }
+        .branchrow {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 2px;
+        }
+        .wrap {
+          grid-template-columns: minmax(0, 1fr);
+          padding: 20px 16px 72px;
+          gap: 0;
+        }
+        nav {
+          position: static;
+          margin-bottom: 8px;
+        }
+        nav a {
+          display: inline-block;
+          border-left: 0;
+          padding: 2px 8px 2px 0;
+        }
+        .flow .arrow {
+          transform: rotate(90deg);
+          width: 100%;
+          text-align: center;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <nav aria-label="目次">
+        <div class="title">目次</div>
+        <a href="#recent">直近の改善<span class="sub">何が変わったか</span></a>
+        <a href="#start"
+          >1. プロジェクト開始手順<span class="sub">最初の 1 回だけ</span></a
+        >
+        <a href="#flow"
+          >2. 実運用フロー<span class="sub">誰が・何を機に・どう動く</span></a
+        >
+        <a href="#automation"
+          >3. 自動化層の一覧<span class="sub">忘れても起きること</span></a
+        >
+        <a href="#codex"
+          >4. Codex 併用の委託運用<span class="sub">実装を外に出す</span></a
+        >
+        <a href="#models"
+          >5. モデル運用方針<span class="sub">どの作業を誰が</span></a
+        >
+        <a href="#commands"
+          >6. コマンド早見表<span class="sub">何を打てばよいか</span></a
+        >
+        <a href="#sync"
+          >7. テンプレート更新の取り込み<span class="sub"
+            >後から追いつく</span
+          ></a
+        >
+        <a href="#tree"
+          >8. ディレクトリ構造<span class="sub">どこに何があるか</span></a
+        >
+        <a href="#disclaimer"
+          >免責事項・ライセンス<span class="sub">保証しないこと</span></a
+        >
+      </nav>
+
+      <main>
+        <header>
+          <h1>claude-codex-template</h1>
+          <p class="lead">
+            スペック駆動開発・ハーネスエンジニアリング・Codex
+            併用委託をひとつにした Claude Code プロジェクトテンプレート。
+          </p>
+          <div class="pillars">
+            <div class="card accent">
+              <div class="v">スペック駆動開発</div>
+              <p>
+                永続ドキュメント(<code>docs/</code>)で「何を作るか」を決め、作業単位のステアリングファイル(<code>.steering/</code>)で「今回何をするか」を計画してから実装する。
+              </p>
+            </div>
+            <div class="card accent">
+              <div class="v">ハーネスエンジニアリング</div>
+              <p>
+                hooks / permissions / git hooks / CI
+                で「必ず起こすべきこと」を仕組みで保証する。散文の運用ルールに頼らない。
+              </p>
+            </div>
+            <div class="card accent">
+              <div class="v">役割別のモデル運用</div>
+              <p>
+                司令塔は Opus 固定。実装フェーズは Codex 委託(既定)か Sonnet の
+                fork(フォールバック)に切り出し、<b>ユーザーもモデルも手で切り替えない</b>。
+              </p>
+            </div>
+          </div>
+          <div class="note info">
+            <p>
+              このリポジトリは<b>テンプレート本体</b>です。ここから作ったプロジェクトでは、<code
+                >/kickoff</code
+              >
+              フェーズ5 が <code>docs/template-dev/</code> とテンプレート由来の
+              <code>.steering/</code> を削除し、この README をプロダクトの
+              README に書き換えます。
+            </p>
+          </div>
+        </header>
+
+        <section id="recent">
+          <h2>
+            <span class="sectnum">新</span>直近の改善(2026-10-31 〜 11-04)
+          </h2>
+          <p>
+            main
+            に入っている最近の変更のうち、<b>使い方が変わるもの</b>だけを挙げる。取り込む側の作業を含む全量は
+            <code>docs/template-dev/CHANGELOG.md</code>(<code>[auto]</code> /
+            <code>[manual]</code> 区分つき)。
+          </p>
+
+          <div class="two">
+            <div class="card sub">
+              <div class="k">2026-11-04</div>
+              <div class="v">シェルスクリプトの静的検査(shellcheck)</div>
+              <p>
+                ハーネスの判定はほぼ全部シェルなのに、機械的な検査が
+                <code>bash -n</code>(構文エラーだけ)しかなかった。実行経路を
+                <code>.claude/scripts/check-shell.sh</code> の 1 本に集約し、<b
+                  >CI の <code>harness-integrity</code> が呼ぶ</b
+                >。devcontainer に shellcheck が入り、<code>/check</code>
+                も同じコマンドを回すので手元と CI の結果が一致する。終了コードは
+                0 = 指摘なし / 1 = 指摘あり / 2 = 実行できない(CI
+                では非ゼロすべて失敗)。
+              </p>
+            </div>
+            <div class="card sub">
+              <div class="k">2026-11-03</div>
+              <div class="v">信頼するボットを 1 つの概念に統合</div>
+              <p>
+                <code>trustedBots</code> と
+                <code>trustedReviewBots</code>
+                は<b>どちらに書いても両方で効く</b>(和集合)。従来は Codex
+                ボットを片方にだけ入れると、autopilot が要対応と数えるのに
+                <code>/fix-pr</code> が本文を受け取れず、何も push
+                せずに終わっていた。キーは互換のため 2
+                つとも残っている。名前が一致するだけの人間のアカウントは信頼されない(<code
+                  >user.type == "Bot"</code
+                >
+                を確認する)。
+              </p>
+            </div>
+            <div class="card sub">
+              <div class="k">2026-11-03</div>
+              <div class="v">
+                敵対的レビューの委託(<code>delegate-codex.sh review</code>)
+              </div>
+              <p>
+                対象が<b>分岐点から作業ツリーまで</b>(未コミット・未追跡を含む)になり、コミット前に回せる。差分なし・出力が形式外なら
+                codex を起動せず
+                <code>exit 2</code>
+                で返る(<b>「指摘なし」と読み替えない</b>)。<code>exit 0</code>
+                のときは
+                <code>findings: critical=N major=M minor=L</code>
+                をホストが数えて出す。第 2 引数にステアリングを渡すと
+                <code>design.md</code> を仕様の正として突き合わせる。
+              </p>
+            </div>
+            <div class="card sub">
+              <div class="k">2026-11-03</div>
+              <div class="v">autopilot のレビューボット・クラウド対応</div>
+              <p>
+                <code>/fix-pr</code> は fork からの PR
+                を触らない(ブランチを取得できず、外部コードを無人でテスト実行することになるため)。PR
+                のブランチに移った直後に
+                <code>--ff-only</code> で追いつく。ループは
+                <code>claude -p</code> を
+                <code>--output-format json</code>
+                で起動し、<b>許可されず実行できなかった操作</b>をログと停止理由に出す。クラウドセッションでは起動を拒否する。
+              </p>
+            </div>
+            <div class="card sub">
+              <div class="k">2026-11-01</div>
+              <div class="v">担当AIの切り替え(<code>route.sh</code>)</div>
+              <p>
+                実装・レビューをどの AI
+                に任せるかをチケットごと・実行ごとに選べる。判定の実体は
+                <code>.claude/scripts/route.sh</code> の 1
+                本で、<b>推測で担当を選ばない</b>。既定は従来どおり(実装 = Codex
+                / レビュー = Sonnet)。詳細は<a href="#routing"
+                  >担当AIの切り替え</a
+                >。
+              </p>
+            </div>
+            <div class="card sub">
+              <div class="k">2026-11-01</div>
+              <div class="v">テンプレート同期のスクリプト化</div>
+              <p>
+                <code>.claude/scripts/sync-template.mjs</code> が owned
+                の上書きと merge の 3-way マージ、<code>syncedAt</code>
+                の更新までを機械的に行う。月次ワークフローは<b
+                  >Issue ではなく同期 PR</b
+                >
+                を作る(Claude
+                を起動しないので枠を消費しない)。これまで手作業だった
+                <code>[manual]</code> 項目の多くが自動で入る。
+              </p>
+            </div>
+          </div>
+
+          <h3>委託ハーネスの堅牢化(Issue #56〜#85)</h3>
+          <p>
+            Codex
+            委託まわりは、同じ時期に「検査が静かに無効化される経路」を順に塞いでいる。司令塔の手順は変わらない。
+          </p>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>変更</th>
+                  <th>何が変わったか</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="nowrap">委託禁止領域を 3 系統に</td>
+                  <td>
+                    実行される実体 / コンテキストへ注入される実体 /
+                    全層が読む判定データ。<code>.devcontainer/</code>・<code>.vscode/</code>・<code>.npmrc</code>・gitignore
+                    済みの
+                    <code>settings.local.json</code> も対象。一覧は
+                    <code>delegation-policy.md</code> に移り、<code
+                      >CLAUDE.md</code
+                    >
+                    はポインタだけになった
+                  </td>
+                </tr>
+                <tr>
+                  <td class="nowrap">記述乖離の双方向照合</td>
+                  <td>
+                    CI の <code>harness-integrity</code> が
+                    <code>FORBIDDEN_PATHS</code> と
+                    <code>delegation-policy.md</code>
+                    を<b>完全一致</b>で照合する
+                  </td>
+                </tr>
+                <tr>
+                  <td class="nowrap">
+                    検証プローブの <code>exists</code> 形式
+                  </td>
+                  <td>
+                    既定を
+                    <code>exists node_modules/.bin/eslint</code>
+                    に変更。旧既定はホスト上で、委託先が書き換え可能な
+                    <code>node_modules/</code> を実行していた(旧 3
+                    形式は後方互換として残る)
+                  </td>
+                </tr>
+                <tr>
+                  <td class="nowrap">縮退復帰検査の強化</td>
+                  <td>
+                    <code>check-guard-integrity.sh degraded</code> が
+                    <code>core.hooksPath</code> の書き換え・<code
+                      >.git/config</code
+                    >
+                    の実行ベクタ・<code>Codex-authored</code>
+                    を<b>名乗らない</b>コミット(D0)まで見る
+                  </td>
+                </tr>
+                <tr>
+                  <td class="nowrap">出口検査のコストと誤爆</td>
+                  <td>
+                    固定費を下げ、run record
+                    を内容ハッシュ比較の対象から外した(read-only
+                    の並行委託で誤爆しない)
+                  </td>
+                </tr>
+                <tr>
+                  <td class="nowrap">委託先サマリーの扱い</td>
+                  <td>
+                    ナンス付き標識ブロックで司令塔に渡し、ホスト警告と分離。<code
+                      >jq</code
+                    >
+                    を必須化して <code>sed</code> フォールバック経路を削除
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="start">
+          <h2><span class="sectnum">1</span>プロジェクト開始手順</h2>
+          <p class="chaplead">
+            <b>最初の 1 回だけ</b>やること。リポジトリの準備 → アイデア → docs 6
+            つ → チケット発行 → ハーネス層。ここを終えたら 2 章のループに入る。
+          </p>
+          <div class="note info">
+            <p>
+              <b>最短ルート</b>: Step 0 を済ませたら、アイデアを
+              <code>docs/ideas/initial-requirements.md</code> に書いて
+              <code>/kickoff</code> を実行する。Step 1〜4 と README
+              のプロダクト化までを対話的に一気通貫でガイドする。
+            </p>
+          </div>
+
+          <h3>全体図 — 着手から最初のチケットまで(誰が何をするか)</h3>
+          <div class="lanes">
+            <div class="lanehead">
+              <span>きっかけ</span><span>動かす人</span><span>すること</span>
+            </div>
+            <div class="lane human">
+              <div class="trig">
+                <b class="ph">1</b>テンプレートから作った直後
+              </div>
+              <div class="who"><span class="chip human">人間</span></div>
+              <div class="do">
+                <b>Step 0</b>: <code>CLAUDE_CODE_OAUTH_TOKEN</code> を設定 →
+                Secret scanning を有効化 → devcontainer で開く →
+                <code>codex login</code>(毎リビルド必要)
+              </div>
+            </div>
+            <div class="lane human">
+              <div class="trig"><b class="ph">2</b>環境が整った</div>
+              <div class="who"><span class="chip human">人間</span></div>
+              <div class="do">
+                <b>Step 1</b>: 作りたいものを
+                <code>docs/ideas/initial-requirements.md</code>
+                に書く(埋まらない欄は後の対話で補完される)
+              </div>
+            </div>
+            <div class="lane human">
+              <div class="trig"><b class="ph">3</b>アイデアが書けた</div>
+              <div class="who"><span class="chip human">人間</span></div>
+              <div class="do">
+                <code>/kickoff</code> を打つ。<b
+                  >以降の 4〜6 は対話で一気通貫に進む</b
+                >(個別に打つこともできる)
+              </div>
+            </div>
+            <div class="lane lead">
+              <div class="trig"><b class="ph">4</b>kickoff が始まった</div>
+              <div class="who"><span class="chip lead">司令塔</span></div>
+              <div class="do">
+                <b>Step 2</b>: <code>docs/</code> の 6 つを<b
+                  >1 ファイルずつ承認を取りながら</b
+                >作成(<code>/setup-project</code>)。技術選定がテンプレ既定と違えば、先に置換をタスク化する
+              </div>
+            </div>
+            <div class="lane lead">
+              <div class="trig"><b class="ph">5</b>docs が揃った</div>
+              <div class="who"><span class="chip lead">司令塔</span></div>
+              <div class="do">
+                <b>Step 3</b>: P0 チケットを GitHub Issues
+                に発行(<code>/setup-tickets</code>)。ハブ&amp;スポーク構成なら<b
+                  >その前に</b
+                >
+                <code>/setup-spoke-standards</code>
+              </div>
+            </div>
+            <div class="lane lead">
+              <div class="trig"><b class="ph">6</b>検証コマンドが確定した</div>
+              <div class="who"><span class="chip lead">司令塔</span></div>
+              <div class="do">
+                <b>Step 4</b>:
+                ハーネス層を追加(<code>/harness-setup</code>)。CLAUDE.md
+                の追記・permissions・hook・subagents・<code>.harness/</code>
+              </div>
+            </div>
+            <div class="lane human">
+              <div class="trig"><b class="ph">7</b>ここまで終わった</div>
+              <div class="who"><span class="chip human">人間</span></div>
+              <div class="do">
+                <b>Step 5</b>: <code>/next-ticket</code> を打つ →
+                <a href="#flow">2 章のループ</a>に入る。以降この章は使わない
+              </div>
+            </div>
+          </div>
+
+          <h3>Step 0: リポジトリの準備</h3>
+          <ol class="steps">
+            <li>
+              GitHub で
+              <b>Use this template</b> から新規リポジトリを作成する(配布側は
+              Settings → General で Template repository を有効化しておく)。
+            </li>
+            <li>
+              Settings → Secrets and variables → Actions に
+              <b><code>CLAUDE_CODE_OAUTH_TOKEN</code></b>
+              を設定する。未設定の間、PR 自動レビューと
+              <code>@claude</code> メンションの Actions
+              はスキップされる(失敗はしない)。<b
+                >スキップしてもジョブは <code>success</code> を返す</b
+              >ので、緑のチェックはレビュー通過を意味しない。機械的な品質ゲート(<code>ci.yml</code>)はシークレット不要で常に走る。
+            </li>
+            <li>
+              Settings → Code security で
+              <b>Secret scanning + Push protection</b>
+              を有効化する(公開リポジトリなら無料)。リポジトリ内の secretlint
+              と二段構えになる。
+            </li>
+            <li>
+              devcontainer で開く(VS Code / GitHub Codespaces)。<code
+                >.devcontainer/post_create.sh</code
+              >
+              が Claude Code のインストールと GitHub 認証、shellcheck
+              の導入を行う。Codex CLI も同時に入るが、<b
+                >認証は初回と devcontainer リビルドのたびに手動</b
+              >で <code>codex login</code>(通らなければ
+              <code>codex login --device-auth</code>)。<code>~/.codex</code>
+              はコンテナ内にしか無く永続化していない。
+            </li>
+            <li>
+              ターミナルで <code>claude</code> を起動し、<code>/model</code> が
+              <b>Opus</b> であること・<code>gh auth status</code>
+              が認証済みであることを確認する。
+            </li>
+          </ol>
+          <div class="note warn">
+            <p>
+              <code>codex login --with-api-key</code> は使わないこと。ChatGPT
+              Plus 枠ではなく API 従量課金になる。
+            </p>
+          </div>
+
+          <p>
+            <b>テンプレート既定のスタック</b>: Node.js v24(devcontainer / CI /
+            <code>engines</code> で固定)・TypeScript
+            6.x・npm・ESLint・Prettier・Vitest・secretlint・husky・shellcheck。アイデアの技術選定が異なる場合は
+            <code>/kickoff</code> フェーズ1 が置換をタスク化する。
+          </p>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>npm script</th>
+                  <th>内容</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>npm run lint</code> / <code>lint:fix</code></td>
+                  <td>ESLint</td>
+                </tr>
+                <tr>
+                  <td><code>npm run typecheck</code></td>
+                  <td><code>tsc --noEmit</code></td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>npm run format</code> / <code>format:check</code>
+                  </td>
+                  <td>Prettier</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>npm test</code> / <code>test:watch</code> /
+                    <code>test:coverage</code>
+                  </td>
+                  <td>Vitest</td>
+                </tr>
+                <tr>
+                  <td><code>npm run build</code> / <code>dev</code></td>
+                  <td><code>tsc</code> / <code>tsc --watch</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Step 1: アイデアの言語化</h3>
+          <p>
+            作りたいものの構想を
+            <code>docs/ideas/initial-requirements.md</code>
+            に書く(見出し構造の雛形が用意済み)。全項目を埋める必要はない。空欄は
+            <code>/setup-project</code> の対話で補完される。
+          </p>
+
+          <h3>Step 2: 永続ドキュメントの作成 — <code>/setup-project</code></h3>
+          <p>
+            対話形式で以下の 6 つを <b>1 ファイルずつ、承認を取りながら</b>
+            <code>docs/</code> に作成する。
+          </p>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ドキュメント</th>
+                  <th>内容</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>product-requirements.md</code></td>
+                  <td>プロダクト要求定義書(何を作るか・ユーザーストーリー)</td>
+                </tr>
+                <tr>
+                  <td><code>functional-design.md</code></td>
+                  <td>機能設計書(機能の振る舞い)</td>
+                </tr>
+                <tr>
+                  <td><code>architecture.md</code></td>
+                  <td>技術仕様書(技術スタック・非機能要件)</td>
+                </tr>
+                <tr>
+                  <td><code>repository-structure.md</code></td>
+                  <td>リポジトリ構造定義書</td>
+                </tr>
+                <tr>
+                  <td><code>development-guidelines.md</code></td>
+                  <td>開発ガイドライン(規約・検証コマンド)</td>
+                </tr>
+                <tr>
+                  <td><code>glossary.md</code></td>
+                  <td>ユビキタス言語定義</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            詳細なレビューが必要なときは
+            <code>/review-docs docs/product-requirements.md</code>
+            のように依頼する。画面を作るプロジェクトでは、同梱の
+            <code>docs/ui-design-guidelines.md</code>(スタック非依存の UI
+            品質基準)と
+            <code>docs/ui-design-request-template.md</code>
+            を併用する。ガイドライン §7「実装への翻訳」表は
+            <code>/kickoff</code> フェーズ1.5 がスタックに合わせて記入する。
+          </p>
+
+          <h3>Step 3: 実装計画の分割(任意)</h3>
+          <div class="cmd">
+            <pre>/setup-spoke-standards    <span class="c"># スポーク公開向けの構成ルールを生成(必要な場合のみ・先に実行)</span>
+/setup-tickets            <span class="c"># 永続ドキュメントを実装チケットに分割 → GitHub Issues に発行</span></pre>
+          </div>
+          <div class="note warn">
+            <p>
+              <b>順序は固定</b> —
+              <code>/setup-spoke-standards</code> を使う場合は
+              <code>/setup-tickets</code> の<b>前</b>に実行する。構成ルールの
+              MUST
+              項目(セキュリティヘッダ・SEO・レジストリメタデータ等)がチケットの受け入れ条件になるため、後から生成すると発行済みチケットを作り直すことになる。
+            </p>
+          </div>
+          <ul>
+            <li>
+              <b>実行する場所はハブ側のリポジトリ</b
+              >。ハブのレジストリスキーマ・ドメイン規約・既存の
+              <code>_headers</code> などを読んでルールを具体化する
+            </li>
+            <li>
+              生成物は
+              <code>docs/playbook/spoke-development-standards.md</code>
+              と、そこへの参照を <code>CLAUDE.md</code> に追記したもの
+            </li>
+            <li>
+              <b>スポーク側リポジトリでは実行しない。</b> スポークは 1
+              リポジトリ = 1
+              サブドメインで、このルールを<b>読んで従う</b>側になる
+            </li>
+            <li>ハブ&amp;スポーク構成でないプロジェクトでは実行不要</li>
+          </ul>
+          <p>
+            チケットは GitHub Issues(<code>ticket</code> +
+            優先度ラベル)で管理する。ステータス更新のコミットが不要になり、PR の
+            <code>Closes #N</code>
+            でマージ時に自動クローズされる。並行作業でもチケット状態が競合しない。
+          </p>
+
+          <h3>Step 4: ハーネス層の追加 — <code>/harness-setup</code></h3>
+          <p>
+            検証コマンド(lint / typecheck /
+            test)が確定したら実行する。スラッシュコマンドではなく<b>スキル</b>として提供されているが、呼び出し方は同じ。
+          </p>
+          <ul>
+            <li>
+              <b>CLAUDE.md への「ハーネス」節追記</b
+              >(検証コマンド・必須ルール・委譲ルール)
+            </li>
+            <li>
+              <b>settings.json の統合</b>(危険コマンドの
+              <code>permissions.deny</code>・PostToolUse の整形/lint hook
+              は既定で導入済み)
+            </li>
+            <li>
+              <b>worker subagents</b>(既定の 5 体は導入済み。security-reviewer
+              等を必要に応じて追加)
+            </li>
+            <li>
+              <b>Agent Teams の有効化</b>(任意・experimental)と
+              <code>.harness/</code> の整備
+            </li>
+          </ul>
+          <p>
+            Agent Teams を有効化した場合は、<code>/config</code> で
+            <b>Default teammate model を Sonnet</b> に設定し、Claude Code
+            を再起動して環境変数を反映する。
+          </p>
+
+          <h3>Step 5: 開発サイクル</h3>
+          <p>
+            基本は普通に会話で依頼すればよい。定型フローにだけコマンドを使う。
+          </p>
+          <div class="cmd">
+            <pre>/status                                <span class="c"># 現在地の確認と次の一手の提案</span>
+/next-ticket                           <span class="c"># 次のチケットに着手(ラベル管理込み)</span>
+/autopilot                             <span class="c"># チケット消化を自動進行(事前チェック → 裏で開始)</span>
+/fix-pr 42                             <span class="c"># 既存 PR のコンフリクト・CI 失敗・レビュー指摘を直す</span>
+/add-feature ユーザープロフィール編集   <span class="c"># 機能追加(計画→実装→検証→PR まで)</span>
+/fix-issue 42                          <span class="c"># GitHub Issue の修正と PR 作成</span>
+/check                                 <span class="c"># lint・型・テスト・整形・シェル検査を一括実行&自動修正</span>
+/commit                                <span class="c"># 変更を適切な粒度でコミット</span>
+/resume-work                           <span class="c"># 中断した .steering/ の作業を再開</span>
+/sync-docs                             <span class="c"># 実装と docs/ の乖離を検出・更新</span></pre>
+          </div>
+          <p>
+            作業計画・実装・振り返りは <code>steering</code> スキルが
+            <code>.steering/[YYYYMMDD]-[タスク名]/</code> に記録する(<code
+              >/next-ticket</code
+            >
+            などが内部で使用)。
+          </p>
+        </section>
+
+        <section id="flow">
+          <h2><span class="sectnum">2</span>実運用フロー</h2>
+          <p class="chaplead">
+            この章は<b>日々どう回るか</b>。<b>誰が動かすのか</b>(色)・<b>何をきっかけに動くのか</b>(きっかけ列)・<b>どう処理されるのか</b>(すること列)を、同じ並びで示す。
+          </p>
+
+          <div class="actors">
+            <span class="chip human">人間 <i>判断・マージ・モード宣言</i></span>
+            <span class="chip lead"
+              >司令塔(Opus) <i>計画・委託・検収・報告</i></span
+            >
+            <span class="chip sub"
+              >委託先 <i>Codex / subagent。実装・レビュー・検査</i></span
+            >
+            <span class="chip auto">自動 <i>hook・CI・GitHub Actions</i></span>
+          </div>
+
+          <h3>2.1 全体像 — 回っているループは 3 つ</h3>
+          <div class="loops">
+            <div class="loop human">
+              <div class="when">きっかけ: アイデアを書いた</div>
+              <div class="name">A. 立ち上げ(1 回だけ)</div>
+              <ol>
+                <li><code>/kickoff</code> を打つ(人間)</li>
+                <li>docs/ 6 つを承認制で作成</li>
+                <li>P0 チケットを Issues に発行</li>
+                <li>ハーネス層を追加</li>
+              </ol>
+            </div>
+            <div class="loop lead">
+              <div class="when">きっかけ: 着手できる枠が空いた</div>
+              <div class="name">B. チケット(毎回・この章の主役)</div>
+              <ol>
+                <li>選定 → 計画 → 委託 → 検収</li>
+                <li>PR を作る(司令塔)</li>
+                <li><b>マージは人間</b> → Issue 自動クローズ</li>
+                <li><code>/clear</code> して次へ</li>
+              </ol>
+            </div>
+            <div class="loop auto">
+              <div class="when">きっかけ: 区切り・月次</div>
+              <div class="name">C. 棚卸し(ときどき)</div>
+              <ol>
+                <li><code>/sync-docs</code> で docs と実装の乖離を解消</li>
+                <li><code>/setup-tickets</code> で P1 を発行</li>
+                <li><code>/sync-template</code> でテンプレ更新を取り込む</li>
+              </ol>
+            </div>
+          </div>
+          <p>
+            ハブ&amp;スポーク構成のときだけ、A の 2 と 3 の間に
+            <code>/setup-spoke-standards</code> が入る(ハブ側リポジトリで実行)。
+          </p>
+
+          <h3>2.2 チケット 1 件が流れるまで(ループ B の中身)</h3>
+          <p>
+            左が<b>きっかけ</b>、中央が<b>動かす人</b>、右が<b>すること</b>。上から順に
+            1
+            往復で、司令塔(Opus)は<b>判断と統合だけ</b>を担い、ログの長い作業は委託先に出す。
+          </p>
+          <div class="lanes">
+            <div class="lanehead">
+              <span>きっかけ</span><span>動かす人</span><span>すること</span>
+            </div>
+            <div class="lane human">
+              <div class="trig"><b class="ph">1</b>着手できる枠が空いた</div>
+              <div class="who"><span class="chip human">人間</span></div>
+              <div class="do">
+                <code>/next-ticket</code> を打つ。無人で回すなら
+                <code>/autopilot</code> が以降 1〜9 を代行する
+              </div>
+            </div>
+            <div class="lane lead">
+              <div class="trig"><b class="ph">2</b>コマンドを受けた</div>
+              <div class="who"><span class="chip lead">司令塔</span></div>
+              <div class="do">
+                Issue を選ぶ(<code>depends:</code> が全 closed・最優先)→
+                <code>in-progress</code> ラベル + 作業ブランチ作成
+              </div>
+            </div>
+            <div class="lane lead">
+              <div class="trig"><b class="ph">3</b>ブランチができた</div>
+              <div class="who"><span class="chip lead">司令塔</span></div>
+              <div class="do">
+                <code>.steering/</code> に計画を書く(requirements / design /
+                tasklist)。<b
+                  >design.md は実装者が設計判断をせずに済む粒度まで書き切る</b
+                >(ここの粗さがそのまま往復コストになる)
+              </div>
+            </div>
+            <div class="lane lead">
+              <div class="trig">
+                <b class="ph">4</b>design が ready になった
+              </div>
+              <div class="who">
+                <span class="chip lead">司令塔</span
+                ><span class="chip sub">委託先</span>
+              </div>
+              <div class="do">
+                <code>route.sh implement</code> が担当を決め、<code
+                  >delegate-codex.sh impl</code
+                >(既定)か <code>implement-ticket</code>(Sonnet
+                fork)に渡す。<b>司令塔はここで実装しない</b>(PreToolUse hook
+                がブロックする)
+              </div>
+            </div>
+            <div class="lane sub">
+              <div class="trig"><b class="ph">5</b>委託を受けた</div>
+              <div class="who"><span class="chip sub">委託先</span></div>
+              <div class="do">
+                tasklist を上から消化し、変更したファイルの
+                lint・型・関連テストまで自分で直す。<b>返すのは終了コードとサマリーだけ</b>(長いログは外に出ない)
+              </div>
+            </div>
+            <div class="lane lead">
+              <div class="trig"><b class="ph">6</b>終了コードが返った</div>
+              <div class="who"><span class="chip lead">司令塔</span></div>
+              <div class="do">
+                コードだけを見て分岐する(下の表)。文面から成否を推測しない
+              </div>
+            </div>
+            <div class="lane sub">
+              <div class="trig"><b class="ph">7</b>実装が完了した</div>
+              <div class="who"><span class="chip sub">委託先</span></div>
+              <div class="do">
+                検収を<b>並列で</b>回す ——
+                <code>code-reviewer</code>(差分 + docs とのスペック整合)と
+                <code>test-runner</code> = <code>/check</code>(フルスイート 1
+                回)
+              </div>
+            </div>
+            <div class="lane lead">
+              <div class="trig"><b class="ph">8</b>指摘が返った</div>
+              <div class="who"><span class="chip lead">司令塔</span></div>
+              <div class="do">
+                設計判断を伴う指摘だけ自分で直す →
+                <code>.harness/decisions.jsonl</code> に 1 行(<b>PR を出す前</b
+                >)→ <code>/commit</code> → push → PR(<code>Closes #N</code>)+
+                Issue にコメント
+              </div>
+            </div>
+            <div class="lane auto">
+              <div class="trig"><b class="ph">9</b>PR が開いた</div>
+              <div class="who"><span class="chip auto">自動</span></div>
+              <div class="do">
+                CI(<code>ci.yml</code>)が全 PR で走る。<b
+                  >main 向け PR のオープン時だけ</b
+                >
+                Claude レビューが 1 回(draft では走らない。再レビューは
+                <code>@claude</code>)
+              </div>
+            </div>
+            <div class="lane human">
+              <div class="trig"><b class="ph">10</b>緑になった</div>
+              <div class="who"><span class="chip human">人間</span></div>
+              <div class="do">
+                <b>マージを押すのは人間</b> → Issue が自動クローズ →
+                <code>/clear</code> して 1 に戻る
+              </div>
+            </div>
+          </div>
+
+          <h4>6 の分岐(委託先の終了コード)</h4>
+          <div class="branches">
+            <div class="branchrow ok">
+              <div class="cond">0 完了</div>
+              <div class="then">7 の検収へ進む</div>
+            </div>
+            <div class="branchrow warn">
+              <div class="cond">1 判断待ち</div>
+              <div class="then">
+                司令塔が判断を下し、<code>design.md</code>
+                に追記してから再委託(tasklist の途中から再開される)
+              </div>
+            </div>
+            <div class="branchrow danger">
+              <div class="cond">2 / 5 失敗</div>
+              <div class="then">
+                タスク起因・計画が draft のまま。原因を分析して計画に戻る
+              </div>
+            </div>
+            <div class="branchrow warn">
+              <div class="cond">3 / 4 使えない</div>
+              <div class="then">
+                3 = Codex 利用不可(恒久・そのセッションは以降ずっと) / 4 =
+                レート上限(一時)。どちらも
+                <code>implement-ticket</code>(Sonnet
+                fork)にフォールバックする。<b>司令塔はモデルを切り替えない</b>
+              </div>
+            </div>
+          </div>
+
+          <h4>委託先の顔ぶれ(4 の行き先と 7 の担当)</h4>
+          <div class="two">
+            <div class="card sub">
+              <div class="k">実装・既定</div>
+              <div class="v">Codex CLI(別プロセス / sandbox)</div>
+              <p>
+                <code>delegate-codex.sh impl</code> — 実装ループは Claude
+                の外で回る。<b>Claude の枠を消費しない</b>
+              </p>
+            </div>
+            <div class="card sub">
+              <div class="k">実装・代替</div>
+              <div class="v">implementer(Sonnet / context: fork)</div>
+              <p>
+                会話履歴を持たず <code>design.md</code> と
+                <code>tasklist.md</code> だけを読む。サマリー 20 行を返す
+              </p>
+            </div>
+            <div class="card sub">
+              <div class="k">検収・レビュー</div>
+              <div class="v">code-reviewer(Sonnet)</div>
+              <p>
+                read-only。差分レビューと docs/
+                とのスペック整合。指摘リストを返す
+              </p>
+            </div>
+            <div class="card sub">
+              <div class="k">検収・機械チェック</div>
+              <div class="v">test-runner(Haiku)= <code>/check</code></div>
+              <p>
+                lint・型・テスト・整形・シェル検査の実行と機械的修正。サマリーのみ返す
+              </p>
+            </div>
+          </div>
+
+          <h3>2.3 運用上のポイント(外すと高くつく作法)</h3>
+          <ul>
+            <li>
+              <b>広範囲のコード探索</b>は組み込みの Explore
+              サブエージェントに委譲し、司令塔は結論だけ受け取る
+            </li>
+            <li>
+              <b>実装フェーズの委譲は hook で強制される。</b> 最新
+              <code>.steering/</code> の
+              <code>tasklist.md</code>
+              に未完了タスクがある状態で司令塔が実装コードを Edit/Write
+              しようとすると
+              <code>check-implementation-phase.sh</code> がブロックする(<code
+                >.steering/</code
+              >
+              / <code>docs/</code> / <code>.claude/</code> /
+              <code>.github/</code> / <code>.husky/</code> への編集は通る)
+              <ul>
+                <li>
+                  検査対象は <b>Edit / Write ツール</b>。<code>sed -i</code>
+                  等の Bash
+                  経由の書き込みまでは見ていない(逸脱を止めるガードレールであって、サンドボックスではない)
+                </li>
+                <li>
+                  「最新の <code>.steering/</code>」の判定は
+                  <code>latest-steering.sh</code> に集約してある。<b
+                    >自前で <code>ls | sort</code> しないこと</b
+                  >
+                </li>
+                <li>
+                  テンプレート自体の改修など司令塔が実装すべき作業では
+                  <code>tasklist.md</code> に
+                  <code>&lt;!-- main-edit-ok --&gt;</code>
+                  を書いて解除する(プロダクト側に残さない)
+                </li>
+              </ul>
+            </li>
+            <li>
+              <b>共通ルールは 2 層。</b> <code>.claude/rules/*.md</code> は
+              <code>CLAUDE.md</code>
+              経由で<b>全サブエージェントにも毎回ロードされる</b>ため、実装者・レビュアーにも要る内容だけを置く。司令塔だけが使うルールは
+              <code>.claude/rules/lead/*.md</code> に置き、SessionStart hook
+              がメインセッションにのみ注入する
+            </li>
+            <li>
+              <b
+                ><code>/clear</code>・resume 後は SessionStart hook
+                が現在地を自動注入する</b
+              >(ブランチとベースの乖離・未コミット変更・in-progress Issue・最新
+              <code>.steering/</code> の未完了タスク・未検収の Codex 委託)。<b
+                >チケット完了ごとに <code>/clear</code></b
+              >
+              が、トークン消費の最大の削減ポイント
+            </li>
+            <li>
+              <b>コンテキストは小さく保つ。</b> 150k を超えたら区切りで
+              <code>/compact</code>、タスクが変わったら
+              <code>/clear</code>。相談・調査と実装を同じセッションに混ぜない
+            </li>
+            <li>
+              <b>Claude Code on the web</b> から開いた場合、SessionStart hook が
+              <code>npm install</code> を自動実行する。web のリモート環境には
+              <code>gh</code> CLI が無いため、GitHub 操作は
+              <code>mcp__github__*</code> で代替する
+            </li>
+            <li>
+              <b>MCP は最小構成。</b> 既定は Context7 のみ(<code
+                >.mcp.json</code
+              >
+              と
+              <code>.codex/config.toml</code>
+              の両方に<b>同じ版を固定</b>して登録)。追加の判断基準は
+              <code>.claude/docs/mcp-introduction-guide.md</code>
+            </li>
+            <li>
+              <b>PR ボディは <code>.github/pull_request_template.md</code></b>
+              に従う(<code>Closes #N</code> と
+              <code>.steering/</code> ディレクトリ名を記録する)
+            </li>
+          </ul>
+
+          <h3>2.4 無人で回す(<code>/autopilot</code>)</h3>
+          <p>
+            <code>/next-ticket</code> →
+            <code>/clear</code> の繰り返しを自動化する。人間向けの手順書は
+            <b><code>.claude/docs/autopilot-guide.html</code></b
+            >(ブラウザで開く)。
+          </p>
+          <div class="lanes">
+            <div class="lanehead">
+              <span>きっかけ</span><span>動かす人</span><span>すること</span>
+            </div>
+            <div class="lane human">
+              <div class="trig"><b class="ph">1</b>人間が 1 回起動する</div>
+              <div class="who"><span class="chip human">人間</span></div>
+              <div class="do">
+                <code>/autopilot</code>(事前チェック →
+                裏で起動)。以降セッションは閉じてよい
+              </div>
+            </div>
+            <div class="lane auto">
+              <div class="trig"><b class="ph">2</b>ループが 1 周するたび</div>
+              <div class="who"><span class="chip auto">シェル</span></div>
+              <div class="do">
+                <code>autopilot-next.sh</code> が<b>次の一手を決める</b>(REST
+                だけなのでクラウドでも動く)。下の優先順で 1 つ選ぶ
+              </div>
+            </div>
+            <div class="lane lead">
+              <div class="trig"><b class="ph">3</b>一手が決まった</div>
+              <div class="who"><span class="chip lead">司令塔</span></div>
+              <div class="do">
+                <code>claude -p</code> を<b>新プロセスで</b>起動して実行する(=
+                毎周 <code>/clear</code> 相当。コンテキストが積み上がらない)
+              </div>
+            </div>
+            <div class="lane human">
+              <div class="trig"><b class="ph">4</b>PR が緑になった</div>
+              <div class="who"><span class="chip human">人間</span></div>
+              <div class="do">
+                <b>マージはループがしない。</b> 人間が押すまで PR
+                は積まれたまま進む
+              </div>
+            </div>
+          </div>
+          <h4>2 の優先順(上から順に 1 つだけ選ぶ)</h4>
+          <div class="branches">
+            <div class="branchrow danger">
+              <div class="cond">要対応の PR がある</div>
+              <div class="then">
+                <code>/fix-pr</code> で直す(コンフリクト → CI 失敗 →
+                レビュー指摘の順)。<b>赤いまま次を積まない</b>
+              </div>
+            </div>
+            <div class="branchrow ok">
+              <div class="cond">空き枠がある</div>
+              <div class="then">
+                依存(<code>depends: #N</code>)が全 closed
+                のチケットに着手する。<b>レビュー待ちの PR は待ちつつ</b
+                >、<code>maxInFlight</code>(既定 2)まで並行して進む
+              </div>
+            </div>
+            <div class="branchrow">
+              <div class="cond">どちらも無い</div>
+              <div class="then">
+                待機する。シェルが眠るだけで<b>枠を消費しない</b>
+              </div>
+            </div>
+          </div>
+          <ul>
+            <li>
+              <b>判定は <code>autopilot-next.sh</code> が毎回行う</b>(REST
+              のみなのでクラウドでも動く)。優先順は 要対応 PR(コンフリクト / CI
+              失敗 / 変更要求)の修復 → 空き枠があれば依存(<code
+                >depends: #N</code
+              >)解決済みのチケットに着手 → 待機。<b
+                >レビュー待ちの PR は待つ(マージは人間)が、その間も
+                <code>maxInFlight</code>(既定
+                2)まで独立チケットを並行して進める</b
+              >
+            </li>
+            <li>
+              <b>ローカル</b>(推奨):
+              <code>/autopilot</code> で事前チェックが走り、全部 ✅
+              なら裏で起動、⚠️ なら確認、❌ なら直し方を示して起動しない(<code
+                >check</code
+              >
+              / <code>status</code> /
+              <code>stop</code> もある)。ターミナルからは
+              <code>bash .claude/scripts/autopilot-loop.sh --background</code
+              >。1 周ごとに <code>claude -p</code> を新プロセスで起動し(=
+              <code>/clear</code>
+              相当)、待機中はシェルが眠るだけで枠を消費しない
+            </li>
+            <li>
+              <b>全体管理 Issue</b>(<code>autopilot</code> ラベル、自動作成):
+              全チケットの状態を一覧し、本文のチェックで一時停止・再開できる。状態の正は各チケットのラベル・PR
+              のまま
+            </li>
+            <li>
+              <b>econ(モード B)でも動く</b>(ローカルのみ): 計画だけ
+              <code>claude -p</code> → 実装はループがシェルから Codex に委託 →
+              draft PR だけ
+              <code>claude -p</code>(<code>/ship-ticket</code>)。<code
+                >package.json</code
+              >
+              のライフサイクル差分があれば止まる
+            </li>
+            <li>
+              <b>クラウド</b>:
+              司令塔セッションがチケットごとに子セッションを起動する(コンテナ・ブランチ・コンテキストが別)
+            </li>
+          </ul>
+
+          <h3>
+            2.5 ブランチ戦略(単一ソース =
+            <code>.claude/branch-policy.json</code>)
+          </h3>
+          <p>
+            機械が読む値はポリシーファイルだけを正とする。テンプレート既定は
+            GitHub Flow(<code>baseBranch: main</code> / 保護ブランチは
+            <code>main</code> / 許可プレフィックスは <code>feature/</code>
+            <code>fix/</code> <code>chore/</code> <code>release/</code>
+            <code>hotfix/</code> <code>claude/</code>
+            <code>dependabot/</code>)。
+          </p>
+          <p>
+            保護ブランチ上での作業は禁止で、層は<b
+              >強制 3 層 + 情報提供 1 層 + 別軸の最終検証</b
+            >。判定の実体は
+            <code>check-protected-branch.sh</code>
+            に一本化してあり、経路によらず同じ結果になる。
+          </p>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>層</th>
+                  <th>実体</th>
+                  <th>効く範囲</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="nowrap">情報提供</td>
+                  <td>SessionStart hook</td>
+                  <td>
+                    現在のブランチとポリシー上のベースを注入する(阻止しない)
+                  </td>
+                </tr>
+                <tr>
+                  <td class="nowrap">強制 1</td>
+                  <td><code>check-branch-policy.sh</code></td>
+                  <td>
+                    直接コミットと
+                    <code>gh pr create --base</code> の誤りをブロック。<b
+                      >Claude 経由のみ</b
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td class="nowrap">強制 2</td>
+                  <td><code>.husky/pre-commit</code></td>
+                  <td>
+                    <code>git commit</code> / <code>--amend</code>。<b
+                      >ベンダー非依存</b
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td class="nowrap">強制 3</td>
+                  <td><code>.husky/prepare-commit-msg</code></td>
+                  <td>
+                    <code>git revert</code> / <code>git cherry-pick</code>。<b
+                      ><code>--no-verify</code> で迂回できない唯一の層</b
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td class="nowrap">最終検証(別軸)</td>
+                  <td>CI の <code>branch-policy</code> ジョブ</td>
+                  <td>
+                    クライアント非依存。ただし見るのは PR の base
+                    とブランチ名だけ
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <ul>
+            <li>
+              <code>git merge</code> /
+              <code>git pull</code> の取り込みだけを通す。判定には第 2
+              引数ではなく
+              <b><code>.git/MERGE_HEAD</code> の有無</b>を使う(<code
+                >git revert -e</code
+              >
+              も第 2 引数に
+              <code>merge</code>
+              を渡してくるため、引数だけで素通しにすると保護ブランチ上ですり抜ける)
+            </li>
+            <li>
+              <b
+                >アプリ/web のリモートセッションは
+                <code>claude/*</code> ブランチが先に作られた状態で始まる。</b
+              >
+              <code>feature/*</code>
+              と同格の正規ブランチとして扱い、<b>リネームしない</b>(セッションとの紐付けが壊れる)
+            </li>
+          </ul>
+        </section>
+
+        <section id="automation">
+          <h2><span class="sectnum">3</span>自動化層の一覧</h2>
+          <p class="chaplead">
+            <b>人が忘れても必ず起きること</b>の一覧。Claude の hook(Claude
+            経由だけ)・git hook(ベンダー非依存)・GitHub
+            Actions(クライアント非依存)が、それぞれどこで効くか。
+          </p>
+
+          <h3>3.1 いつ・どの層が・何を止めるか</h3>
+          <p>
+            この図だけ<b>色の意味が違う</b> ——
+            <span class="chip lead">Claude 経由のみ</span> は Claude Code
+            からの操作にしか効かない層、
+            <span class="chip sub">ベンダー非依存</span> は Codex でも手動 git
+            でも効く層。<b>同じ検査を両方に置いてあるのは、片方をすり抜けても止めるため</b>。
+          </p>
+          <div class="lanes">
+            <div class="lanehead">
+              <span>きっかけ</span><span>届く範囲</span
+              ><span>何が起きるか</span>
+            </div>
+            <div class="lane lead">
+              <div class="trig">
+                <b class="ph">1</b>ファイルを Edit / Write した
+              </div>
+              <div class="who"><span class="chip lead">Claude のみ</span></div>
+              <div class="do">
+                PostToolUse
+                <code>lint-on-edit.sh</code>
+                が<b>編集したファイルだけ</b>整形・lint する(<code>flock</code>
+                で待ち合わせ)
+              </div>
+            </div>
+            <div class="lane lead">
+              <div class="trig">
+                <b class="ph">2</b>司令塔が実装コードを書こうとした
+              </div>
+              <div class="who"><span class="chip lead">Claude のみ</span></div>
+              <div class="do">
+                PreToolUse
+                <code>check-implementation-phase.sh</code>
+                が<b>ブロック</b>する(委譲の強制)。<code>.steering/</code> /
+                <code>docs/</code> / <code>.claude/</code> への編集は通る
+              </div>
+            </div>
+            <div class="lane lead">
+              <div class="trig">
+                <b class="ph">3</b
+                >危険コマンド・保護ブランチへのコミットを打とうとした
+              </div>
+              <div class="who"><span class="chip lead">Claude のみ</span></div>
+              <div class="do">
+                <code>block-dangerous-cmds.sh</code> /
+                <code>check-branch-policy.sh</code> がブロック(<code
+                  >gh pr create --base</code
+                >
+                の誤りもここ)
+              </div>
+            </div>
+            <div class="lane sub">
+              <div class="trig">
+                <b class="ph">4</b><code>git commit</code> /
+                <code>--amend</code>
+              </div>
+              <div class="who"><span class="chip sub">誰でも</span></div>
+              <div class="do">
+                <code>.husky/pre-commit</code>: 保護ブランチ判定 + secretlint +
+                lint-staged。<b>Codex・手動 git・他ツールにも効く</b>
+              </div>
+            </div>
+            <div class="lane sub">
+              <div class="trig">
+                <b class="ph">5</b><code>git revert</code> /
+                <code>cherry-pick</code>
+              </div>
+              <div class="who"><span class="chip sub">誰でも</span></div>
+              <div class="do">
+                <code>.husky/prepare-commit-msg</code>:
+                <code>pre-commit</code> が発火しない経路を塞ぐ。<b
+                  ><code>--no-verify</code> で迂回できない唯一の層</b
+                >
+              </div>
+            </div>
+            <div class="lane auto">
+              <div class="trig">
+                <b class="ph">6</b>PR を開いた / main・develop に push した
+              </div>
+              <div class="who"><span class="chip auto">CI</span></div>
+              <div class="do">
+                <code>ci.yml</code> の 3 ジョブ(branch-policy /
+                harness-integrity / quality)。<b>draft PR でも走る</b
+                >。作業ブランチへの push だけでは走らない
+              </div>
+            </div>
+            <div class="lane auto">
+              <div class="trig">
+                <b class="ph">7</b>PR を編集・ラベル操作した
+              </div>
+              <div class="who"><span class="chip auto">CI</span></div>
+              <div class="do">
+                <code>record-hygiene.yml</code> が CHANGELOG と
+                <code>decisions.jsonl</code>
+                の記録漏れを検査する(逃げ道ラベルで外せる)
+              </div>
+            </div>
+            <div class="lane auto">
+              <div class="trig">
+                <b class="ph">8</b>main 向け PR を開いた / ready にした
+              </div>
+              <div class="who"><span class="chip auto">Actions</span></div>
+              <div class="do">
+                Claude レビューが<b>1 回だけ</b>走る。draft では走らず、push
+                ごとの再レビューも無い(必要なら <code>@claude</code>)
+              </div>
+            </div>
+            <div class="lane auto">
+              <div class="trig"><b class="ph">9</b>毎月 1 日</div>
+              <div class="who"><span class="chip auto">Actions</span></div>
+              <div class="do">
+                <code>template-update-check</code> がテンプレ更新を取り込んだ<b
+                  >同期 PR</b
+                >
+                を作る(<a href="#sync">7 章</a>。Claude を起動しない)
+              </div>
+            </div>
+          </div>
+
+          <h3>3.2 Claude Code の hooks(<code>.claude/settings.json</code>)</h3>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>hook</th>
+                  <th>役割</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="nowrap">SessionStart</td>
+                  <td>
+                    現在地の注入(ブランチ・未コミット変更・in-progress
+                    Issue・最新
+                    <code>.steering/</code
+                    >・未検収の委託)と司令塔専用ルールの読み込み
+                  </td>
+                </tr>
+                <tr>
+                  <td class="nowrap">PreToolUse</td>
+                  <td>
+                    <code>block-dangerous-cmds.sh</code>(危険コマンド)/
+                    <code>check-branch-policy.sh</code>(保護ブランチ・PR
+                    ベース)/
+                    <code>check-implementation-phase.sh</code
+                    >(司令塔の実装をブロック)
+                  </td>
+                </tr>
+                <tr>
+                  <td class="nowrap">PostToolUse</td>
+                  <td>
+                    <code>lint-on-edit.sh</code
+                    >(編集したファイル単位で整形・lint。<code>flock</code>
+                    で待ち合わせる)
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>3.3 git hooks(ベンダー非依存 / <code>.husky/</code>)</h3>
+          <p>
+            Codex・手動 git・他ツールにも効く層。<code>pre-commit</code> が
+            <code>git commit</code> / <code>--amend</code> と
+            secretlint・lint-staged を、<code>prepare-commit-msg</code> が
+            <code>git revert</code> / <code>git cherry-pick</code> を見る。
+          </p>
+
+          <h3>3.4 GitHub Actions</h3>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ワークフロー</th>
+                  <th>起動条件</th>
+                  <th>内容</th>
+                  <th>シークレット</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>ci.yml</code></td>
+                  <td>
+                    <code>main</code> / <code>develop</code> への push と<b
+                      >全 PR</b
+                    >
+                  </td>
+                  <td>
+                    <code>branch-policy</code>(ベースとブランチ名)/
+                    <code>harness-integrity</code
+                    >(ガードレール健全性・委託禁止領域の記述乖離・<b>shellcheck</b>)/
+                    <code>quality</code
+                    >(lint・typecheck・format:check・test・secretlint・<code
+                      >npm audit</code
+                    >)
+                  </td>
+                  <td>不要</td>
+                </tr>
+                <tr>
+                  <td><code>record-hygiene.yml</code></td>
+                  <td>
+                    PR の opened / synchronize / reopened / edited / labeled /
+                    unlabeled
+                  </td>
+                  <td>
+                    CHANGELOG と
+                    <code>.harness/decisions.jsonl</code> の記録漏れを検査
+                  </td>
+                  <td>不要</td>
+                </tr>
+                <tr>
+                  <td><code>claude-code-review.yml</code></td>
+                  <td>
+                    <b><code>main</code> 向け</b> PR の opened /
+                    ready_for_review(<b>draft では走らない</b>)
+                  </td>
+                  <td>Claude による自動レビュー</td>
+                  <td><code>CLAUDE_CODE_OAUTH_TOKEN</code></td>
+                </tr>
+                <tr>
+                  <td><code>claude.yml</code></td>
+                  <td>
+                    <code>@claude</code> メンション(OWNER / MEMBER /
+                    COLLABORATOR のみ)
+                  </td>
+                  <td>指示に応じた作業</td>
+                  <td>同上</td>
+                </tr>
+                <tr>
+                  <td><code>template-update-check.yml</code></td>
+                  <td>毎月 1 日 + 手動実行</td>
+                  <td>
+                    テンプレートの更新を同期スクリプトで取り込み、PR
+                    を作る(競合・ワークフロー変更時は Issue)
+                  </td>
+                  <td>不要(<b>Claude を起動しない</b>)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <b>CI は Claude の枠を一切消費しない</b>ので、機械的検証はできるだけ
+            CI に寄せる。<code>record-hygiene.yml</code> を
+            <code>ci.yml</code> に同居させていないのは、ラベル操作のたびに
+            <code>npm ci</code> から再実行させないため。
+          </p>
+
+          <h3>3.5 記録の義務と逃げ道ラベル</h3>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>検査</th>
+                  <th>落ちる条件</th>
+                  <th>逃げ道ラベル</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>docs/template-dev/CHANGELOG.md</code></td>
+                  <td>
+                    <code>.claude/</code> / <code>.husky/</code> /
+                    <code>.codex/</code> / <code>.github/workflows/</code> /
+                    <code>AGENTS.md</code> を変更した PR で CHANGELOG が未更新
+                  </td>
+                  <td><code>no-changelog</code></td>
+                </tr>
+                <tr>
+                  <td><code>.harness/decisions.jsonl</code></td>
+                  <td>
+                    PR が <code>ticket</code> ラベル付き Issue を
+                    <code>Closes #N</code> でクローズするのに該当行が無い
+                  </td>
+                  <td><code>no-decision-record</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>decisions.jsonl</code>
+            は<b>削除禁止・追記のみ</b>の永続ログで、<b>PR を出す前</b
+            >(検収が終わり往復回数と指摘数が確定した時点)に書く。マージ後に回すと記録そのものが落ちる。逃げ道ラベルは理由を添えて付けるもので、既定の回避手段ではない。判定の実体は
+            <code>check-record-hygiene.sh</code>
+            にあり、環境変数を渡せば手元でも同じ結果を再現できる。
+          </p>
+
+          <h3>3.6 品質チェックの三層</h3>
+          <p>同じ内容を繰り返し回さないための切り分け。</p>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>層</th>
+                  <th>範囲</th>
+                  <th>担当</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="nowrap">実装直後の自己修復</td>
+                  <td>変更したファイルの lint・型・関連テスト</td>
+                  <td>委託先(Codex / Sonnet fork)</td>
+                </tr>
+                <tr>
+                  <td class="nowrap">検収</td>
+                  <td>フルスイート 1 回</td>
+                  <td><code>test-runner</code>(Haiku)= <code>/check</code></td>
+                </tr>
+                <tr>
+                  <td class="nowrap">最終ゲート</td>
+                  <td>
+                    フルスイート + secretlint + shellcheck + ガードレール健全性
+                  </td>
+                  <td>CI</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>/check</code>
+            を「実装中に即時フィードバックが要る局面」以外で繰り返し回さない。
+          </p>
+        </section>
+
+        <section id="codex">
+          <h2><span class="sectnum">4</span>Codex 併用の委託運用</h2>
+          <p class="chaplead">
+            <b>実装を Claude の外に出す仕組み</b>。入口は 1
+            本・分岐は終了コードだけ。委託してよい粒度と、渡してはいけない領域を決める。
+          </p>
+          <p>
+            Claude の週枠を守るため、実装・調査・レビューの一部を
+            <b>Codex CLI(ChatGPT Plus 枠)</b> に委託できる。委託の入口は
+            <code>.claude/scripts/delegate-codex.sh</code> の 1
+            本だけで、司令塔は<b>終了コードだけを見て</b>分岐する(サマリーの文面から成否を推測しない)。
+          </p>
+
+          <h3>4.1 委託 1 回の中で何が起きるか</h3>
+          <p>
+            司令塔が叩くのは <code>delegate-codex.sh</code> 1
+            本だけで、<b>検査は委託の前後に自動で挟まる</b>。Codex
+            本体はサンドボックスの中にしか居ない。
+          </p>
+          <div class="lanes">
+            <div class="lanehead">
+              <span>きっかけ</span><span>動かす人</span><span>すること</span>
+            </div>
+            <div class="lane lead">
+              <div class="trig"><b class="ph">1</b>委託すると決めた</div>
+              <div class="who"><span class="chip lead">司令塔</span></div>
+              <div class="do">
+                <code>delegate-codex.sh</code> を <code>explore</code> /
+                <code>review</code> / <code>impl</code> のどれかで呼ぶ。<b
+                  >入口はこの 1 本だけ</b
+                >
+              </div>
+            </div>
+            <div class="lane auto">
+              <div class="trig"><b class="ph">2</b>呼ばれた直後(入口検査)</div>
+              <div class="who"><span class="chip auto">スクリプト</span></div>
+              <div class="do">
+                ハーネスモード・計画の完成(<code
+                  >&lt;!-- status: ready --&gt;</code
+                >)・impl の並行数(1 本まで)・<b
+                  ><code>codex-denylist.txt</code></b
+                >(該当ファイルがあるだけで中止)を見て、禁止領域の内容ハッシュを採る
+              </div>
+            </div>
+            <div class="lane sub">
+              <div class="trig"><b class="ph">3</b>入口検査を通った</div>
+              <div class="who"><span class="chip sub">Codex</span></div>
+              <div class="do">
+                <code>env -i</code> +
+                許可した変数だけで起動し、サンドボックスで実行。<code
+                  >impl</code
+                >
+                は workspace-write、<code>explore</code> /
+                <code>review</code> は
+                read-only。<b>ネットワークは無効</b>(新規依存を足せないのはこのため)
+              </div>
+            </div>
+            <div class="lane auto">
+              <div class="trig">
+                <b class="ph">4</b>Codex が終わった(出口検査)
+              </div>
+              <div class="who"><span class="chip auto">スクリプト</span></div>
+              <div class="do">
+                禁止領域のハッシュを<b>前後で突き合わせ</b>、差があれば
+                <code>exit 2</code>。<code>package.json</code>
+                のライフサイクル差分を警告し、run record を
+                <code>.harness/codex-runs/</code> に残す
+              </div>
+            </div>
+            <div class="lane lead">
+              <div class="trig"><b class="ph">5</b>検査を通った</div>
+              <div class="who"><span class="chip lead">司令塔</span></div>
+              <div class="do">
+                <b>終了コードだけ</b
+                >を見て分岐する(下の表)。サマリーはナンス付きの標識ブロックで渡るが、<b
+                  >文面から成否を推測しない</b
+                >
+              </div>
+            </div>
+          </div>
+
+          <h3>4.2 終了コードの契約</h3>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>コード</th>
+                  <th>意味</th>
+                  <th>司令塔の動き</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><b>0</b></td>
+                  <td>完了</td>
+                  <td>
+                    検収(<code>code-reviewer</code> +
+                    <code>test-runner</code>)へ
+                  </td>
+                </tr>
+                <tr>
+                  <td><b>1</b></td>
+                  <td>判断待ち</td>
+                  <td><code>design.md</code> に判断を追記して再委託</td>
+                </tr>
+                <tr>
+                  <td><b>2</b></td>
+                  <td>
+                    失敗(タスク起因・使い方の誤り)。review / explore では<b
+                      >結果として扱わない</b
+                    >
+                  </td>
+                  <td>原因分析</td>
+                </tr>
+                <tr>
+                  <td><b>3</b></td>
+                  <td>Codex 利用不可(CLI 不在・未認証・依存未インストール)</td>
+                  <td>
+                    <b>そのセッションは以降ずっと</b> Sonnet fork
+                    にフォールバック
+                  </td>
+                </tr>
+                <tr>
+                  <td><b>4</b></td>
+                  <td>Codex 側のレート上限</td>
+                  <td>一時フォールバック(待つ or Sonnet fork)</td>
+                </tr>
+                <tr>
+                  <td><b>5</b></td>
+                  <td>計画が未完成(<code>design.md</code> が draft のまま)</td>
+                  <td>計画を書き切る</td>
+                </tr>
+                <tr>
+                  <td><b>130 / 143</b></td>
+                  <td>割り込み(SIGINT / SIGTERM)</td>
+                  <td>
+                    「結果」ではなく「中断」。run record は
+                    <code>running</code> のまま残る
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note warn">
+            <p>
+              <b>3 と 4 を混ぜないこと。</b>
+              前者は環境の欠落(恒久)、後者は枠切れ(一時)で回復手段が違う。
+            </p>
+          </div>
+
+          <h3>4.3 委託モード(実装済み 3 種)</h3>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>呼び出し</th>
+                  <th>権限</th>
+                  <th>内容</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code>delegate-codex.sh explore &lt;調査指示&gt;</code>
+                  </td>
+                  <td>read-only</td>
+                  <td>広域コード探索。サマリーのみ返す</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code
+                      >delegate-codex.sh review &lt;base-ref&gt;
+                      [.steering/dir]</code
+                    >
+                  </td>
+                  <td>read-only</td>
+                  <td>
+                    敵対的レビュー。<b>分岐点から作業ツリーまで</b>(未コミット・未追跡を含む)が対象で、<code
+                      >findings:</code
+                    >
+                    行に件数が出る
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>delegate-codex.sh impl &lt;.steering/[dir]&gt;</code>
+                  </td>
+                  <td>workspace-write</td>
+                  <td>実装フェーズの委託</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            並行数は
+            <b>impl が 1 本まで</b
+            >(同一ワーキングツリーを共有するため、入口検査が機械的に止める)。read-only
+            の explore / review は並行できる。生ログと run record は
+            <code>.harness/codex-runs/</code>
+            に落ち、<code>codex-run.sh</code>(<code>list</code> /
+            <code>pending</code> / <code>show</code> / <code>accept</code> /
+            <code>set-status</code> / <code>prune</code>)で扱う。
+          </p>
+
+          <h3>4.4 運用モード(切替を宣言するのは人間)</h3>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>モード</th>
+                  <th><code>.harness/mode</code></th>
+                  <th>使いどころ</th>
+                  <th>Claude の役割</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="nowrap">A(通常)</td>
+                  <td>未設定 / <code>normal</code></td>
+                  <td>週枠に余裕がある</td>
+                  <td>計画・検収・統合をすべて行う</td>
+                </tr>
+                <tr>
+                  <td class="nowrap">B(節約)</td>
+                  <td><code>econ</code></td>
+                  <td>週枠を温存したい</td>
+                  <td>
+                    <code>design.md</code> を書き切ったら閉じる。検収は CI
+                    に預け、PR は <b>draft</b> で積む
+                  </td>
+                </tr>
+                <tr>
+                  <td class="nowrap">C(縮退)</td>
+                  <td><code>degraded</code></td>
+                  <td>Claude が使えない</td>
+                  <td>不在。Codex が単独で走り、成果をキューとして積む</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <b><code>.harness/mode</code> は Claude が自分で書き換えない。</b>
+            読み取りの唯一の経路は <code>harness-mode.sh</code>(優先順位は
+            <code>CODEX_HARNESS_MODE</code> &gt; <code>.harness/mode</code> &gt;
+            <code>normal</code>)。モードごとの司令塔の作法は
+            <code>.claude/rules/mode/*.md</code> が SessionStart で注入される。
+          </p>
+          <ul>
+            <li>
+              <b>モード B</b> の draft は作法ではなく節約の実体。<code
+                >claude-code-review.yml</code
+              >
+              は <code>draft == false</code> のときだけ走るため、draft
+              のままならレビューが起動しない。一方 <code>ci.yml</code> は draft
+              でも走る。<b>作業ブランチへの push だけでは CI は走らない</b
+              >ので、「CI が緑なら PR を作る」は因果が逆になる
+            </li>
+            <li>
+              <b>モード C からの復帰</b>では、まず下のコマンドを回す。縮退中は
+              <code>.git</code> が書き込み可能な唯一の経路で、<code
+                >core.hooksPath</code
+              >
+              の書き換え・<code>.git/hooks/</code> への直書き・<code
+                >.git/config</code
+              >
+              の実行ベクタ・禁止領域を触ったコミット・<code
+                >Codex-authored</code
+              >
+              を名乗らないコミットを検出する
+            </li>
+          </ul>
+          <div class="cmd">
+            <pre>
+bash .claude/scripts/check-guard-integrity.sh degraded &amp;&amp; echo "ガードレール健全"</pre>
+          </div>
+          <div class="note danger">
+            <p>
+              <b
+                >委託を挟んだ差分では
+                <code>git diff -- package.json</code> を目視する。</b
+              >
+              <code>scripts</code> / <code>lint-staged</code> /
+              <code>prepare</code>
+              は委託成果をホスト上・ネットワーク有効で実行する経路で、sandbox
+              はここを守らない。
+            </p>
+          </div>
+
+          <h3>4.5 委託していいか(上から順に見る)</h3>
+          <p>
+            判定軸は<b>モデルの賢さではなく往復コスト</b>。1 つでも<span
+              class="tag warn"
+              >はい</span
+            >が出たら委託しない。
+          </p>
+          <div class="decide">
+            <div class="q">
+              <div class="ask">
+                <b class="ph">Q1</b>委託禁止領域(下の 18 パス)を触るか?
+              </div>
+              <div class="outs">
+                <div class="ans stop">
+                  はい → 司令塔か fork が<b>直接書く</b>
+                </div>
+                <div class="ans go">いいえ → Q2 へ</div>
+              </div>
+            </div>
+            <div class="q">
+              <div class="ask">
+                <b class="ph">Q2</b>新しい依存(ライブラリ)を足すか?
+              </div>
+              <div class="outs">
+                <div class="ans stop">
+                  はい → <b>sandbox はネットワーク無効</b>なので入れられない
+                </div>
+                <div class="ans go">いいえ → Q3 へ</div>
+              </div>
+            </div>
+            <div class="q">
+              <div class="ask">
+                <b class="ph">Q3</b><code>.git</code> を書き換えるタスクか?
+              </div>
+              <div class="outs">
+                <div class="ans stop">
+                  はい → <code>workspace-write</code> では index 操作が<b
+                    >必ず失敗する</b
+                  >
+                </div>
+                <div class="ans go">いいえ → Q4 へ</div>
+              </div>
+            </div>
+            <div class="q">
+              <div class="ask">
+                <b class="ph">Q4</b
+                ><code>design.md</code> に手順まで書き切れているか?
+              </div>
+              <div class="outs">
+                <div class="ans stop">
+                  いいえ → 粒度を下げるか fork に残す(往復が利得を食う)
+                </div>
+                <div class="ans go">はい → Q5 へ</div>
+              </div>
+            </div>
+            <div class="q">
+              <div class="ask">
+                <b class="ph">Q5</b>受け入れ確認が
+                <code>/check</code> で機械的に済むか?
+              </div>
+              <div class="outs">
+                <div class="ans stop">
+                  いいえ → 検収コストが読めない。手元に残す
+                </div>
+                <div class="ans go">はい → <b>委託する</b>(粒度は下の表)</div>
+              </div>
+            </div>
+          </div>
+
+          <h4>通ったときの粒度 — 最小は tasklist 1 項目、最大は Issue 1 枚</h4>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>粒度</th>
+                  <th>経路</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="nowrap">tasklist 1〜3 項目</td>
+                  <td>
+                    <code>delegate-codex.sh impl</code
+                    >。これより小さく切らない(起動 +
+                    検収のコストが生成コストを上回る)
+                  </td>
+                </tr>
+                <tr>
+                  <td class="nowrap"><b>チケット 1 枚</b>(1 Issue = 1 PR)</td>
+                  <td>
+                    同上 + Issue に
+                    <b><code>delegate:codex</code></b> ラベル。<code
+                      >/next-ticket</code
+                    >
+                    が tasklist を分割せず 1
+                    回で流す。<b>これより大きくしない</b>(検収単位が PR 1
+                    本を超える)
+                  </td>
+                </tr>
+                <tr>
+                  <td class="nowrap">行き詰まり調査 / 重要変更のレビュー</td>
+                  <td>
+                    <code>delegate-codex.sh explore</code> /
+                    <code>review</code>(read-only。並行可)
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note info">
+            <p>
+              <b
+                >委託は「<code>design.md</code>
+                を書き切るコスト」&lt;「実装ループのコスト」のときだけ得になる。</b
+              >
+              既存パターンの横展開(「A と同じ形で B
+              を作る」)は成立しやすく、新規パターンの 1 例目は成立しない ——
+              <b>参照実装は司令塔が書く</b>。
+            </p>
+          </div>
+          <p>
+            ラベルは条件が明らかなときの発行時、または
+            <code>design.md</code> を書き切った時点で付ける。計画中に Q1〜Q3
+            が出たら外す。<code>exit 3</code>(Codex 利用不可)では<b>外さない</b>
+            —— 環境の欠落であってチケットの属性ではない。
+          </p>
+
+          <h3>4.6 委託禁止領域(テンプレート既定の 18 パス)</h3>
+          <p>
+            事故のコストが高い領域は<b>パスで</b>外す。プロジェクト固有パスを含む全量は次で出る。
+          </p>
+          <div class="cmd">
+            <pre>bash .claude/scripts/delegate-codex.sh --print-forbidden</pre>
+          </div>
+
+          <div class="pathgroup">
+            <div class="pathhead danger">
+              <b>系統 1 — 実行される実体</b>1
+              行の書き換えで、検査が<b>静かに無効化</b>される
+            </div>
+            <div class="pathrow">
+              <code>.claude/scripts/</code
+              ><span
+                >委託の唯一の入口・保護ブランチ判定・CI が
+                <code>bash</code> で呼ぶ判定の実体</span
+              >
+            </div>
+            <div class="pathrow">
+              <code>.claude/hooks/</code
+              ><span
+                >PreToolUse / SessionStart hook
+                の実体。司令塔コンテキストへの注入元でもある</span
+              >
+            </div>
+            <div class="pathrow">
+              <code>.husky/</code
+              ><span
+                >ベンダー中立ガードレールの本体と、git
+                が実際に起動する入口(<code>.husky/_/</code>。git
+                追跡外だがハッシュで照合)</span
+              >
+            </div>
+            <div class="pathrow">
+              <code>.github/workflows/</code
+              ><span
+                >非 fork PR で
+                <code>CLAUDE_CODE_OAUTH_TOKEN</code>
+                に触れられる定義そのもの</span
+              >
+            </div>
+            <div class="pathrow">
+              <code>.devcontainer/</code
+              ><span
+                ><code>initializeCommand</code> はコンテナの外(ホスト)で、<code
+                  >postCreateCommand</code
+                >
+                は次のリビルドで走る</span
+              >
+            </div>
+            <div class="pathrow">
+              <code>.vscode/</code
+              ><span
+                >タスクの自動実行・ツールのパス指定。エディタを開いた瞬間にホストで走りうる</span
+              >
+            </div>
+            <div class="pathrow">
+              <code>.npmrc</code
+              ><span
+                ><code>registry</code> /
+                <code>script-shell</code> 等で、ホスト上の <code>npm ci</code> /
+                <code>npm test</code> の挙動を変えられる</span
+              >
+            </div>
+            <div class="pathrow">
+              <code>.codex/</code
+              ><span
+                >Codex 側の設定(<code>network_access</code> 等)とモード C
+                の手順書</span
+              >
+            </div>
+          </div>
+
+          <div class="pathgroup">
+            <div class="pathhead warn">
+              <b>系統 2 — コンテキストに注入される文書</b
+              >書いた内容が<b>そのまま恒久的な指示</b>になる
+            </div>
+            <div class="pathrow">
+              <code>.claude/rules/</code
+              ><span
+                >司令塔と全サブエージェントのコンテキストへ本文がそのまま載る</span
+              >
+            </div>
+            <div class="pathrow">
+              <code>CLAUDE.md</code
+              ><span
+                >全エージェントに毎回ロードされる(<code>rules/</code>
+                と同じ注入経路)</span
+              >
+            </div>
+            <div class="pathrow">
+              <code>AGENTS.md</code
+              ><span
+                >委託先の憲法。冒頭の verify-probe は次回委託時に<b
+                  >ホスト上で読まれる</b
+                ></span
+              >
+            </div>
+            <div class="pathrow">
+              <code>.mcp.json</code
+              ><span
+                >MCP サーバ定義 =
+                セッション開始時のローカルプロセス起動指示</span
+              >
+            </div>
+            <div class="pathrow">
+              <code>.claude/settings.json</code
+              ><span>hook の定義そのもの(どのコマンドを止めるかの宣言)</span>
+            </div>
+            <div class="pathrow">
+              <code>.claude/settings.local.json</code
+              ><span
+                >同上。<b>gitignore 済みで <code>git diff</code> に出ない</b
+                >が、次に人間がセッションを開いた瞬間にホストで走る</span
+              >
+            </div>
+          </div>
+
+          <div class="pathgroup">
+            <div class="pathhead accent">
+              <b>系統 3 — 全層が読む判定データ</b
+              >書き換わると<b>全層が正常に動作したうえで素通し</b>する
+            </div>
+            <div class="pathrow">
+              <code>.claude/branch-policy.json</code
+              ><span>保護ブランチ検査の全 3 層が読む単一ソース</span>
+            </div>
+            <div class="pathrow">
+              <code>.claude/codex-denylist.txt</code
+              ><span>委託先が自分の送信禁止リストを編集できてはならない</span>
+            </div>
+            <div class="pathrow">
+              <code>.harness/mode</code
+              ><span>委託先がハーネスモードを詐称できてはならない</span>
+            </div>
+            <div class="pathrow">
+              <code>.harness/codex-runs/</code
+              ><span
+                >委託先が自分の結果を
+                <code>accepted</code> に書き換えられてはならない</span
+              >
+            </div>
+          </div>
+
+          <h4>単一ソースは 2 箇所だけ — 足すときはここを直す</h4>
+          <div class="two">
+            <div class="card" style="border-top: 3px solid var(--accent)">
+              <div class="k">汎用項目(上の 18 パス)</div>
+              <div class="v">
+                <code>delegate-codex.sh</code> の <code>FORBIDDEN_PATHS</code>
+              </div>
+              <p>テンプレート由来。どのプロジェクトでも残る</p>
+            </div>
+            <div class="card" style="border-top: 3px solid var(--ok)">
+              <div class="k">プロジェクト固有パス</div>
+              <div class="v"><code>AGENTS.md</code> §4 のマーカー内</div>
+              <p>
+                認証・決済・データ移行などの<b>実パス</b>。<code>/kickoff</code>
+                フェーズ4 が書く
+              </p>
+            </div>
+          </div>
+          <p>
+            委託の開始時に<b>両方を抽出してマージ</b>し、前後の内容ハッシュに差があれば
+            <code>status=failed</code> / <code>exit 2</code>。CI の
+            <code>harness-integrity</code> が
+            <code>delegation-policy.md</code>
+            との記述乖離を<b>双方向・完全一致</b>で照合する。
+          </p>
+
+          <h3>4.7 設定ファイルの具体例</h3>
+          <p>
+            委託まわりで人が触るのはこの 4 つ。<b
+              >どれも Claude ではなく人間が決める</b
+            >。
+          </p>
+
+          <div class="card" style="margin-bottom: 10px">
+            <div class="k">何を止めるか(機密の送信禁止)</div>
+            <div class="v"><code>.claude/codex-denylist.txt</code></div>
+            <p>
+              該当ファイルが<b>存在するだけ</b>で委託を止めるフェイルクローズ検査。<code
+                >/</code
+              >
+              を含めばパス一致、含まなければファイル名一致。
+            </p>
+            <div class="cmd">
+              <pre><span class="c"># 1 行 1 パターン。空行と # 始まりは無視。glob(* ? [])が使える</span>
+.env
+.env.*
+*.pem
+credentials*
+*.sqlite
+.claude/settings.local.json</pre>
+            </div>
+            <p>
+              誤検出は<b>許容する層</b>(中身を見ずに名前だけで止める)。内容を確認したうえで通すときだけ次を付ける。
+            </p>
+            <div class="cmd">
+              <pre>
+CODEX_DELEGATE_ACK_SECRETS=1 bash .claude/scripts/delegate-codex.sh impl .steering/20261104-xxx/</pre>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom: 10px">
+            <div class="k">どこを渡さないか(プロジェクト固有)</div>
+            <div class="v"><code>AGENTS.md</code> §4 のマーカー内</div>
+            <p>
+              <b>「- パス — 説明」の 1 行</b>で書く。抽出されるのは説明ダッシュ(
+              —
+              )より前のバックティックだけで、説明文にバックティックを使うと委託のたびに警告が出る。
+            </p>
+            <div class="cmd">
+              <pre>
+&lt;!-- kickoff:delegation-forbidden-paths --&gt;
+
+- `src/auth/` — 認証の実体です。ここを書き換えられるとログイン境界が壊れます
+- `src/billing/**` — 決済処理です。金額計算の 1 行が実損害になります
+
+&lt;!-- /kickoff:delegation-forbidden-paths --&gt;</pre>
+            </div>
+            <p>
+              ディレクトリは <code>src/auth/</code> か
+              <code>src/auth/**</code>
+              の形で、<b>実在するパス</b>を書く(実在しない語は無視される)。
+            </p>
+          </div>
+
+          <div class="card" style="margin-bottom: 10px">
+            <div class="k">どのモードで回すか</div>
+            <div class="v"><code>.harness/mode</code></div>
+            <p>
+              <b>切替を宣言するのは人間</b>(Claude
+              は書き換えない)。ファイルが無ければ <code>normal</code>。
+            </p>
+            <div class="cmd">
+              <pre>echo econ &gt; .harness/mode   <span class="c"># 節約モードへ(枠を温存する)</span>
+rm .harness/mode            <span class="c"># 通常に戻す</span>
+bash .claude/scripts/harness-mode.sh   <span class="c"># いまのモードを表示(読み取りの唯一の経路)</span></pre>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="k">無人運用の上限と信頼するボット</div>
+            <div class="v"><code>.claude/autopilot.json</code></div>
+            <div class="cmd">
+              <pre>{
+  "maxInFlight": 2,          <span class="c">// 同時に進める作業の上限(レビュー待ちの PR も数える)</span>
+  "pollSeconds": 300,        <span class="c">// 待機中の再判定間隔。この間 Claude は起動しない</span>
+  "maxRuns": 20,             <span class="c">// ループが claude -p を起動する回数の上限</span>
+  "econ": { "maxInFlight": 4 },
+  "trustedBots": ["claude[bot]", "github-actions[bot]"],
+  "trustedReviewBots": ["chatgpt-codex-connector[bot]"]
+}</pre>
+            </div>
+            <p>
+              <b
+                ><code>trustedBots</code> と
+                <code>trustedReviewBots</code> はどちらに書いても両方で効く</b
+              >(和集合)。名前が一致するだけの人間のアカウントは信頼されない(<code
+                >user.type == "Bot"</code
+              >
+              を併せて見る)。
+            </p>
+          </div>
+
+          <div class="note warn">
+            <p>
+              <b>denylist と委託禁止領域は別の層。</b> denylist
+              は<b>何を送らないか</b>(存在するだけで中止)、禁止領域は<b>どこを書かせないか</b>(前後のハッシュ比較)。denylist
+              が守るのは<b>ワークツリー内だけ</b>で、ホーム配下の資格情報は検査対象にすらならない(環境変数経由の漏れは
+              <code>env -i</code> + 許可リストで別途塞いである)。
+            </p>
+          </div>
+
+          <h3>4.8 Codex を使わない場合</h3>
+          <p>
+            Codex CLI が無い・未認証の環境では <code>delegate-codex.sh</code> が
+            <code>exit 3</code> を返し、<b
+              >そのセッションは以降ずっと <code>implement-ticket</code>(Sonnet
+              fork)にフォールバックする</b
+            >。<code>delegate:codex</code>
+            ラベルが付いていても同じで、テンプレートの全フローは Codex
+            無しで成立する。
+          </p>
+        </section>
+
+        <section id="models">
+          <h2><span class="sectnum">5</span>モデル運用方針</h2>
+          <p class="chaplead">
+            <b>どの作業をどのモデルが担うか</b
+            >。役割ごとの既定と、チケット単位で担当を切り替える方法(<code>route.sh</code>)、レビューの使い分け。
+          </p>
+
+          <h3>5.1 役割ごとの既定</h3>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>役割</th>
+                  <th>モデル</th>
+                  <th>備考</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="nowrap">司令塔(メインセッション)</td>
+                  <td><b>Opus</b></td>
+                  <td>
+                    計画・設計判断・統合・報告。<code
+                      >.claude/settings.json</code
+                    >
+                    で固定済み
+                  </td>
+                </tr>
+                <tr>
+                  <td class="nowrap">実装フェーズ</td>
+                  <td><b>Codex / Sonnet</b></td>
+                  <td>
+                    既定は Codex(<code>delegate-codex.sh impl</code
+                    >)。使えなければ <code>implement-ticket</code>(<code
+                      >context: fork</code
+                    >)が Sonnet で実行。<b>ユーザーもモデルも切り替えない</b>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="nowrap">委譲作業(subagent)</td>
+                  <td><b>Sonnet</b></td>
+                  <td>
+                    <code>implementer</code> / <code>code-reviewer</code> /
+                    <code>implementation-validator</code> /
+                    <code>doc-reviewer</code> / 組み込みの Explore
+                  </td>
+                </tr>
+                <tr>
+                  <td class="nowrap">品質チェック実行</td>
+                  <td><b>Haiku</b></td>
+                  <td>
+                    <code>test-runner</code
+                    >。lint・テスト実行と機械的修正、サマリーのみ返す
+                  </td>
+                </tr>
+                <tr>
+                  <td class="nowrap">最難関タスク</td>
+                  <td><b>Fable 5</b>(一時切替)</td>
+                  <td>
+                    難度の高い設計・原因不明の調査のみ。<code
+                      >/model fable</code
+                    >
+                    → 完了後 <code>/model opus</code>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 id="routing">5.2 担当AIの切り替え(<code>route.sh</code>)</h3>
+          <p>
+            実装とレビューを<b>どの AI に任せるか</b
+            >は、チケットごと・実行ごとに切り替えられる。判定の実体は
+            <code>.claude/scripts/route.sh</code> の 1
+            本で、<b>上から順に見て最初に見つかったもので決まる</b>。
+          </p>
+          <div class="branches">
+            <div class="branchrow ok">
+              <div class="cond">1. コマンドの記載</div>
+              <div class="then">
+                <code>/next-ticket 12 実装=sonnet レビュー=codex</code> —
+                その実行だけの指定。最優先
+              </div>
+            </div>
+            <div class="branchrow ok">
+              <div class="cond">2. Issue のチェック</div>
+              <div class="then">
+                「担当AI」欄。<b>起票後もクリックで付け替えられる</b>ので、チケット単位の指定はここが基本
+              </div>
+            </div>
+            <div class="branchrow warn">
+              <div class="cond">3. ラベル</div>
+              <div class="then">
+                <code>delegate:codex</code> — 旧来の指定。「実装:
+                Codex」のチェックと同じ意味
+              </div>
+            </div>
+            <div class="branchrow">
+              <div class="cond">4. routing.json</div>
+              <div class="then">
+                プロジェクトの既定(<code>.claude/routing.json</code>)
+              </div>
+            </div>
+            <div class="branchrow">
+              <div class="cond">5. 既定値</div>
+              <div class="then">実装 = Codex / レビュー = Claude Sonnet</div>
+            </div>
+          </div>
+
+          <h3>5.3 選べる値は 5 つ</h3>
+          <p>
+            <b>実装</b
+            >と<b>レビュー</b>で別々に選べる。計画・設計と統合はメインセッション(Opus)固定なので、選択肢に出てこない。
+          </p>
+          <div class="picks">
+            <div class="pick codex">
+              <div class="v">codex</div>
+              <div class="tags">
+                <span class="tag ok">実装 ✓</span
+                ><span class="tag ok">レビュー ✓</span>
+              </div>
+              <p class="boot">
+                起動 → <code>delegate-codex.sh impl</code> / <code>review</code>
+              </p>
+              <p>
+                別プロセス・sandbox で回り、<b>Claude の枠を消費しない</b>。定型
+                CRUD・既存パターンの横展開・別ベンダーの第二意見に向く
+              </p>
+            </div>
+            <div class="pick claude">
+              <div class="v">sonnet</div>
+              <div class="tags">
+                <span class="tag ok">実装 ✓</span
+                ><span class="tag ok">レビュー ✓</span>
+              </div>
+              <p class="boot">
+                起動 → <code>implement-ticket</code>(fork)/
+                <code>code-reviewer</code>
+              </p>
+              <p>
+                <b>レビューの既定</b>。実装では Codex
+                が使えないときのフォールバック先でもある(<code>exit 3</code>)
+              </p>
+            </div>
+            <div class="pick claude">
+              <div class="v">opus</div>
+              <div class="tags">
+                <span class="tag ok">実装 ✓</span
+                ><span class="tag ok">レビュー ✓</span>
+              </div>
+              <p class="boot">
+                起動 → <code>implementer</code> /
+                <code>code-reviewer</code>(model 指定)
+              </p>
+              <p>
+                難度の高い実装や、認証・決済まわりのレビュー。<b
+                  >枠を最も食うので常用しない</b
+                >
+              </p>
+            </div>
+            <div class="pick claude">
+              <div class="v">haiku</div>
+              <div class="tags">
+                <span class="tag ok">実装 ✓</span
+                ><span class="tag ok">レビュー ✓</span>
+              </div>
+              <p class="boot">
+                起動 → <code>implementer</code> /
+                <code>code-reviewer</code>(model 指定)
+              </p>
+              <p>
+                機械的な置換・軽いチェック向け。<b
+                  >設計判断が要る作業には使わない</b
+                >
+              </p>
+            </div>
+            <div class="pick pick-auto">
+              <div class="v">auto</div>
+              <div class="tags">
+                <span class="tag off">実装 —</span
+                ><span class="tag ok">レビュー ✓</span>
+              </div>
+              <p class="boot">起動 → 実装と<b>別ベンダー</b>を自動で選ぶ</p>
+              <p>
+                Codex が実装 → Sonnet がレビュー / Claude が実装 → Codex
+                がレビュー。<b
+                  >同じベンダーの自己レビューは第二意見にならない</b
+                >
+              </p>
+            </div>
+          </div>
+          <div class="branches">
+            <div class="branchrow danger">
+              <div class="cond">Codex が使えない</div>
+              <div class="then">
+                指定が <code>codex</code> でも Claude に切り替わる(<code
+                  >exit 3</code
+                >)。<b>チケットの指定は外さない</b> ——
+                環境の欠落であってチケットの属性ではない
+              </div>
+            </div>
+            <div class="branchrow warn">
+              <div class="cond">無人運用(econ)</div>
+              <div class="then">
+                Codex に委託するチケットだけを回す。担当が Claude のチケットには
+                <code>autopilot:manual</code> を付けて候補から外す
+              </div>
+            </div>
+            <div class="branchrow">
+              <div class="cond">記録</div>
+              <div class="then">
+                どの担当で何回往復したかは
+                <code>.harness/decisions.jsonl</code> の
+                <code>route</code> に残る(担当ごとの比較用)
+              </div>
+            </div>
+          </div>
+
+          <h3>5.4 指定のしかた(具体例)</h3>
+          <p>
+            上ほど優先される。どれも書かなければ既定(実装 = Codex / レビュー =
+            Sonnet)になる。
+          </p>
+
+          <div
+            class="card"
+            style="margin-bottom: 10px; border-top: 3px solid var(--ok)"
+          >
+            <div class="k">優先 1 — その実行だけ</div>
+            <div class="v">コマンドに書く</div>
+            <div class="cmd">
+              <pre>
+/next-ticket 12 実装=sonnet レビュー=codex
+/add-feature ユーザープロフィール編集 実装=codex
+/fix-issue 42 レビュー=auto</pre>
+            </div>
+          </div>
+
+          <div
+            class="card"
+            style="margin-bottom: 10px; border-top: 3px solid var(--ok)"
+          >
+            <div class="k">優先 2 — チケット単位(基本はここ)</div>
+            <div class="v">Issue 本文の「担当AI」欄をクリック</div>
+            <p>
+              <code>/setup-tickets</code>
+              が<b>チェックなしで</b>全チケットに入れる。起票後もクリックで付け替えられる。
+            </p>
+            <div class="cmd" data-raw>
+              <pre>
+## 担当AI
+- [x] 実装: Codex
+- [ ] 実装: Claude Sonnet
+- [ ] 実装: Claude Opus
+- [ ] レビュー: Codex
+- [x] レビュー: auto</pre>
+            </div>
+            <p class="boot">
+              同じ工程に 2 つチェックを入れると
+              <code>exit 2</code>(指定が不正)になる。
+            </p>
+          </div>
+
+          <div
+            class="card"
+            style="margin-bottom: 10px; border-top: 3px solid var(--warn)"
+          >
+            <div class="k">優先 3 — 旧来の指定(実装だけ)</div>
+            <div class="v"><code>delegate:codex</code> ラベル</div>
+            <div class="cmd">
+              <pre>
+gh issue edit 12 --add-label delegate:codex
+gh issue edit 12 --remove-label delegate:codex</pre>
+            </div>
+            <p>
+              「実装: Codex」のチェックと同じ意味。<b
+                >計画中に禁止領域・新規依存・未確定の設計判断が出たら外す。</b
+              >
+            </p>
+          </div>
+
+          <div class="card" style="margin-bottom: 10px">
+            <div class="k">優先 4 — プロジェクトの既定</div>
+            <div class="v"><code>.claude/routing.json</code></div>
+            <div class="cmd">
+              <pre>
+{
+  "implement": "codex",
+  "review": "sonnet"
+}</pre>
+            </div>
+            <p>
+              テンプレート既定と同じ値なので、<b>置くだけでは挙動は変わらない</b>。
+            </p>
+          </div>
+
+          <div class="card">
+            <div class="k">確認する</div>
+            <div class="v">いま誰が担当になるか</div>
+            <div class="cmd">
+              <pre>
+bash .claude/scripts/route.sh implement --issue 12
+bash .claude/scripts/route.sh review --issue 12 --explain
+bash .claude/scripts/route.sh implement --set 実装=sonnet</pre>
+            </div>
+            <p>
+              stdout は <code>codex</code> / <code>claude:sonnet</code> /
+              <code>claude:opus</code> / <code>claude:haiku</code> のいずれか 1
+              行。<code>--explain</code> は<b>どの指定から決まったか</b>を
+              stderr に 1 行出す。<b
+                >推測で担当を選ばず、必ずこの出力に従う。</b
+              >
+            </p>
+          </div>
+
+          <h3>5.5 実装フェーズを司令塔から切り離す理由</h3>
+          <p>
+            トークン消費が最も大きいのは「実装 → テスト → エラーを読む →
+            修正」のループで、ここを司令塔の外で回すのが上限消費を減らす最大の手段になる。手動で
+            <code>/model</code> を切り替える運用は、<b
+              >切替前の
+              <code>/clear</code>
+              を忘れると膨らんだコンテキスト全体がキャッシュミスとなり全額課金される</b
+            >という失敗モードを持っていた。
+          </p>
+          <p>
+            そこで実装フェーズを委託に切り出している。<b
+              >委託先が変わっても司令塔の分岐(完了 / 判断待ち / 失敗)は同じ</b
+            >であることが設計要件。
+          </p>
+          <ul>
+            <li>
+              <b>Codex 委託</b>:
+              実装ループは別プロセスで回り、司令塔には終了コードとサマリーだけが返る。Claude
+              の枠を消費しない
+            </li>
+            <li>
+              <b>Sonnet fork</b>: <code>context: fork</code> +
+              <code>model: sonnet</code> で subagent が実装する。司令塔は Opus
+              のまま。長いログは fork 側で完結し、サマリー 20 行だけが返る
+            </li>
+            <li>
+              fork は会話履歴を持たず <code>design.md</code> /
+              <code>tasklist.md</code> だけを読む。<b
+                >計画の粒度がそのまま往復コストになる。</b
+              >
+              1 チケットで往復が 2 回を超えたら粒度不足のサイン
+            </li>
+            <li>
+              司令塔が委譲を迂回して自分で実装しようとすると、PreToolUse hook
+              がブロックする
+            </li>
+            <li>
+              <b>参照実装は司令塔が書く。</b> P0 の基盤や新パターンの 1
+              例目は品質のレバレッジが最大。2 例目以降の横展開が委託の主戦場
+            </li>
+          </ul>
+
+          <h3>5.6 レビューの使い分け</h3>
+          <ul>
+            <li>
+              <b>実装中(主レビュー)</b>:
+              <code>code-reviewer</code> subagent(read-only / Sonnet)。<code
+                >docs/</code
+              >
+              とのスペック整合もここで確認する
+            </li>
+            <li>
+              <b>PR 時(最終ゲート)</b>: <code>main</code> 向け PR のオープン時 /
+              ready_for_review 時に 1 回だけ自動で走る。push
+              ごとの再レビューは無い。必要なときは
+              <code>@claude</code> にメンションする
+            </li>
+            <li>
+              <b>200 行以上 かつ 重要変更</b
+              >(認証・決済・データ移行・アーキテクチャ変更):
+              <b>既定は <code>delegate-codex.sh review</code></b
+              >。read-only
+              で司令塔が自分で起動でき、別ベンダーの第二意見にもなる。判断の単一ソースは
+              <code>review-policy.md</code>
+              <ul>
+                <li>
+                  <code>/code-review ultra</code> は<b>ユーザー起動 + 課金</b
+                  >で司令塔からは起動できない。提案するのは (1) その差分自体を
+                  Codex が書いた場合、(2) Codex が使えない場合の 2 つだけ。<b
+                    >既定と併用しない</b
+                  >
+                </li>
+              </ul>
+            </li>
+            <li>
+              <b>UI/画面</b>: <code>docs/ui-design-guidelines.md</code> §6
+              のチェックリストを <code>code-reviewer</code> に当てる
+            </li>
+          </ul>
+          <p>
+            判断の根拠と実測値は
+            <code>docs/template-dev/cost-model.md</code>、委託設計の根拠は
+            <code>docs/template-dev/codex-delegation-plan.md</code
+            >、実測の記録方法は
+            <code>docs/template-dev/econ-measurement.md</code>。
+          </p>
+        </section>
+
+        <section id="commands">
+          <h2><span class="sectnum">6</span>コマンド早見表</h2>
+          <p class="chaplead">
+            <b>何を打てばよいか</b
+            >。スラッシュコマンドと、判定の実体になっているスクリプトの一覧。
+          </p>
+
+          <h3>6.1 いつ使うか</h3>
+          <div class="loops">
+            <div class="loop human">
+              <div class="when">きっかけ: プロジェクトを始めた</div>
+              <div class="name">初回だけ(<a href="#start">1 章</a>)</div>
+              <ol>
+                <li><code>/kickoff</code> — 以下をまとめて</li>
+                <li>
+                  <code>/setup-project</code> → <code>/setup-tickets</code>
+                </li>
+                <li><code>/harness-setup</code></li>
+              </ol>
+            </div>
+            <div class="loop lead">
+              <div class="when">きっかけ: 枠が空いた / 機能を足したい</div>
+              <div class="name">チケットごと(<a href="#flow">2 章</a>)</div>
+              <ol>
+                <li>
+                  <code>/next-ticket</code>・<code>/add-feature</code>・<code
+                    >/fix-issue</code
+                  >
+                </li>
+                <li><code>/check</code> → <code>/commit</code> → PR</li>
+                <li>無人なら <code>/autopilot</code> が代行</li>
+              </ol>
+            </div>
+            <div class="loop auto">
+              <div class="when">きっかけ: 詰まった / 区切りがついた</div>
+              <div class="name">随時</div>
+              <ol>
+                <li>
+                  <code>/status</code>・<code>/resume-work</code> — 現在地と再開
+                </li>
+                <li><code>/fix-pr</code> — 赤い PR を直す</li>
+                <li>
+                  <code>/sync-docs</code>・<code>/sync-template</code> — 棚卸し
+                </li>
+              </ol>
+            </div>
+          </div>
+
+          <h3>6.2 コマンド一覧</h3>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>コマンド</th>
+                  <th>タイミング</th>
+                  <th>内容</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>/kickoff</code></td>
+                  <td>初回</td>
+                  <td>Step 1〜4 + README のプロダクト化を一気通貫</td>
+                </tr>
+                <tr>
+                  <td><code>/setup-project</code></td>
+                  <td>初回</td>
+                  <td>永続ドキュメント 6 つを対話作成</td>
+                </tr>
+                <tr>
+                  <td><code>/setup-spoke-standards</code></td>
+                  <td>初回(任意・チケット発行前)</td>
+                  <td>
+                    スポーク公開向け構成ルール(<b>ハブ側リポジトリで実行</b>)
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>/setup-tickets</code></td>
+                  <td>初回(任意)</td>
+                  <td>実装チケットを GitHub Issues に発行</td>
+                </tr>
+                <tr>
+                  <td><code>/harness-setup</code></td>
+                  <td>初回(検証コマンド確定後)</td>
+                  <td>ハーネス層の追加(スキルとして提供)</td>
+                </tr>
+                <tr>
+                  <td><code>/next-ticket</code></td>
+                  <td>日常</td>
+                  <td>次のチケットに着手(ラベル管理込み)</td>
+                </tr>
+                <tr>
+                  <td><code>/autopilot</code></td>
+                  <td>日常</td>
+                  <td>チケット消化の自動進行(事前チェック → 開始)</td>
+                </tr>
+                <tr>
+                  <td><code>/fix-pr [番号]</code></td>
+                  <td>日常</td>
+                  <td>既存 PR の修復(コンフリクト・CI・レビュー指摘)</td>
+                </tr>
+                <tr>
+                  <td><code>/ship-ticket [番号]</code></td>
+                  <td>econ 自動進行が呼ぶ</td>
+                  <td>Codex の委託成果を draft PR にする(検収なし)</td>
+                </tr>
+                <tr>
+                  <td><code>/add-feature [機能]</code></td>
+                  <td>日常</td>
+                  <td>機能追加の計画→実装→検証→PR</td>
+                </tr>
+                <tr>
+                  <td><code>/fix-issue [番号]</code></td>
+                  <td>日常</td>
+                  <td>Issue 修正と PR 作成</td>
+                </tr>
+                <tr>
+                  <td><code>/check</code></td>
+                  <td>日常</td>
+                  <td>
+                    品質チェック一括実行&amp;自動修正(lint・型・テスト・整形・シェル検査)
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>/commit</code></td>
+                  <td>日常</td>
+                  <td>適切な粒度でのコミット</td>
+                </tr>
+                <tr>
+                  <td><code>/status</code></td>
+                  <td>随時</td>
+                  <td>現在地と次の一手(読み取り専用)</td>
+                </tr>
+                <tr>
+                  <td><code>/resume-work</code></td>
+                  <td>随時</td>
+                  <td>中断作業の再開</td>
+                </tr>
+                <tr>
+                  <td><code>/sync-docs</code></td>
+                  <td>定期</td>
+                  <td>実装と <code>docs/</code> の同期</td>
+                </tr>
+                <tr>
+                  <td><code>/review-docs [パス]</code></td>
+                  <td>随時</td>
+                  <td>ドキュメントの詳細レビュー</td>
+                </tr>
+                <tr>
+                  <td><code>/sync-template</code></td>
+                  <td>随時(テンプレート更新時)</td>
+                  <td>テンプレートの更新差分を取り込む</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>6.3 スクリプト早見表(<code>.claude/scripts/</code>)</h3>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>スクリプト</th>
+                  <th>役割</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>delegate-codex.sh</code></td>
+                  <td>
+                    Codex 委託の唯一の入口(<code>explore</code> /
+                    <code>review</code> / <code>impl</code> /
+                    <code>--print-forbidden</code>)
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>codex-run.sh</code></td>
+                  <td>run record の一覧・検収・状態更新・剪定</td>
+                </tr>
+                <tr>
+                  <td><code>harness-mode.sh</code></td>
+                  <td>ハーネスモード読み取りの唯一の経路</td>
+                </tr>
+                <tr>
+                  <td><code>route.sh &lt;implement|review&gt;</code></td>
+                  <td>担当AI(実装・レビュー)の判定の唯一の経路</td>
+                </tr>
+                <tr>
+                  <td><code>check-guard-integrity.sh</code></td>
+                  <td>
+                    ガードレール健全性(引数なし / <code>degraded</code> /
+                    <code>hooks-path</code>)
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>check-protected-branch.sh</code></td>
+                  <td>保護ブランチ判定の実体(強制 3 層が共有)</td>
+                </tr>
+                <tr>
+                  <td><code>check-shell.sh</code></td>
+                  <td>
+                    shellcheck の唯一の実行経路(対象選定と引数を集約。CI と
+                    <code>/check</code> が共有)
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>latest-steering.sh</code></td>
+                  <td>
+                    最新 <code>.steering/</code> の判定(hook・fork・SessionStart
+                    が共有)
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>check-record-hygiene.sh</code></td>
+                  <td>
+                    CHANGELOG / decisions.jsonl の記録漏れ判定(CI
+                    と手元で同じ結果)
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>check-forbidden-paths-doc.sh</code></td>
+                  <td>委託禁止領域の記述乖離の双方向照合</td>
+                </tr>
+                <tr>
+                  <td><code>autopilot-next.sh</code></td>
+                  <td>
+                    チケット自動進行の判定(<code>/next-ticket</code> /
+                    <code>/autopilot</code> / ループが共有)
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>autopilot-loop.sh</code> /
+                    <code>-preflight.sh</code> / <code>-board.sh</code>
+                  </td>
+                  <td>自動進行のループ / 開始前チェック / 全体管理 Issue</td>
+                </tr>
+                <tr>
+                  <td><code>pr-feedback.sh</code></td>
+                  <td>
+                    PR
+                    のレビュー・コメントを読む唯一の経路(信頼する書き手の本文だけを返す)
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>sync-template.mjs</code></td>
+                  <td>
+                    テンプレート同期の実体(<code>--check-drift</code>
+                    でドリフト検出)
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>block-dangerous-cmds.sh</code> /
+                    <code>check-branch-policy.sh</code> /
+                    <code>check-implementation-phase.sh</code> /
+                    <code>lint-on-edit.sh</code>
+                  </td>
+                  <td>hook の実体</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>lib-record.sh</code> / <code>lib-github.sh</code> /
+                    <code>lib-forbidden.sh</code> / <code>lib-probe.sh</code>
+                  </td>
+                  <td>
+                    source 専用の共有ライブラリ(<b>実行権限を付けない</b>。CI
+                    が検査する)
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="sync">
+          <h2><span class="sectnum">7</span>テンプレート更新の取り込み</h2>
+          <p class="chaplead">
+            <b>このテンプレートから作ったプロジェクト</b
+            >が、後からテンプレ側の更新を取り込む手順。普段は自動
+            PR、判断が要るときだけ <code>/sync-template</code>。
+          </p>
+          <p>
+            このテンプレートから作ったプロジェクトは、テンプレート側でルール・コマンド・ハーネスが更新されたときに差分を取り込める。<b
+              >機械的な取り込みは <code>sync-template.mjs</code> が行い</b
+            >、月次の
+            <code>template-update-check</code> ワークフローがそれで同期 PR
+            を自動作成する。判断が要るもの(競合・<code>[manual]</code>
+            項目)が残ったときだけ <code>/sync-template</code>(Claude)を使う。
+          </p>
+
+          <h3>7.1 更新が届くまで</h3>
+          <div class="lanes">
+            <div class="lanehead">
+              <span>きっかけ</span><span>動かす人</span><span>すること</span>
+            </div>
+            <div class="lane auto">
+              <div class="trig"><b class="ph">1</b>毎月 1 日(手動実行も可)</div>
+              <div class="who"><span class="chip auto">Actions</span></div>
+              <div class="do">
+                <code>template-update-check</code> が
+                <code>syncedAt</code> 以降のテンプレ差分を取り、<code
+                  >sync-template.mjs</code
+                >
+                を流す
+              </div>
+            </div>
+            <div class="lane auto">
+              <div class="trig"><b class="ph">2</b>差分が出た</div>
+              <div class="who"><span class="chip auto">スクリプト</span></div>
+              <div class="do">
+                manifest の区分で処理する —— <b>owned</b> = 上書き /
+                <b>merge</b> = 前回同期版を祖先にした 3-way マージ /
+                <b>never</b> = 触らない
+              </div>
+            </div>
+            <div class="lane auto">
+              <div class="trig"><b class="ph">3</b>競合なし</div>
+              <div class="who"><span class="chip auto">Actions</span></div>
+              <div class="do">
+                <b>同期 PR</b> を作る。<b
+                  >Claude を起動しないので枠を消費しない</b
+                >(Actions 製の PR は CI が自動で走らないため Close → Reopen
+                で起動する)
+              </div>
+            </div>
+            <div class="lane auto">
+              <div class="trig">
+                <b class="ph">4</b>競合あり / workflows が変わる / PR 作成が無効
+              </div>
+              <div class="who"><span class="chip auto">Actions</span></div>
+              <div class="do">
+                PR を作らず <b>Issue</b> で知らせる(ブランチだけ push される)
+              </div>
+            </div>
+            <div class="lane human">
+              <div class="trig"><b class="ph">5</b>PR / Issue が来た</div>
+              <div class="who"><span class="chip human">人間</span></div>
+              <div class="do">
+                中身を見る。機械で片付いた分はそのままマージ、残りだけ
+                <code>/sync-template</code> を回す
+              </div>
+            </div>
+            <div class="lane lead">
+              <div class="trig">
+                <b class="ph">6</b>競合・<code>[manual]</code> が残っている
+              </div>
+              <div class="who"><span class="chip lead">司令塔</span></div>
+              <div class="do">
+                CHANGELOG の <code>[manual]</code> の指示どおり直し、競合を解消
+                → <code>/check</code> → PR。<b
+                  >hooks / scripts が入れ替わるので再起動が要る</b
+                >
+              </div>
+            </div>
+          </div>
+
+          <h3>7.2 仕組みの要点</h3>
+          <ul>
+            <li>
+              <b>所有権の分離</b>: 共通ルールは
+              <code>.claude/rules/</code
+              >(テンプレート所有・上書き対象)。全エージェント共通のものは
+              <code>CLAUDE.md</code> が
+              <code>@</code>
+              インポートし、司令塔専用のもの(<code>lead/</code>)は SessionStart
+              hook が注入する。プロジェクト固有の追記は
+              <code>CLAUDE.md</code>
+              の「プロジェクト固有ルール」節に書く(同期で失われない)
+            </li>
+            <li>
+              <b>同期対象の単一ソース</b>:
+              <code>.claude/template-manifest.json</code> の
+              <code>owned</code>(上書き)/ <code>merge</code>(3-way マージ)/
+              <code>never</code
+              >(触らない)。パスが複数に該当するときは最も具体的な(長い)エントリが勝ち、同じ長さなら
+              <code>owned</code> &gt; <code>merge</code> &gt;
+              <code>never</code>。<code>syncedAt</code> に前回同期した<b
+                >テンプレート側の commit SHA</b
+              >
+              を持ち、そこからの差分だけを見る
+            </li>
+            <li>
+              <b>変更の伝達</b>: テンプレート側の
+              <code>docs/template-dev/CHANGELOG.md</code> に
+              <code>[auto]</code> / <code>[manual]</code> を明示する。<code
+                >/sync-template</code
+              >
+              はリモートから直接読むため、<code>docs/template-dev/</code>
+              を削除済みのプロジェクトでも機能する
+            </li>
+            <li>
+              <b>3-way マージ</b>: テキストは <code>git merge-file</code>(ignore
+              系は行の和集合)、JSON
+              はキー単位の構造マージ。プロジェクト側の追記(allowlist・ignore
+              行・Flutter
+              対応など)を保ったままテンプレート側の変更が入り、<b>両側が同じ箇所を変えたときだけ</b>競合になる
+            </li>
+            <li>
+              <b>自動 PR</b>: 月次ワークフローが同期スクリプトを流して PR
+              を作る(Claude は起動しないため枠を消費しない)。競合がある・<code
+                >.github/workflows/</code
+              >
+              が変わる・リポジトリ設定で Actions からの PR 作成が無効、のときは
+              Issue で知らせる。PR 作成には Settings → Actions → General の
+              <b>Allow GitHub Actions to create and approve pull requests</b>
+              を有効にする。Actions が作った PR では CI が自動で走らないので
+              Close → Reopen で起動する
+            </li>
+            <li>
+              <b>ドリフト検出</b>:
+              <code>node .claude/scripts/sync-template.mjs --check-drift</code>
+              で、owned
+              なのに書き換えてあるファイル(次の同期で失われる変更)を列挙できる
+            </li>
+            <li>
+              <b>プロジェクト側で同期を止める</b>: 更新されたくないファイルは
+              manifest の <code>never</code> に足す(区分の判定で最優先される)
+            </li>
+          </ul>
+          <div class="note danger">
+            <p>
+              ⚠️ <code>.claude/rules/</code>(<code>lead/</code>
+              を含む)を直接編集しないこと。次回の
+              <code>/sync-template</code>
+              で上書きされる。共通ルールを変えたい場合はテンプレート側を直すか、<code
+                >CLAUDE.md</code
+              >
+              に例外を書く。
+            </p>
+          </div>
+
+          <details>
+            <summary>
+              同期未対応のプロジェクトを追いつかせる(初回ブートストラップ)
+            </summary>
+            <p>
+              <code>.claude/template-manifest.json</code>
+              が導入される前のテンプレートで始めたプロジェクトは、<b
+                >同期の起点を手で刻んでから</b
+              >
+              <code>/sync-template</code> に載せる。<code>/kickoff</code>
+              の再実行はしないこと(ドキュメントとチケットを作り直す流れのため)。
+            </p>
+            <p>
+              作業ツリーをクリーンにしてから、プロジェクト側リポジトリで実行する。
+            </p>
+            <div class="cmd">
+              <pre>
+git switch -c chore/sync-template-$(date +%Y%m%d)
+git remote add template &lt;テンプレートリポジトリの URL&gt;
+git fetch template main --quiet
+git checkout template/main -- .claude/commands/sync-template.md .claude/scripts/sync-template.mjs .claude/template-manifest.json</pre>
+            </div>
+            <p>
+              取り込んだ manifest の <code>syncedAt</code> に、<b
+                >そのプロジェクトが出発点にしたテンプレート側の commit SHA</b
+              >
+              を書く(<code>null</code>
+              のままだと差分抽出が全ファイル比較になる)。分からない場合はプロジェクトの最初のコミット日以前で最も近いテンプレート側のコミットを使う。<code
+                >templateRepo</code
+              >
+              が以降の同期元になるので、値が正しいかもここで確認する。
+            </p>
+            <p>
+              あとは Claude Code を再起動して
+              <code>/sync-template</code> を実行する。古い出発点ほど
+              <code>[manual]</code>
+              が積み上がっており、特に次が取りこぼしやすい。
+            </p>
+            <ul>
+              <li>
+                <b><code>CLAUDE.md</code> のルール分離</b>:
+                共通ルールがインラインなら、該当節を
+                <code>@.claude/rules/spec-driven.md</code> の 1 行に置き換える
+              </li>
+              <li>
+                <b>手動 <code>/model sonnet</code> 運用の削除</b>:
+                実装フェーズは委託に変わった
+              </li>
+              <li>
+                <b><code>AGENTS.md</code> の検証プローブ</b>:
+                <code>&lt;!-- verify-probe: ... --&gt;</code> は
+                <code>exists &lt;リポジトリ相対パス&gt;</code>
+                形式が既定。旧形式はホスト上で実行される経路が残る
+              </li>
+              <li>
+                <b>委託禁止領域の <code>.husky/</code> 統合</b>: §4
+                に個別記述が残っていれば <code>.husky/</code> の 1
+                行に置き換える
+              </li>
+              <li>
+                <b><code>.claude/settings.json</code></b
+                >(merge 対象): <code>hooks</code> と
+                <code>permissions.allow</code> の追加分を自分の配列に足す
+              </li>
+            </ul>
+            <p>
+              最後に
+              <code>chmod +x .claude/hooks/*.sh .claude/scripts/*.sh</code> →
+              <code>/check</code> → <code>/commit</code> → PR。hooks / scripts /
+              <code>settings.json</code> が入れ替わるため、<b
+                >反映には Claude Code の再起動が必要</b
+              >。
+            </p>
+          </details>
+        </section>
+
+        <section id="tree">
+          <h2><span class="sectnum">8</span>ディレクトリ構造</h2>
+          <p class="chaplead"><b>どのファイルが何を決めているか</b>の地図。</p>
+          <p>
+            役割で見ると 3 系統に分かれる。<b
+              >この分類がそのまま <a href="#codex">委託禁止領域</a>の線引き</b
+            >になっている(事故ったときのコストが高い順)。
+          </p>
+          <div class="two">
+            <div class="card" style="border-top: 3px solid var(--danger)">
+              <div class="k">系統 1</div>
+              <div class="v">実行される実体</div>
+              <p>
+                <code>.claude/scripts/</code> <code>.claude/hooks/</code>
+                <code>.husky/</code> <code>.github/workflows/</code>
+                <code>.devcontainer/</code> — 1
+                行の書き換えで検査が<b>静かに無効化</b>される
+              </p>
+            </div>
+            <div class="card" style="border-top: 3px solid var(--warn)">
+              <div class="k">系統 2</div>
+              <div class="v">コンテキストに注入される文書</div>
+              <p>
+                <code>CLAUDE.md</code> <code>.claude/rules/</code>(<code
+                  >lead/</code
+                >
+                <code>mode/</code>)<code>AGENTS.md</code>
+                <code>.mcp.json</code> — 書いた内容が<b>そのまま指示になる</b>
+              </p>
+            </div>
+            <div class="card" style="border-top: 3px solid var(--accent)">
+              <div class="k">系統 3</div>
+              <div class="v">全層が読む判定データ</div>
+              <p>
+                <code>branch-policy.json</code> <code>routing.json</code>
+                <code>autopilot.json</code> <code>template-manifest.json</code>
+                <code>.harness/mode</code> —
+                書き換わると<b>全層が正常に動作したうえで素通し</b>する
+              </p>
+            </div>
+          </div>
+          <div class="tree">
+            <pre>
+docs/                  永続ドキュメント(プロジェクトの北極星。/setup-project が生成)
+├── ui-design-guidelines.md       UI 品質基準(スタック非依存。同梱ガイド)
+├── ui-design-request-template.md AI に画面デザインを依頼するプロンプト雛形
+├── ideas/             下書き・アイデア(開始の起点は initial-requirements.md)
+└── template-dev/      テンプレート開発の記録・CHANGELOG・コストモデル(開発開始後は削除可)
+.steering/             作業単位の計画・タスクリスト(履歴として保持)
+.harness/              ハーネス状態
+├── decisions.jsonl    横断的な判断ログ(削除禁止・追記のみ。コミットする)
+├── mode               運用モード(normal / econ / degraded。切替は人間が宣言。gitignore 済み)
+└── codex-runs/        Codex 委託の run record と生ログ(gitignore 済み)
+AGENTS.md              Codex 向けの規約(Codex は CLAUDE.md も hooks も読まないため、写像はここだけ)
+CLAUDE.md              プロジェクトメモリ(全エージェントに毎回ロードされる)
+.codex/
+├── config.toml        Codex CLI のプロジェクト設定(防衛線ではない)
+├── agents/            Codex 側のサブエージェント定義
+├── hooks/             Codex の SessionStart hook
+└── skills/            Codex 用ワークフロー(モード C = 縮退運用の単独完走手順)
+.husky/                ベンダー非依存の git hook(pre-commit / prepare-commit-msg)
+.claude/
+├── agents/            サブエージェント定義(implementer / code-reviewer ほかは Sonnet、test-runner は Haiku)
+├── skills/            スキル(implement-ticket / steering / harness-setup / 各ドキュメント作成ガイド)
+├── commands/          スラッシュコマンド
+├── rules/             全エージェント共通ルール(テンプレート所有。CLAUDE.md が @ インポート)
+│   ├── lead/          司令塔専用ルール(SessionStart hook が注入。サブエージェントには載らない)
+│   └── mode/          モード別の司令塔ルール(normal 以外のときだけ注入)
+├── scripts/           hook の実体・共通判定ロジック・Codex 委託経路・同期スクリプト
+├── hooks/             SessionStart hook
+├── docs/              恒久参照ガイド(autopilot 手順書・MCP 導入・serena 再導入)
+├── branch-policy.json      ブランチ戦略の機械可読な単一ソース
+├── routing.json            担当AI(実装・レビュー)の既定
+├── autopilot.json          自動進行の設定(maxInFlight・信頼するボット)
+├── codex-denylist.txt      Codex 委託の送信禁止パターン
+├── template-manifest.json  テンプレート追従の所有権マニフェスト
+└── settings.json           モデル固定・権限・hooks
+.github/workflows/     CI・Claude レビュー・記録検査・テンプレート更新検知</pre>
+          </div>
+        </section>
+
+        <section id="disclaimer">
+          <h2><span class="sectnum">!</span>免責事項・ライセンス</h2>
+          <p class="chaplead"><b>この仕組みが保証しないこと</b>。</p>
+          <ul>
+            <li>
+              <b>危険コマンドのブロックはベストエフォート</b>:
+              <code>permissions.deny</code> と
+              <code>block-dangerous-cmds.sh</code>
+              は文字列パターンによる防衛線であり、サンドボックスではない。変数展開等による迂回は原理的に防げないため、本当の境界は
+              permission mode と実行環境の隔離(devcontainer /
+              リモート環境)が担う
+            </li>
+            <li>
+              <b>委託先のガードレールも同様</b>:
+              委託禁止領域・denylist・出口検査は事故を減らす層であって、敵対的な相手への防御ではない。<code
+                >Codex-authored</code
+              >
+              トレーラーは自己申告で、検出はできても強制はできない
+            </li>
+            <li>
+              <b>AI レビューは人間のレビューを代替しない</b>:
+              自動レビューは見落としがありうる。マージ判断と生成物の最終的な検証責任は利用者にある
+            </li>
+            <li>
+              <b>利用料金は利用者の負担</b>: GitHub Actions の実行時間、Claude /
+              Codex のトークン消費は、このテンプレートの構成によって発生する。各
+              Actions には
+              <code>timeout-minutes</code>
+              を設定済みだが、コストの監視は利用者が行う
+            </li>
+            <li>
+              本テンプレートは MIT ライセンスに基づき<b>無保証</b>で提供される
+            </li>
+          </ul>
+          <p>ライセンスは <a href="./LICENSE">LICENSE</a> を参照。</p>
+        </section>
+
+        <footer>
+          <p>
+            このページは <code>README.md</code> と同じ内容を HTML
+            で読めるようにしたもの。原本は
+            <a href="./README.md">README.md</a> で、取り込み手順つきの変更履歴は
+            <code>docs/template-dev/CHANGELOG.md</code>。
+          </p>
+        </footer>
+      </main>
+    </div>
+
+    <button class="theme" id="theme" type="button">表示: 自動</button>
+
+    <script>
+      // コードブロックにコピーボタンを足す
+      document.querySelectorAll('.cmd').forEach(function (box) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'copy';
+        btn.textContent = 'コピー';
+        btn.addEventListener('click', function () {
+          var pre = box.querySelector('pre');
+          if (!pre) return;
+          // data-raw のブロックは # で始まる行にも意味があるので削らない
+          var text = box.hasAttribute('data-raw')
+            ? pre.innerText
+            : pre.innerText
+                .replace(/[ \t]*#[^\n]*/g, '')
+                .replace(/[ \t]+$/gm, '');
+          var done = function () {
+            btn.textContent = 'コピーしました';
+            setTimeout(function () {
+              btn.textContent = 'コピー';
+            }, 1400);
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done, function () {
+              btn.textContent = '選択してコピー';
+            });
+          } else {
+            btn.textContent = '選択してコピー';
+          }
+        });
+        box.appendChild(btn);
+      });
+
+      // 表示テーマの切り替え(自動 → ライト → ダーク)
+      (function () {
+        var order = ['auto', 'light', 'dark'];
+        var label = {
+          auto: '表示: 自動',
+          light: '表示: ライト',
+          dark: '表示: ダーク',
+        };
+        var btn = document.getElementById('theme');
+        var cur = 'auto';
+        try {
+          cur = localStorage.getItem('readme-theme') || 'auto';
+        } catch (e) {}
+        function apply(t) {
+          if (t === 'auto')
+            document.documentElement.removeAttribute('data-theme');
+          else document.documentElement.setAttribute('data-theme', t);
+          btn.textContent = label[t];
+        }
+        apply(cur);
+        btn.addEventListener('click', function () {
+          cur = order[(order.indexOf(cur) + 1) % order.length];
+          apply(cur);
+          try {
+            localStorage.setItem('readme-theme', cur);
+          } catch (e) {}
+        });
+      })();
+
+      // いま読んでいる章を目次で示す
+      (function () {
+        var links = Array.prototype.slice.call(
+          document.querySelectorAll('nav a')
+        );
+        var map = {};
+        var sections = [];
+        links.forEach(function (a) {
+          var el = document.getElementById(a.getAttribute('href').slice(1));
+          if (!el) return;
+          map[el.id] = a;
+          sections.push(el);
+        });
+        function spy() {
+          var cur = null;
+          sections.forEach(function (s) {
+            if (s.getBoundingClientRect().top <= 140) cur = s;
+          });
+          links.forEach(function (a) {
+            a.classList.remove('active');
+          });
+          if (cur) map[cur.id].classList.add('active');
+        }
+        var ticking = false;
+        window.addEventListener(
+          'scroll',
+          function () {
+            if (ticking) return;
+            ticking = true;
+            requestAnimationFrame(function () {
+              spy();
+              ticking = false;
+            });
+          },
+          { passive: true, capture: true }
+        );
+        spy();
+      })();
+    </script>
+  </body>
+</html>
