@@ -8,6 +8,7 @@
 # 検査するのは「名前」ではなく「どこへ PR するか / どこにコミットするか」:
 #   1) 保護ブランチ(main / develop)上での git commit / git revert / git cherry-pick
 #   2) --base 無し、またはポリシー外の base を指定した gh pr create
+#   3) git push --no-verify(push 先の検査 .husky/pre-push を迂回する唯一の経路)
 #
 # 注意: block-dangerous-cmds.sh と同じく文字列パターンによるベストエフォート。
 # 最終的な砦は CI の branch-policy ジョブ(.github/workflows/ci.yml)が担う。
@@ -48,6 +49,14 @@ if printf '%s' "$cmd" | grep -qE "${CMD_START}git[[:space:]]+(commit|revert|cher
   case $? in
     1) exit 2 ;;
   esac
+fi
+
+# --- 3) git push --no-verify ---
+# 保護ブランチ・ポリシー外の名前への push は .husky/pre-push(check-push-policy.sh)が止める。
+# 宛先の判定はそちらに一本化し、ここでは迂回手段だけを塞ぐ。
+if printf '%s' "$cmd" | grep -qE "${CMD_START}git[[:space:]]+push([[:space:]]+[^[:space:]]+)*[[:space:]]+--no-verify([[:space:]]|$)"; then
+  echo "check-branch-policy.sh: git push --no-verify は push 先の検査(.husky/pre-push)を迂回するためブロックしました。--no-verify を外して実行してください。" >&2
+  exit 2
 fi
 
 # --- 2) gh pr create の base 検査 ---

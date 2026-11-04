@@ -1,5 +1,9 @@
+---
+paths:
+  - ".claude/rules/lead/**"
+---
 <!-- テンプレート所有ファイル: /sync-template で上書きされます。プロジェクト固有のルールは CLAUDE.md の「プロジェクト固有ルール」節に書いてください。 -->
-<!-- 司令塔専用: SessionStart hook がメインセッションにのみ注入します。サブエージェントには読み込まれません。 -->
+<!-- 司令塔専用: SessionStart hook がメインセッションに Read を指示します。上の paths により、このディレクトリを扱うとき以外は自動ロードされません(サブエージェントにも載りません)。 -->
 
 ## コンテキスト管理
 
@@ -13,7 +17,7 @@
 
 ### ルールを追記するときの置き場所
 
-`.claude/rules/*.md`(`lead/` を除く)は **CLAUDE.md 経由で全サブエージェントに毎回ロードされる**。`code-reviewer` や `implementer` を起動するたびに全量が載るため、ここを太らせると spawn のたびに課金される。
+`.claude/rules/*.md`(`lead/` を除く)は **CLAUDE.md 経由で全サブエージェントに毎回ロードされる**。`code-reviewer` や `implementer` を起動するたびに全量が載るため、ここを太らせると spawn のたびに課金される。**Claude Code は `.claude/rules/` をサブディレクトリまで自動ロードする**ため、`lead/` と `mode/` に置くファイルは先頭に frontmatter `paths: [".claude/rules/<dir>/**"]` を付けて自動ロードを止める(付け忘れると全サブエージェントに載る)。
 
 - 実装者・レビュアーにも要る内容 → `.claude/rules/`
 - 司令塔だけが使う内容(モデル選択・`/clear`・レビュー起動・チケット運用・計画フェーズ) → `.claude/rules/lead/`

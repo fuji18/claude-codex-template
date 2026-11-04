@@ -1,5 +1,9 @@
+---
+paths:
+  - ".claude/rules/mode/**"
+---
 <!-- テンプレート所有ファイル: /sync-template で上書きされます。 -->
-<!-- SessionStart hook が .harness/mode = econ のときにのみ注入します。サブエージェントには載りません。 -->
+<!-- SessionStart hook が .harness/mode = econ のときにのみ注入します。上の paths により、このディレクトリを扱うとき以外は自動ロードされません(サブエージェントにも載りません)。 -->
 
 ## 現在のハーネスモード: B(節約 / `.harness/mode` = `econ`)
 
