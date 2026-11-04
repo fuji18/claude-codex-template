@@ -67,3 +67,57 @@ mapfile -t FILES < <(git ls-files | grep -E '\.sh$|^\.husky/[a-z-]+$' | grep -v 
   `check-manifest-coverage.sh` / `test-sync-template.sh` / `test-route.sh` / `harness-mode.sh` /
   SessionStart hook の実行 / `20261103-trusted-bots-union` の検証スイート
 - `ci.yml` は prettier で検査する(YAML として壊れていればここで落ちる)
+
+---
+
+## 第2ラウンド: devcontainer にも入れ、判定を 1 箇所に寄せる
+
+第1ラウンドでは `ci.yml` に検査をインラインで書いた。**ローカルに shellcheck が無いまま**だったので、
+申し送りに「devcontainer に入れるかは別途判断」と残した —— ユーザーの判断は「入れる」。
+
+ただし **「ローカルに入れる」だけでは足りない。** CI だけが対象の選定と引数を知っている状態で
+手元にツールを入れると、「手元では緑なのに CI で落ちる(逆もある)」が起きる。手元で先に見ることの
+意味が消え、このリポジトリで繰り返し起きている事故(判定が 2 箇所にある)と同じ形になる。
+そこで **検査の実体をスクリプトに一本化し、CI と手元の両方がそれを呼ぶ**形にする。
+
+### 1) `.claude/scripts/check-shell.sh`(新規)= 唯一の実行経路
+
+対象の選定(git 追跡下の `*.sh` + `.husky/pre-commit` / `.husky/prepare-commit-msg`、
+`.husky/_/` と `.steering/` を除外)と引数(`-x -P SCRIPTDIR --severity=warning`)をここに集約する。
+
+| 終了コード | 意味 |
+| --- | --- |
+| 0 | 指摘なし |
+| 1 | 指摘あり |
+| 2 | **検査を実行できない**(shellcheck が無い / 対象 0 件 / 不明な引数) |
+
+`--list` で対象一覧だけを出せる(shellcheck が無くても動く)。
+
+**0 件を「指摘なし」に倒さない。** テンプレートの `.claude/scripts/*.sh` は必ず追跡下にあるので、
+空になるのは `git ls-files` が働いていないか除外条件が壊れたとき。シェルを一切使わない構成の
+プロジェクトでは CI のステップごと落とす(CHANGELOG の `[manual]` に明記した)。
+
+### 2) `ci.yml` は `bash .claude/scripts/check-shell.sh` を呼ぶだけにする
+
+**非ゼロはすべて失敗。** 指摘(1)だけでなく「shellcheck が無い」(2)でも落とす。
+他のハーネス層はフェイルオープンだが、**CI のゲートは止めるのが仕事**で、黙って通ると
+層が消えたことに誰も気づかない。
+
+### 3) devcontainer に入れる(`.devcontainer/post_create.sh`)
+
+ステップを 4 → 5 に増やし、`[2/5] Installing shellcheck...` を足す。
+`post_create.sh` は `set -e` なので、**インストールは `if` の条件で受ける**
+(失敗しても警告 1 行でセットアップは続行。ツールが無いことと環境が壊れることは別の話)。
+
+### 4) `/check`(`test-runner`)が同じコマンドを回す
+
+`test-runner.md` のステップ1 に検出項目として足す。**テンプレートはスタック非依存**なので、
+`check-shell.sh` があるときだけ回し、`exit 2`(未インストール)は**スキップとして報告する**
+(失敗にしない)。**指摘の自動修正はしない** —— ガードレールのシェルを機械的に書き換えると
+挙動が変わるため、要約だけ司令塔に返す。
+
+### やり残し
+
+`.claude/settings.json` の allow に `Bash(bash .claude/scripts/check-shell.sh:*)` を足せなかった
+(auto モードの分類器が自己改変として拒否した)。足さなくても動くが、`/check` のたびに許可を聞かれる。
+**人間が 1 行足す**(`harness-mode.sh` の行の次が自然)。

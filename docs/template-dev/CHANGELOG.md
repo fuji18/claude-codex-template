@@ -16,19 +16,26 @@
 
 ## 2026-11-04
 
-- **[manual]** **CI(`ci.yml` の `harness-integrity` ジョブ)に `shellcheck` のステップを足しました。** ハーネスの判定の実体(委託の入口・保護ブランチ判定・autopilot の選定)は
-  ほぼ全部シェルなのに、機械的な検査が `bash -n`(構文エラーだけ)しかありませんでした。`shellcheck -x -P SCRIPTDIR --severity=warning` を **git 追跡下のシェルスクリプト全量**
-  (`*.sh` と `.husky/pre-commit` / `.husky/prepare-commit-msg`。`.husky/_/` は husky の生成物、`.steering/` は過去の作業記録なので除外)に当てます。
+- **[manual]** **シェルスクリプトの静的検査(shellcheck)を足しました。** ハーネスの判定の実体(委託の入口・保護ブランチ判定・autopilot の選定)はほぼ全部シェルなのに、
+  機械的な検査が `bash -n`(構文エラーだけ)しかなく、クォート漏れや `cd` 失敗の取りこぼしは通っていました。入れたものは 3 つです:
+  - **`.claude/scripts/check-shell.sh`(新規)= 検査の唯一の実行経路。** 対象の選定(git 追跡下の `*.sh` と `.husky/pre-commit` / `.husky/prepare-commit-msg`。
+    `.husky/_/` は husky の生成物、`.steering/` は過去の作業記録なので除外)と引数(`shellcheck -x -P SCRIPTDIR --severity=warning`)をここに集約しています。
+    終了コードは **0 = 指摘なし / 1 = 指摘あり / 2 = 実行できない**(shellcheck 未インストール・対象 0 件)。`--list` で対象一覧だけ出せます
+  - **CI(`ci.yml` の `harness-integrity` ジョブ)がこのスクリプトを呼びます。** 非ゼロはすべて失敗 —— 指摘だけでなく「shellcheck が無い」でも落とします
+    (他のハーネス層はフェイルオープンですが、CI のゲートは止めるのが仕事で、黙って通るとゲートが消えたことに誰も気づきません)
+  - **devcontainer に shellcheck が入ります**(`.devcontainer/post_create.sh`。失敗しても警告だけでセットアップは続きます)。`/check`(`test-runner`)も
+    `check-shell.sh` があれば同じコマンドを回すので、**手元と CI で結果が一致します**。`exit 2`(未インストール)はスキップとして報告され、失敗にはなりません
   深刻度を warning 以上に絞っているのは、note に**意図して使っている書き方**(`set -e` を発火させないための `A && B || C` = SC2015 / 共有ライブラリの source = SC1091)が多く、
-  全部拾うと鳴りっぱなしのゲートになるためです。個別に抑止したいものは、その場に `# shellcheck disable=SCxxxx` と理由を書きます。`shellcheck` が見つからないときは
-  **黙って通さず `exit 1`** にしてあります(ゲートが消えたことに気づけない状態の方が悪い。`ubuntu-latest` には同梱されています)。
+  全部拾うと「赤いのが普通」の鳴りっぱなしゲートになるためです。個別に抑止したいものは、その場に `# shellcheck disable=SCxxxx` と理由を書きます(深刻度は下げない)。
   あわせて、これで出た 11 件を直しました:
   - `cd` の失敗を明示的に扱う(SC2164): `session-start.sh`(Claude / Codex)は `|| exit 0` でフェイルオープン、`harness-mode.sh` と `check-guard-integrity.sh` は
     `|| true`(現在地のまま続ける)、`test-sync-template.sh` は `|| exit 1`(違う場所で検査すると結果が無意味になる)
   - `autopilot-preflight.sh` の未使用変数 `OPEN` を削除(SC2034。値は同じ行の `SUM` に入っています)
   - `.husky/pre-commit` / `.husky/prepare-commit-msg` の先頭に `# shellcheck shell=sh` を足す(SC2148。husky はこの 2 つを shebang 無しの `sh -e` で実行します)
-  **取り込む側の作業**: `.github/workflows/ci.yml` と `.husky/*` は `merge`(手動統合)区分です。ステップを写したうえで、**自プロジェクトのシェルスクリプトに出る指摘を潰してください**
-  (`shellcheck -x -P SCRIPTDIR --severity=warning $(git ls-files | grep -E '\.sh$')` を手元で回すと同じ結果になります)。シェルを使わないプロジェクトではステップごと落として構いません
+  **取り込む側の作業**: `.github/workflows/ci.yml` / `.husky/*` / `.devcontainer/post_create.sh` はいずれも `merge`(手動統合)区分です。3 つを写したうえで、
+  **自プロジェクトのシェルスクリプトに出る指摘を潰してください**(`bash .claude/scripts/check-shell.sh` を手元で回すと CI と同じ結果になります)。
+  `.claude/settings.json` の allow に `Bash(bash .claude/scripts/check-shell.sh:*)` を足すと、`/check` で許可を聞かれなくなります。
+  **シェルを一切使わない構成のプロジェクトでは、CI のステップごと落として構いません**(対象 0 件は `exit 2` = 失敗として扱われるため)
 
 ---
 

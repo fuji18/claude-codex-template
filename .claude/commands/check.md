@@ -1,10 +1,10 @@
 ---
-description: lint・型チェック・テスト・フォーマットを一括実行し、エラーを自動修正する
+description: lint・型チェック・テスト・フォーマット・シェル検査を一括実行し、エラーを自動修正する
 ---
 
 # 品質チェックの一括実行
 
-品質チェックの実行と機械的なエラー修正を `test-runner` subagent(Haiku)に委譲するコマンド。長いログを司令塔のコンテキストに流さない。**チェック項目・自動修正の範囲・禁止事項・サマリー形式は `test-runner` の定義(`.claude/agents/test-runner.md`)が正**で、ここには重複記述しない。
+品質チェックの実行と機械的なエラー修正を `test-runner` subagent(Haiku)に委譲するコマンド。シェルスクリプトの静的検査(`check-shell.sh` = CI の `harness-integrity` と同じ実体)もここに含まれる。長いログを司令塔のコンテキストに流さない。**チェック項目・自動修正の範囲・禁止事項・サマリー形式は `test-runner` の定義(`.claude/agents/test-runner.md`)が正**で、ここには重複記述しない。
 
 **引数:** なし(任意で対象を絞ってよい。例: `/check lintだけ`)
 
