@@ -128,6 +128,49 @@ jobs:
             exit 1
           fi
 
+      # テンプレート本体でだけ働く検査: 追跡ファイルが template-manifest.json の
+      # どの区分にも入っていなければ落とす(区分に無いファイルは /sync-template で
+      # 下流に届かない)。下流プロジェクトではスクリプト側が何もせず exit 0 する。
+      - name: Check template manifest coverage
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          if ! MISSING="$(bash .claude/scripts/check-manifest-coverage.sh)"; then
+            printf '%s\n' "$MISSING" | while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error::$line"
+            done
+            exit 1
+          fi
+
+      # テンプレート同期スクリプトの動作確認(一時リポジトリ内で完結。ネットワーク不要)。
+      # 上書き・ローカル変更の保持・JSON の構造マージ・競合検出・manifest の更新を検査する
+      - name: Test template sync script
+        run: |
+          if [ -f .claude/scripts/test-sync-template.sh ]; then
+            bash .claude/scripts/test-sync-template.sh
+          fi
+
+      # Codex 側のスキル(.agents/skills/)が .claude/skills/ と一致しているかを見る。
+      # 両者は読み手が違うだけの同じスキルで、.agents/ は生成物。手で足した・正だけ直した
+      # といったズレは、Codex からだけ古いスキルが見える形で静かに効く。
+      - name: Check generated agent skills
+        run: |
+          if [ -f .claude/scripts/sync-agents-skills.sh ]; then
+            if ! DRIFT="$(bash .claude/scripts/sync-agents-skills.sh --check)"; then
+              printf '%s\n' "$DRIFT" | while IFS= read -r line; do
+                [ -n "$line" ] && echo "::error::$line"
+              done
+              exit 1
+            fi
+          fi
+
+      # 担当AIの判定(route.sh)の動作確認(一時ディレクトリ内で完結)
+      - name: Test AI routing
+        run: |
+          if [ -f .claude/scripts/test-route.sh ]; then
+            bash .claude/scripts/test-route.sh
+          fi
+
       # 委託禁止領域の単一ソース(delegate-codex.sh の FORBIDDEN_PATHS)と
       # .claude/rules/lead/delegation-policy.md の一覧のずれを**双方向**で検出する。
       # マーカーを持たない旧版の delegation-policy.md を抱えた下流プロジェクトで
@@ -154,6 +197,20 @@ jobs:
             if [ -n "$line" ]; then echo "::warning::$line"; fi
           done
           exit 0
+
+      # シェルスクリプトの静的検査。ハーネスの判定の実体(委託の入口・保護ブランチ判定・
+      # autopilot の選定)はほぼ全部シェルなので、クォート漏れや cd 失敗の取りこぼしは
+      # ここで機械的に止める。同じジョブの `bash -n` は構文エラーしか見ず、意味的な欠陥は通す。
+      #
+      # 対象の選定と shellcheck の引数は .claude/scripts/check-shell.sh に一本化してある。
+      # devcontainer にも shellcheck を入れてあり(post_create.sh)、**手元で同じコマンドを
+      # 回すと同じ結果が出ることが要件**。CI だけが知っている引数を持たせてはいけない。
+      #
+      # 非ゼロはすべて失敗として扱う。指摘(exit 1)だけでなく「shellcheck が無い」
+      # (exit 2)でも落とす: 他のハーネス層はフェイルオープンだが、CI のゲートは
+      # 止めるのが仕事で、黙って通るとゲートが消えたことに誰も気づかない。
+      - name: ShellCheck
+        run: bash .claude/scripts/check-shell.sh
 
   quality:
     runs-on: ubuntu-latest

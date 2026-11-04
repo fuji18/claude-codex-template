@@ -44,6 +44,7 @@
 - `.claude/rules/`: テンプレート所有の共通ルール(全エージェント共通。上記でインポート)。`/sync-template` の同期対象
   - `.claude/rules/lead/`: 司令塔専用ルール(SessionStart hook が Read を指示。frontmatter `paths` で自動ロードを止めてあり、サブエージェントには載らない)
 - `.claude/docs/`: プロジェクト開始後も参照が続く判断ガイド(MCP 導入の判断 / serena 再導入の目安と手順)。`docs/template-dev/` と違い削除しない
+- `.agents/`: **生成物。直接編集しない。** Codex CLI が読むスキル置き場(Claude Code は `.claude/skills/` しか読まず、Codex は `.agents/skills/` しか読まないため、正の `.claude/skills/` から機械的に複製する)。生成・検査は `bash .claude/scripts/sync-agents-skills.sh [--check]`、乖離は CI の `harness-integrity` が止める
 - `.steering/`: 作業単位の計画とタスクリスト。作業ごとに新規作成し、**履歴としてコミットして保持する**
 
 詳細は `README.md` を参照。
@@ -68,7 +69,7 @@
 
 ### テンプレート更新の取り込み
 
-テンプレート(`claude-code-template`)側で共通ルール・コマンド・スキル・ハーネスが更新されたら、**`/sync-template`** で差分を取り込む。同期対象・除外は `.claude/template-manifest.json` が単一ソース。
+テンプレート(`claude-codex-template`)側で共通ルール・コマンド・スキル・ハーネスが更新されたら、**`/sync-template`** で差分を取り込む。同期対象・除外は `.claude/template-manifest.json` が単一ソース。
 
 - 月次の `template-update-check` ワークフロー(毎月1日)が、テンプレートに未取り込みの更新があれば Issue を立てる
 - `[manual]` 印の変更はプロジェクト側の対応が要るため、`/sync-template` の提示に従って個別に判断する

@@ -28,3 +28,11 @@ network_access = false
 # 変更する場合だけ次のコメントを外す(プロジェクト裁量)。
 # model = "..."
 # model_reasoning_effort = "..."
+
+# Codex から参照する MCP サーバ。Claude 側の .mcp.json と同じ構成・同じ版に揃える。
+# 版を固定するのは npx -y の未固定取得を避けるため(.mcp.json と同じ理由)。
+# 上の network_access = false は sandbox 内の**委託先**に効くもので、MCP サーバは
+# codex CLI のプロセスが起動する。版を上げるときは .mcp.json と両方直すこと。
+[mcp_servers.context7]
+command = "npx"
+args = ["-y", "@upstash/context7-mcp@4.1.1"]

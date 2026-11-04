@@ -3,7 +3,7 @@
   "baseBranch": "main",
   "releaseBase": "main",
   "protectedBranches": ["main"],
-  "allowedPrefixes": ["feature/", "fix/", "release/", "hotfix/", "claude/", "dependabot/"],
+  "allowedPrefixes": ["feature/", "fix/", "chore/", "release/", "hotfix/", "claude/", "dependabot/"],
   "releasePrefixes": [],
   "remoteSessionPrefix": "claude/"
 }

@@ -18,6 +18,7 @@ model: haiku
 1. `docs/development-guidelines.md` の検証コマンド定義(プロジェクトの正)
 2. `package.json` の `scripts`(`lint`, `typecheck`, `test`, `format`。類似名も柔軟に判断)
 3. 代替検出: `npx tsc --noEmit`(tsconfig.json)、`npx vitest run`(vitest.config.ts)、`npx eslint .`(eslint.config.js)、`npx prettier --check .`(.prettierrc)、`./gradlew lint` / `./gradlew test`(build.gradle)、`pytest`(pyproject.toml)
+4. **シェルスクリプトの静的検査**: `.claude/scripts/check-shell.sh` があれば `bash .claude/scripts/check-shell.sh` を回す(CI の `harness-integrity` と同じ実体)。`exit 2` は「shellcheck が未インストール」なので**スキップとして報告する**(失敗にしない)。指摘の自動修正はしない —— ガードレールのシェルを機械的に書き換えると挙動が変わるため、**内容を要約して司令塔に返す**
 
 特定できないチェックはスキップし、その旨をサマリーに含める。
 
@@ -55,6 +56,7 @@ model: haiku
 | typecheck | ... |
 | test | ... |
 | format | ... |
+| shell(shellcheck) | ... |
 
 ### 自動修正した内容
 - [修正内容と対象ファイルのリスト。なければ「なし」]

@@ -14,7 +14,9 @@ set -uo pipefail
 INPUT="$(cat 2>/dev/null || true)"
 SOURCE="$(printf '%s' "$INPUT" | jq -r '.source // "startup"' 2>/dev/null || echo "startup")"
 
-cd "${CLAUDE_PROJECT_DIR:-.}"
+# cd に失敗したら何も注入せず終わる(ハーネスはフェイルオープン設計。
+# 違う場所で動いて見当違いの現在地を注入する方が害が大きい)
+cd "${CLAUDE_PROJECT_DIR:-.}" || exit 0
 
 # --- 1) 依存関係(リモート環境のみ。devcontainer では post_create.sh が担う) ---
 # node_modules があればスキップし、resume / clear のたびの再インストールを避ける

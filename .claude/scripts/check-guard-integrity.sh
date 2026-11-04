@@ -38,7 +38,8 @@ case "$SUBCOMMAND" in
 esac
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-[ -n "$ROOT" ] && cd "$ROOT" 2>/dev/null
+# cd に失敗しても続ける(現在地のまま検査する)。検査が起動しない方が害が大きい
+if [ -n "$ROOT" ]; then cd "$ROOT" 2>/dev/null || true; fi
 
 GUARD=".claude/scripts/check-protected-branch.sh"
 POLICY=".claude/branch-policy.json"

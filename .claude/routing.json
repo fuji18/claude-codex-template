@@ -1,0 +1,5 @@
+{
+  "$comment": "工程ごとの担当AIのプロジェクト既定。判定の実体は .claude/scripts/route.sh。優先順位は コマンドの記載(/next-ticket 12 実装=sonnet レビュー=codex)> Issue の「担当AI」チェック > delegate:codex ラベル > このファイル > 既定値。値は codex / sonnet / opus / haiku、review だけ auto(実装と別ベンダー)も可。plan(計画・設計)と統合はメインセッション(Opus)固定のためここでは選ばない。",
+  "implement": "codex",
+  "review": "sonnet"
+}

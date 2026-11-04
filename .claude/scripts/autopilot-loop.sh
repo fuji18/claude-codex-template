@@ -32,6 +32,11 @@
 #   AUTOPILOT_MAX_RUNS      claude -p を起動する回数の上限(既定 20)
 #   AUTOPILOT_CLAUDE_ARGS   claude に渡す引数(既定 "--permission-mode acceptEdits")
 #   AUTOPILOT_NOTIFY_CMD    停止時に理由を引数に実行するコマンド(例: 'notify-send autopilot')
+#   AUTOPILOT_ALLOW_REMOTE  =1 でクラウドセッション(CLAUDE_CODE_REMOTE=true)でも起動する(既定は拒否)
+#
+# claude -p は --output-format json で起動し、許可されずに実行できなかった操作(permission_denials)を
+# ログに出す。「状態が変わっていない」で止まったときは、その一覧を停止理由に添える
+# (AUTOPILOT_CLAUDE_ARGS に --output-format を自分で書いた場合はこの集計をしない)。
 #
 # 止まる条件(人間に返す。全体管理 Issue にコメントされる): モードが degraded / 他チケットの
 #   未コミット変更 / 判定の失敗 / 同じ対象が 2 周続けて進まない / 別セッションの作業らしい
@@ -44,6 +49,15 @@ cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" || exit 2
 
 LOGF=.harness/autopilot.log
 PIDF=.harness/autopilot.pid
+
+# クラウドセッション(Claude Code on the web 等)では、ターンが終わると裏のプロセスが回収されうる。
+# 黙って死ぬループを起動しない(クラウドでは /autopilot の子セッション方式を使う)
+refuse_remote() {
+  [ "${CLAUDE_CODE_REMOTE:-}" = true ] && [ "${AUTOPILOT_ALLOW_REMOTE:-}" != 1 ] || return 0
+  echo "autopilot-loop.sh: クラウドセッション(CLAUDE_CODE_REMOTE=true)ではローカルループを起動しない。ターン終了後に裏のプロセスが回収されうるため。" >&2
+  echo "  クラウドでは /autopilot の子セッション方式を使う。どうしても起動するなら AUTOPILOT_ALLOW_REMOTE=1" >&2
+  exit 2
+}
 
 # pid ファイルが指すプロセスが本当にこのループか(pid の再利用で無関係なプロセスを殺さない)
 loop_alive() {
@@ -69,6 +83,7 @@ DRY=0
 case "${1:-}" in
   --dry-run) DRY=1 ;;
   --background)
+    refuse_remote
     if P="$(loop_alive)"; then echo "既に実行中(pid $P)。止めるには --stop"; exit 1; fi
     # 事前チェック: 致命的な問題(❌)があれば起動しない。警告(⚠️)は表示して進む
     bash .claude/scripts/autopilot-preflight.sh
@@ -126,6 +141,9 @@ case "${1:-}" in
   *) echo "autopilot-loop.sh: 不明な引数: $1" >&2; exit 2 ;;
 esac
 
+# shellcheck source=lib-github.sh
+. .claude/scripts/lib-github.sh # gh_resolve_repo(REST で Issue にラベルを付けるため)
+
 CONF=.claude/autopilot.json
 conf() { [ -f "$CONF" ] && jq -r --arg k "$1" 'if has($k) then .[$k] else empty end' "$CONF" 2>/dev/null; } # // は false を値なし扱いにするので使わない
 POLL="${AUTOPILOT_POLL_SECONDS:-$(conf pollSeconds)}"; POLL="${POLL:-300}"
@@ -173,6 +191,7 @@ $1
 
 command -v jq >/dev/null 2>&1 || stop "jq が見つからない" 2
 if [ "$DRY" = 0 ]; then
+  refuse_remote
   command -v claude >/dev/null 2>&1 || stop "claude CLI が見つからない" 2
 fi
 trap 'log "割り込みで終了"; release_pid; exit 130' INT TERM
@@ -197,18 +216,45 @@ fi
 
 RUNS=0
 LAST_KEY=""
+LAST_DENIALS=""
+JUDGE_FAILS=0
 RATE_WAITS=0
 WAIT_SIG=""
 WAIT_STREAK=0
 # 待機が変化なしでこの周回数続いたら 1 度だけ知らせる(止めはしない。レビューは長引いてよい)
 WAIT_NOTIFY_AFTER="$(( (3600 + POLL - 1) / POLL ))"
 
+# 許可されなかった操作を停止理由に添える(無ければ空)
+denials_note() {
+  [ -n "$LAST_DENIALS" ] || return 0
+  printf '\n\n直前の claude -p で許可されず実行できなかった操作:\n%s\n→ 必要な操作なら .claude/settings.json の allow に足す(無人実行では確認を出せない)' \
+    "$(printf '%s\n' "$LAST_DENIALS" | sed 's/^/- /')"
+}
+
 run_claude() { # $1=プロンプト
+  local out rc of=""
   RUNS=$((RUNS + 1))
   [ "$RUNS" -le "$MAX_RUNS" ] || stop "起動回数の上限($MAX_RUNS)に達した。続けるなら再起動する" 0
   log "起動 $RUNS/$MAX_RUNS: claude -p \"$1\""
-  # shellcheck disable=SC2086 # CLAUDE_ARGS は意図的に単語分割する
-  claude -p "$1" $CLAUDE_ARGS || stop "claude -p が失敗した($1)"
+  case " $CLAUDE_ARGS " in *" --output-format"*) ;; *) of="--output-format json" ;; esac
+  out="$(mktemp)"
+  # shellcheck disable=SC2086 # CLAUDE_ARGS / of は意図的に単語分割する
+  claude -p "$1" $CLAUDE_ARGS $of >"$out"
+  rc=$?
+  LAST_DENIALS=""
+  if [ -n "$of" ] && jq -e 'type == "object"' "$out" >/dev/null 2>&1; then
+    jq -r '.result // empty' "$out"
+    LAST_DENIALS="$(jq -r '[.permission_denials[]? | .tool_name +
+        (if (.tool_input.command? // null) != null then ": " + (.tool_input.command | tostring | .[0:200])
+         elif (.tool_input.file_path? // null) != null then ": " + .tool_input.file_path
+         else "" end)] | unique | .[]' "$out" 2>/dev/null)"
+    [ "$(jq -r '.is_error // false' "$out")" = true ] && [ "$rc" = 0 ] && rc=1
+  else
+    cat "$out"
+  fi
+  rm -f "$out"
+  [ -n "$LAST_DENIALS" ] && log "⚠️ 許可されず実行できなかった操作: $(printf '%s' "$LAST_DENIALS" | tr '\n' ' ')"
+  [ "$rc" = 0 ] || stop "claude -p が失敗した($1)$(denials_note)"
 }
 
 # チケット N のブランチ(この作業ツリーで切ったもの)を返す
@@ -250,6 +296,20 @@ econ_step() { # $1=Issue 番号
   local n="$1" dir br rc
   br="$(ticket_branch "$n")"
   [ -n "$br" ] && [ "$(git branch --show-current)" != "$br" ] && { git switch -q "$br" || stop "#$n のブランチ $br に移れない"; }
+  # 担当AIの判定(route.sh。Issue の「担当AI」チェック・delegate:codex ラベル・routing.json)。
+  # econ の自動進行は Codex に委託するチケットだけを回す。Claude 担当のチケットを
+  # ここで Sonnet fork に流すと、econ が温存しようとしている枠を使ってしまうため
+  local impl repo
+  impl="$(bash .claude/scripts/route.sh implement --issue "$n" 2>/dev/null)" || impl="不正な指定"
+  if [ "$impl" != codex ]; then
+    log "#$n: 実装の担当が $impl のため自動進行から外す(autopilot:manual)"
+    if [ "$DRY" = 0 ] && repo="$(gh_resolve_repo)"; then
+      gh api -X POST "repos/$repo/issues/$n/labels" -f 'labels[]=autopilot:manual' >/dev/null 2>&1 || true
+      gh api -X POST "repos/$repo/issues/$n/comments" \
+        -f body="自動進行(econ)は実装を Codex に委託するチケットだけを回します。このチケットの実装の担当は \`$impl\`(\`route.sh\` の判定)のため、\`autopilot:manual\` を付けて候補から外しました。通常モードで \`/next-ticket $n\` を実行してください。" >/dev/null 2>&1 || true
+    fi
+    return
+  fi
   dir="$(ticket_steering "$n")"
   if [ -z "$dir" ] || [ ! -f "$dir/design.md" ] || ! grep -q '<!-- status: ready -->' "$dir/design.md"; then
     run_claude "/next-ticket $n --plan-only"
@@ -271,7 +331,7 @@ econ_step() { # $1=Issue 番号
         [ "$RATE_WAITS" -le 12 ] || stop "Codex のレート上限(exit 4)が 12 回続いた。枠の回復を待ってから再起動する" 0
         RUNS=$((RUNS - 1)) # 待っただけなので起動回数にも「進まなかった」にも数えない
         log "Codex のレート上限(exit 4)。${POLL}s 待って再開する($RATE_WAITS/12)"; sleep "$POLL"; KEEP_GOING=1 ;;
-      *) stop "Codex への委託が失敗した(exit $rc / $dir)。.harness/codex-runs/ のログを確認する" ;;
+      *) stop "Codex への委託が失敗した(exit $rc / $dir)。.harness/codex-runs/ のログを確認する。「成果物が確認できない」なら、tasklist に Codex が閉じられない項目(/check・振り返り等)が - [ ] で残っていないか見る(econ では - [x] ~~…~~(理由)で閉じておく)" ;;
     esac
     return
   fi
@@ -288,7 +348,18 @@ while :; do
     *) stop "ハーネスモードが $MODE(Claude が動かない前提のモード。自動進行しない)" ;;
   esac
 
-  J="$(bash .claude/scripts/autopilot-next.sh)" || { J=""; stop "判定に失敗した(autopilot-next.sh の stderr を参照)" 2; }
+  # 判定の失敗(GitHub の一時的な 5xx・ネットワーク断)は 2 回まで待って取り直す。続けば止まる
+  if ! J="$(bash .claude/scripts/autopilot-next.sh)"; then
+    J=""
+    JUDGE_FAILS=$((JUDGE_FAILS + 1))
+    [ "$JUDGE_FAILS" -le 2 ] || stop "判定に 3 回続けて失敗した(autopilot-next.sh の stderr を参照)" 2
+    RETRY_WAIT=$((POLL < 60 ? POLL : 60))
+    log "判定に失敗した($JUDGE_FAILS/2)。${RETRY_WAIT}s 後に取り直す"
+    [ "$DRY" = 1 ] && stop "判定に失敗した(dry-run)" 2
+    sleep "$RETRY_WAIT"
+    continue
+  fi
+  JUDGE_FAILS=0
   # 要約は取得済みの JSON から作る(REST を 2 回叩かない / 2 回の結果がずれない)
   printf '%s' "$J" | bash .claude/scripts/autopilot-next.sh --format-summary | sed 's/^/  /'
 
@@ -376,7 +447,7 @@ ${OTHER:+- PR 未作成の in-progress(この作業ツリー以外): $OTHER — 
 
   # 前の周と同じ対象・同じ状態のまま = 進められなかった。同じ起動を繰り返さない
   if [ "$KEY" = "$LAST_KEY" ]; then
-    stop "前回の実行後も状態が変わっていない(${KEY%%:*} #${OWN_STALLED:-$TARGET})。人間の判断が要る"
+    stop "前回の実行後も状態が変わっていない(${KEY%%:*} #${OWN_STALLED:-$TARGET})。人間の判断が要る$(denials_note)"
   fi
 
   if [ "$DRY" = 1 ]; then

@@ -6,7 +6,7 @@ description: GitHub Issueを読み込み、steeringフローで修正を実装�
 
 指定されたGitHub Issueの内容を読み込み、ステアリングファイルで計画を立ててから修正を実装し、PRを作成するコマンドです。
 
-**引数:** Issue番号（例: `/fix-issue 42`）
+**引数:** Issue番号（例: `/fix-issue 42`）。担当AIの指定を付けてよい(例: `/fix-issue 42 実装=opus`。`route.sh` に `--set` で渡す)
 
 ---
 
@@ -42,7 +42,7 @@ description: GitHub Issueを読み込み、steeringフローで修正を実装�
 
 ### ステップ4: 実装(委託)
 
-**司令塔は実装コードを書かない。** 委譲前に `git status` で作業ツリーがクリーンであることを確認したうえで、**既定は `bash .claude/scripts/delegate-codex.sh impl .steering/[dir]`**、`exit 3` なら `Skill('implement-ticket')`(`context: fork` / Sonnet)に切り替える。**分岐は `/add-feature` ステップ5 の手順ごとに従う**(3 コマンドで同一)。終了コード表だけでなく、**`exit 3` を一度受けたらそのセッションでは `delegate-codex.sh` を呼び直さない**という恒久フォールバックの手順も含む。
+**司令塔は実装コードを書かない。** 委譲前に `git status` で作業ツリーがクリーンであることを確認したうえで、**担当を `bash .claude/scripts/route.sh implement --issue [Issue番号] --explain` で決める**(引数に `実装=` / `レビュー=` があれば `--set` で渡す)。`codex` なら `bash .claude/scripts/delegate-codex.sh impl .steering/[dir]`、`exit 3` か `claude:*` なら Claude 経路(`Skill('implement-ticket')`、Opus / Haiku は `implementer` の `model` 指定)。レビューも `route.sh review` で決める。**分岐は `/add-feature` ステップ5 の手順ごとに従う**(3 コマンドで同一)。終了コード表だけでなく、**`exit 3` を一度受けたらそのセッションでは `delegate-codex.sh` を呼び直さない**という恒久フォールバックの手順も含む。
 
 - `design.md` に「修正に対応するテストを追加または更新する(回帰防止)」を必ず含めてから委譲する
 

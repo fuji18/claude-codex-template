@@ -14,7 +14,7 @@
 
 ---
 
-## 2026-10-21
+## 2026-11-04 (2)
 
 - **[manual]** 💸 **司令塔専用ルール(`.claude/rules/lead/`)とモード別ルール(`.claude/rules/mode/`)が全サブエージェントに自動ロードされていた問題を直しました。**
   Claude Code は `.claude/rules/` をサブディレクトリまで自動ロードするため、`lead/` と `mode/` が SessionStart hook とは無関係に
@@ -32,6 +32,141 @@
   `.claude/scripts/check-push-policy.sh`。Claude 経由の `git push --no-verify` は PreToolUse(`check-branch-policy.sh`)が止めます。
   **取り込む側の作業: `.husky/pre-push` は `merge`(手動統合)対象なので、テンプレートからコピーする。既に独自の pre-push があれば、
   `check-push-policy.sh` の呼び出しを足す。`npm ci`(husky の `prepare`)を回し直して `.husky/_/pre-push` が生成されることを確認する。**
+
+## 2026-11-04
+
+- **[manual]** **Codex 側のスキル置き場(`.agents/skills/`)を `.claude/skills/` からの生成物にしました。**
+  Claude Code がスキルを読むのは `.claude/skills/` だけ、Codex CLI が読むのは `.agents/skills/` だけなので、
+  同じスキルを両方から使うには一方を正にしてもう一方を追従させる必要があります。正は `.claude/skills/` です。
+  - **`.claude/scripts/sync-agents-skills.sh`(新規)= 生成と検査の唯一の経路。** 引数なしで生成、`--check` で乖離検査(0 = 一致 / 1 = 乖離)、`--list` で対象一覧。
+    対象は**ベンダー中立なスキルだけ**で、Claude 固有の起動機構を前提にするもの(`implement-ticket` = `context: fork` / `harness-setup` = `.claude/agents/` と settings.json・hooks の書き換え)は
+    スクリプト冒頭の `EXCLUDED` で明示的に外しています。足し引きはこの 1 箇所だけを直します
+  - **CI(`ci.yml` の `harness-integrity` ジョブ)が `--check` を呼びます。** 正を直して生成し忘れた・生成物を手で編集した・対象外のスキルが残っている、の 3 方向すべてで落ちます
+  - **生成物も git で追跡します**(Codex は clone 直後のワークツリーから読むため)。`template-manifest.json` では `never`(同期対象外)—— 各プロジェクトが自分の `.claude/skills/` から生成するものなので、テンプレートから上書き配布しません
+  - シンボリックリンクは採りません。Windows ホスト + Linux devcontainer の構成では片側で解決できず壊れます
+  **取り込む側の作業**: `.github/workflows/ci.yml`(merge 対象)に `Check generated agent skills` ステップを写し、`.prettierignore`(merge 対象)に `.agents/` を、
+  `.claude/template-manifest.json`(merge 対象)の `never` に `.agents/` を足してください。そのうえで
+  `bash .claude/scripts/sync-agents-skills.sh` を 1 回実行してコミットします。**Codex を使わないプロジェクトでは、CI のステップごと落として構いません**(`.agents/` を作らなければスクリプトも検査も不要です)。
+
+- **[auto]** **README の HTML 版(`README.html`)を足しました。** `README.md` と同じ内容を、章ごとの図(「きっかけ / 動かす人 / すること」のレーン図・委託の判定フロー・禁止領域の一覧・選べるモデル)つきでブラウザから読めるようにしたものです。
+  `README.md` と同じく `template-manifest.json` の `never`(同期対象外)なので、**取り込む側の作業はありません**。プロダクト側では `/kickoff` フェーズ5 が `README.md` を書き換えるときに、不要なら削除してください。
+
+- **[manual]** **シェルスクリプトの静的検査(shellcheck)を足しました。** ハーネスの判定の実体(委託の入口・保護ブランチ判定・autopilot の選定)はほぼ全部シェルなのに、
+  機械的な検査が `bash -n`(構文エラーだけ)しかなく、クォート漏れや `cd` 失敗の取りこぼしは通っていました。入れたものは 3 つです:
+  - **`.claude/scripts/check-shell.sh`(新規)= 検査の唯一の実行経路。** 対象の選定(git 追跡下の `*.sh` と `.husky/pre-commit` / `.husky/prepare-commit-msg`。
+    `.husky/_/` は husky の生成物、`.steering/` は過去の作業記録なので除外)と引数(`shellcheck -x -P SCRIPTDIR --severity=warning`)をここに集約しています。
+    終了コードは **0 = 指摘なし / 1 = 指摘あり / 2 = 実行できない**(shellcheck 未インストール・対象 0 件)。`--list` で対象一覧だけ出せます
+  - **CI(`ci.yml` の `harness-integrity` ジョブ)がこのスクリプトを呼びます。** 非ゼロはすべて失敗 —— 指摘だけでなく「shellcheck が無い」でも落とします
+    (他のハーネス層はフェイルオープンですが、CI のゲートは止めるのが仕事で、黙って通るとゲートが消えたことに誰も気づきません)
+  - **devcontainer に shellcheck が入ります**(`.devcontainer/post_create.sh`。失敗しても警告だけでセットアップは続きます)。`/check`(`test-runner`)も
+    `check-shell.sh` があれば同じコマンドを回すので、**手元と CI で結果が一致します**。`exit 2`(未インストール)はスキップとして報告され、失敗にはなりません
+  深刻度を warning 以上に絞っているのは、note に**意図して使っている書き方**(`set -e` を発火させないための `A && B || C` = SC2015 / 共有ライブラリの source = SC1091)が多く、
+  全部拾うと「赤いのが普通」の鳴りっぱなしゲートになるためです。個別に抑止したいものは、その場に `# shellcheck disable=SCxxxx` と理由を書きます(深刻度は下げない)。
+  あわせて、これで出た 11 件を直しました:
+  - `cd` の失敗を明示的に扱う(SC2164): `session-start.sh`(Claude / Codex)は `|| exit 0` でフェイルオープン、`harness-mode.sh` と `check-guard-integrity.sh` は
+    `|| true`(現在地のまま続ける)、`test-sync-template.sh` は `|| exit 1`(違う場所で検査すると結果が無意味になる)
+  - `autopilot-preflight.sh` の未使用変数 `OPEN` を削除(SC2034。値は同じ行の `SUM` に入っています)
+  - `.husky/pre-commit` / `.husky/prepare-commit-msg` の先頭に `# shellcheck shell=sh` を足す(SC2148。husky はこの 2 つを shebang 無しの `sh -e` で実行します)
+  **取り込む側の作業**: `.github/workflows/ci.yml` / `.husky/*` / `.devcontainer/post_create.sh` はいずれも `merge`(手動統合)区分です。3 つを写したうえで、
+  **自プロジェクトのシェルスクリプトに出る指摘を潰してください**(`bash .claude/scripts/check-shell.sh` を手元で回すと CI と同じ結果になります)。
+  `.claude/settings.json` の allow に `Bash(bash .claude/scripts/check-shell.sh:*)` を足すと、`/check` で許可を聞かれなくなります。
+  **シェルを一切使わない構成のプロジェクトでは、CI のステップごと落として構いません**(対象 0 件は `exit 2` = 失敗として扱われるため)
+
+---
+
+## 2026-11-03
+
+- **[auto]** ⚠️ **`delegate-codex.sh review` が未コミットの変更を見ていなかった不具合を直しました。** 従来は `git diff <base>...HEAD`(コミット済みだけ)をレビューさせており、
+  コミット前に回す運用(`/add-feature` ステップ6)では対象が空のまま「指摘なし」で完了していました。対象を**分岐点から作業ツリーまで**(コミット済み + 未コミット + 未追跡)に変え、
+  あわせて次を足しました:
+  - 差分が無ければ codex を起動せず `exit 2`(枠を使わない)。base-ref がコミットを指さなければ `exit 2`、ローカルの base が origin とずれていれば警告
+  - 出力に指摘行(`[Critical|Major|Minor]`)も「指摘なし」も無い・空なら `exit 2`(結果として扱わない)。`exit 0` のときはホストが数えた件数を `findings: critical=N major=M minor=L` で出す
+  - 第 2 引数にステアリング(`review <base-ref> .steering/[dir]/`)を渡すと design.md / requirements.md を仕様の正として突き合わせる。観点を `code-reviewer` と揃え、重大度ラベルを Critical / Major / Minor に統一
+  - review のサマリー上限を 2000B → 8000B にし、切ったときはホスト警告に全文(`.last.txt`)のパスを出す(マルチバイト文字の途中で切らない)
+  - read-only(explore / review)の前後で作業ツリーの内容を比べ、変わっていれば `exit 2`(sandbox が効いていない場合の多重防御。並行する impl があるときは比べない)。explore も出力が空なら `exit 2`
+- **[manual]** `AGENTS.md` に読み取り専用委託の扱い(§1 冒頭: 1-1 以外を停止条件にしない・§7 の報告形式を使わない)と **§8 Review guidelines** を足しました(GitHub 上の Codex レビューもこの節を読みます)。
+  **取り込む側の作業**: `AGENTS.md`(merge 対象)に §1 冒頭の注記と §8 を写してください
+- **[manual]** 無人実行(autopilot)で重要変更のレビューを回せるよう、`.claude/settings.json` の allow に `Bash(bash .claude/scripts/delegate-codex.sh review:*)` を足しました(review は引数が ref だけの read-only)。
+  **取り込む側の作業**: `.claude/settings.json`(merge 対象)の allow に同じ行を足してください(足さないと事前チェックが ⚠️ で知らせます)
+- **[auto]** `review-policy.md` / `delegation-policy.md` / `/add-feature` ステップ6 に `delegate-codex.sh review` の呼び方と分岐(`findings:` 行・`exit 2` は結果として扱わない)を書きました
+- **[manual]** autopilot の**変更要求**の判定に `.claude/autopilot.json` の新キー `trustedReviewBots` を足しました。従来どおり書き込み権限のあるレビュアー
+  (OWNER / MEMBER / COLLABORATOR)だけを数えたうえで、ここに載せたボットのログイン名(GitHub 上の Codex レビュー等)を例外として数えます。`/fix-pr` も同じキーで判断します。
+  **既存の `trustedBots`(`/fix-pr` が本文まで読む Bot。`pr-feedback.sh`)とは別のキー**で、両方が併存します。`autopilot-preflight.sh` は両方を「文字列の配列か」で検証します。
+  **取り込む側の作業**: `.claude/autopilot.json`(merge 対象)に `"trustedReviewBots": []` を足し、GitHub 上の Codex レビュー等を使うならボットのログイン名を入れてください
+- **[auto]** **`trustedBots` と `trustedReviewBots` を「信頼するボット」という 1 つの概念にまとめ、`pr-feedback.sh` と `autopilot-next.sh` の両方が 2 キーの和集合を読むようにしました。**
+  従来は Codex ボット(例: `chatgpt-codex-connector[bot]`)を `trustedReviewBots` にだけ入れると、`autopilot-next.sh` が変更要求を要対応と数えて `/fix-pr` を起動するのに、
+  `pr-feedback.sh` がそのボットの本文を `untrusted` に回すため、`/fix-pr` が直す対象を受け取れず何も push せずに終わっていました(`review-policy.md` の案内どおりに設定すると必ずこの状態になっていました)。
+  **ボットはどちらのキーに足しても両方で効きます。** キーは互換のため 2 つとも残し、既定値も変えていません(`trustedReviewBots` は `[]` のまま)。
+  あわせて `autopilot-next.sh` の `trustedBots` にも `trustedReviewBots` と同じ型検査(文字列の配列でなければ `exit 2`)と、同じ既定値(キーが無ければ `claude[bot]` / `github-actions[bot]`)を入れました。
+  Bot 種別(`user.type == "Bot"`)の確認はそのまま残しているので、名前が一致するだけの人間のアカウントは信頼されません
+- **[auto]** `/fix-pr` が **fork からの PR を触らない**ようにしました(`isCrossRepository` が `true` なら早期終了。ブランチを取得できず、外部のコードを無人でテスト実行することになるため)。
+  判定側(`autopilot-next.sh`)が fork の PR を枠・要対応に数えないのは 2026-10-08 のとおりで、`--summary` には「⚠️ fork の PR は対象外」、JSON では `untrustedPrs` に出ます
+- **[auto]** `/fix-pr` が PR のブランチに移った直後に `git merge --ff-only origin/[head]` で追いつくようにしました(GitHub の画面で修正案をコミットされると push が拒否されていた)
+- **[auto]** `autopilot-loop.sh`: `claude -p` を `--output-format json` で起動し、**許可されず実行できなかった操作**(`permission_denials`)をログと停止理由に出すようにしました
+  (「状態が変わっていない」で止まったとき、allow に何を足せばよいかが分かる)。判定の一時的な失敗は 2 回まで待って取り直します。
+  **クラウドセッション(`CLAUDE_CODE_REMOTE=true`)では起動を拒否します**(ターン終了後に裏のプロセスが回収されうるため。`AUTOPILOT_ALLOW_REMOTE=1` で強行可)。
+  `/autopilot` もクラウドで子セッションを起動できないときはローカル経路に落とさず止まります
+- **[auto]** econ の自動進行が tasklist の検収・振り返り項目(Codex が閉じられない `- [ ]`)で毎回止まる問題に対し、`/next-ticket --plan-only` と `econ.md` に
+  「それらは `- [x] ~~…~~（econ: 理由）` で閉じる」規則を足しました。停止メッセージにも原因の候補を出します
+- **[manual]** `.codex/config.toml` に `[mcp_servers.context7]` を足しました。Claude 側の `.mcp.json` と同じ構成で、**版も同じ `@4.1.1` に固定**しています
+  (`npx -y` の未固定取得を避けるため。2026-10-08 で `.mcp.json` に入れたのと同じ方針)。版を上げるときは両方直してください。
+  **取り込む側の作業**: `.codex/config.toml`(merge 対象)に同じブロックを足すか、Codex から context7 を使わないなら足さないでください
+- **[manual]** `.codex/hooks.json` の SessionStart に**特定マシンの絶対パス**(`C:\Project\...`)が入っていたのを直し、各 hook を `${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}` 起点にしました
+  (`delegate-codex.sh` は `env -i` で Codex を起動するため `CLAUDE_PROJECT_DIR` が渡らない)。あわせて `.codex/agents/`(Codex 側のサブエージェント定義 5 本)と `.codex/hooks/session-start.sh` を追加し、
+  `template-manifest.json` に `.codex/agents/`・`.codex/hooks/`(owned)と `.codex/hooks.json`(merge)を足しました。
+  **取り込む側の作業**: `.claude/template-manifest.json` と `.codex/hooks.json`(どちらも merge 対象)を同じ形にしてください
+
+---
+
+## 2026-11-01 (3)
+
+- **[auto]** **担当AIの切り替え**を追加しました。実装・レビューをどの AI に任せるかを `.claude/scripts/route.sh`(新規)が決めます。優先順位は「コマンドの記載(`/next-ticket 12 実装=sonnet レビュー=codex`)> Issue の『担当AI』チェック > `delegate:codex` ラベル > `.claude/routing.json` > 既定(実装 = Codex / レビュー = Sonnet)」。担当名は `codex` / `sonnet` / `opus` / `haiku`、レビューは `auto`(実装と別ベンダー)も可。`/add-feature` `/next-ticket` `/fix-issue` の実装・レビュー手順、ルール(`model-strategy.md` / `review-policy.md`)を `route.sh` 経由に書き換えました。
+- **[auto]** `.claude/routing.json`(新規・merge 対象)でプロジェクトの既定の担当を決められます。テンプレート既定は従来どおり(実装 = Codex / レビュー = Sonnet)なので、置くだけでは挙動は変わりません。
+- **[auto]** `/setup-tickets` が発行する Issue に「担当AI」のチェック欄を入れるようにしました(チェックなしで発行。着手前にクリックで選ぶ)。
+- **[auto]** 自動進行(econ)は、実装の担当が Codex のチケットだけを回します。Claude 担当のチケットには `autopilot:manual` を付けて候補から外します。
+- **[auto]** `.harness/decisions.jsonl` に担当AI(`route`)を残すようにしました(担当ごとの往復回数・指摘数の比較用)。
+- **[manual]** 既存のチケットに担当を指定したい場合は、Issue 本文に次の節を足してください(無ければ `routing.json` / 既定に従うので、足さなくても動きます)。
+
+  ```
+  ## 担当AI
+  - [ ] 実装: Codex
+  - [ ] 実装: Claude Sonnet
+  - [ ] 実装: Claude Opus
+  - [ ] レビュー: Codex
+  - [ ] レビュー: Claude Sonnet
+  - [ ] レビュー: auto
+  ```
+
+## 2026-11-01 (2)
+
+- **[auto]** `sync-template.mjs` の `process` / `console` / `Buffer` を、`/* global */` 宣言ではなく `node:` モジュールの import で取るようにしました。Node のグローバルを定義済みの ESLint 設定(omote-navi など)では `/* global */` が `no-redeclare` になり、プロジェクトの lint が落ちていました。
+
+## 2026-11-01
+
+- **[auto]** テンプレート同期を**スクリプト化**しました(`.claude/scripts/sync-template.mjs`・新規)。owned の上書き・削除、merge の **3-way マージ**(前回同期した版を共通の祖先にする。テキストは `git merge-file`、ignore 系は行の和集合、JSON はキー単位の構造マージで配列は集合として追加・削除を両方反映)、`syncedAt` の更新までを機械的に行います。両側が同じ箇所を変えたときだけ競合として報告します。これまで手作業だった「allowlist に足す」「`.gitignore` に足す」「`autopilot.json` にキーを足す」といった `[manual]` 項目の多くは、自動で入るようになります。
+- **[auto]** `--check-drift` を追加しました。owned なのにプロジェクトで書き換えてあるファイル(次の同期で上書きされて失われる変更)を列挙します。
+- **[auto]** プロジェクトの manifest にだけある `never` のエントリを、区分の判定で最優先するようにしました(テンプレートから更新されたくないファイルをプロジェクトが個別に止めるため)。
+- **[auto]** `/sync-template` をスクリプト前提に書き換えました。Claude が担うのは競合の解消と `[manual]` 項目の対応、検証・PR 作成だけです。
+- **[manual]** 月次の `template-update-check` が **Issue ではなく同期 PR を作る**ようになりました(競合がある・`.github/workflows/` が変わるときは従来どおり Issue)。PR を作らせるには、リポジトリの Settings → Actions → General で **Allow GitHub Actions to create and approve pull requests** を有効にしてください。無効のままだと、ブランチを push したうえで Issue で知らせます。なおこのワークフロー自体の更新は `.github/workflows/` の変更なので、**初回はローカルで `/sync-template` を実行して取り込む**必要があります。
+- **[auto]** `.claude/branch-policy.json`(merge 対象)の `allowedPrefixes` に `chore/` を追加しました(同期 PR のブランチ名 `chore/sync-template-*` 用)。
+- **[auto]** テンプレート本体の CI に同期スクリプトのテスト(`.claude/scripts/test-sync-template.sh`・新規)を追加しました。
+
+## 2026-10-31 (2)
+
+- **[auto]** `record-hygiene` の CHANGELOG 検査を**テンプレート本体だけ**で行うようにしました(リポジトリ名と `templateRepo` が一致するときだけ)。これまでプロジェクト側でもハーネスを変えるたびに `docs/template-dev/CHANGELOG.md` の追記を求められ、`/kickoff` で `docs/template-dev/` を消したプロジェクトでは毎回落ちていました。
+- **[auto]** 委託禁止領域の抽出を「`-` で始まる行の、説明ダッシュ( — )より前のバックティック」だけに狭めました(lastwhen #28 で直したものの取り込み)。これまで説明文中の `npx` / `python3` なども禁止パスとして抽出されていました。書式違反は stderr に警告します。入口検査0 に `awk` を追加しています。
+- **[manual]** `AGENTS.md`(merge 対象)の委託禁止領域の節で、**説明文からバックティックを外して**ください。説明にバックティックが残っていると委託のたびに警告が出ます。節の冒頭に書式の説明段落も追加しています(テンプレートの `AGENTS.md` を参照)。
+- **[auto]** `/kickoff` フェーズ5 に「テンプレートの判断ログ `.harness/decisions.jsonl` を空にする」手順を追加しました。新規プロジェクトにテンプレート自身の実測記録が持ち込まれていました。
+
+## 2026-10-31
+
+- **[manual]** ⚠️ `.claude/template-manifest.json` の `templateRepo` を `fuji18/claude-codex-template` に直しました。これまで旧テンプレート(`claude-template`)を指していたため、`/kickoff` が記録する `syncedAt` も旧テンプレートの SHA になり、`/sync-template` と `template-update-check` が**新テンプレートの更新を一切拾えていませんでした**。
+  **取り込む側の作業**: 自分の `.claude/template-manifest.json`(merge 対象)の `templateRepo` を同じ URL に直し、`syncedAt` を**プロジェクト開始時点の claude-codex-template の commit SHA** に書き換えてください(分からなければプロジェクトの最初のコミット日以前で最も近い main のコミット)。
+- **[manual]** スタックに合わせて `/kickoff` フェーズ1 が書き換えるファイルを **owned から merge に移しました**: `.github/workflows/ci.yml` / `.claude/hooks/session-start.sh` / `.claude/scripts/lint-on-edit.sh`。owned のままだと `/sync-template` がプロジェクトのスタック対応(Flutter の CI など)を黙って上書きしていました。あわせて未分類だった `.prettierignore` / `.secretlintignore` を merge に追加しました。
+  区分の判定を「**最も具体的な(長い)エントリが勝つ**(同じ長さなら owned > merge > never)」に改め、owned ディレクトリを上書きした直後に中の merge / never 個別指定を戻す手順を `/sync-template` に足しました。
+  **取り込む側の作業**: 自分の manifest(merge 対象)に同じ移動・追加を反映してください。
+- **[auto]** テンプレート本体の CI(`harness-integrity` ジョブ)に `check-manifest-coverage.sh`(新規)を追加しました。追跡ファイルが manifest のどの区分にも無ければ落ちます。下流プロジェクトでは何もしません(リポジトリが `templateRepo` と一致するときだけ働く)。
+- **[auto]** 名称を `claude-codex-template` に統一しました(`package.json` の `name`・`/sync-template`・`CLAUDE.md`・`template-update-check.yml` の表記)。
 
 ## 2026-10-08
 

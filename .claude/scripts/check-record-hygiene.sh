@@ -62,6 +62,30 @@ changed_contains() {
   printf '%s\n' "$CHANGED_FILES" | grep -qxF "$1"
 }
 
+# --- 検査1 の対象判定: テンプレート本体だけで行う ---
+# CHANGELOG はテンプレートが下流へ「何を取り込めばよいか」を伝えるためのもの。
+# 下流プロジェクトが自分のハーネスを直しても伝える相手はいないので、要求しない
+# (要求すると、/kickoff で docs/template-dev/ を消したプロジェクトでハーネスの PR が
+# 毎回落ちる)。テンプレート本体かどうかは、リポジトリ名(CI では GITHUB_REPOSITORY、
+# 手元では origin)と template-manifest.json の templateRepo の一致で判定する。
+# 判定材料が無い場合(manifest 無し・origin 無し)は従来どおり検査する。
+normalize_repo() {
+  printf '%s' "$1" | sed -E 's#^(https://|git@)github\.com[/:]##; s#\.git$##' | tr '[:upper:]' '[:lower:]'
+}
+CHANGELOG_APPLIES=yes
+MANIFEST="${REPO_ROOT}/.claude/template-manifest.json"
+if [ -f "$MANIFEST" ] && command -v jq >/dev/null 2>&1; then
+  TEMPLATE_REPO="$(normalize_repo "$(jq -r '.templateRepo // ""' "$MANIFEST" 2>/dev/null)")"
+  if [ -n "${GITHUB_REPOSITORY:-}" ]; then
+    SELF_REPO="$(normalize_repo "$GITHUB_REPOSITORY")"
+  else
+    SELF_REPO="$(normalize_repo "$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null || true)")"
+  fi
+  if [ -n "$TEMPLATE_REPO" ] && [ -n "$SELF_REPO" ] && [ "$SELF_REPO" != "$TEMPLATE_REPO" ]; then
+    CHANGELOG_APPLIES=no
+  fi
+fi
+
 # --- 検査1: CHANGELOG の記載漏れ ---
 # while はヒアストリングで回す(パイプにすると subshell になり triggered が残らない)。
 triggered=""
@@ -77,7 +101,9 @@ while IFS= read -r f; do
   [ -n "$triggered" ] && break
 done <<< "$CHANGED_FILES"
 
-if [ -n "$triggered" ]; then
+if [ -n "$triggered" ] && [ "$CHANGELOG_APPLIES" = no ]; then
+  : # 下流プロジェクトでは CHANGELOG を要求しない(上の判定を参照)
+elif [ -n "$triggered" ]; then
   if changed_contains "$CHANGELOG_PATH"; then
     :
   elif has_label "$CHANGELOG_ESCAPE_LABEL"; then

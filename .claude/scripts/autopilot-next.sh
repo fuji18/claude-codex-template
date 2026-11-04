@@ -13,7 +13,18 @@
 #   ... | bash .claude/scripts/autopilot-next.sh --format-summary  # 取得済みの JSON を要約に整形する
 #   bash .claude/scripts/autopilot-next.sh --issues F --prs F [--details F]  # フィクスチャ(テスト用)
 #     F はそれぞれ REST の issues 一覧 / pulls 一覧の JSON 配列。
-#     --details は {"<PR番号>": {"mergeable_state":..,"checks":[conclusion..],"reviews":[{"user":..,"state":..}]}}
+#     --details は {"<PR番号>": {"mergeable_state":..,"checks":[conclusion..],"reviews":[{"user":..,"state":..,"author_association":..}]}}
+#     (author_association が無いレビューは信頼済みとして扱う。実 API は必ず返す)
+#
+# 信頼の境界(公開リポジトリで外部の人に止められないため):
+#   - fork からの PR(head のリポジトリが base と違う)は、Closes #N があってもチケットに紐づけない。
+#     判定・枠・要対応のどれにも数えず untrustedPrs に出すだけ(/fix-pr はブランチを取得できず、
+#     外部のコードを無人で実行することにもなる)
+#   - 変更要求は書き込み権限のあるレビュアー(OWNER / MEMBER / COLLABORATOR)と
+#     .claude/autopilot.json の trustedBots / trustedReviewBots の**和集合**に載った
+#     ボットのものだけを数える。2 キーは「信頼するボット」という 1 つの概念で、どちらに書いても
+#     このスクリプトと pr-feedback.sh の両方で効く(片方だけだと、ここで要対応と数えた指摘の
+#     本文が pr-feedback.sh から返らず、/fix-pr が直す対象を受け取れないまま空振りする)
 #
 # action(上から最初に当たったもの):
 #   fix     — 進行中の PR にコンフリクト / CI 失敗 / 変更要求がある(新規着手より先に直す)
@@ -82,6 +93,27 @@ else
   MAX_IN_FLIGHT="${MAX_IN_FLIGHT:-2}"
 fi
 case "$MAX_IN_FLIGHT" in '' | *[!0-9]* | 0) die "maxInFlight は 1 以上の整数にする: $MAX_IN_FLIGHT" ;; esac
+# 変更要求を信頼するボット(例: GitHub 上の Codex レビュー)。ログイン名の配列。
+# trustedBots(pr-feedback.sh が本文を返す Bot)との和集合を使い、既定値の扱いも揃える
+# ——「どちらのキーに書いても両方のスクリプトで効く」を 2 箇所で同じ結果にするため
+DEFAULT_BOTS='["claude[bot]","github-actions[bot]"]'
+TRUSTED_BOTS='[]'
+if [ -f "$CONF" ]; then
+  for bk in trustedBots trustedReviewBots; do
+    bv="$(jq -c --arg k "$bk" 'if has($k) then .[$k] else null end' "$CONF" 2>/dev/null)" ||
+      die "$CONF の $bk を読めない"
+    if [ "$bv" = null ]; then
+      # trustedBots を書いていなければ pr-feedback.sh と同じ既定値に倒す
+      if [ "$bk" = trustedBots ]; then bv="$DEFAULT_BOTS"; else continue; fi
+    fi
+    jq -e 'type == "array" and all(.[]; type == "string")' <<<"$bv" >/dev/null 2>&1 ||
+      die "$bk は文字列の配列にする: $bv"
+    TRUSTED_BOTS="$(jq -c --argjson a "$bv" '. + $a | unique' <<<"$TRUSTED_BOTS" 2>/dev/null)" ||
+      die "$bk を取り込めない: $bv"
+  done
+else
+  TRUSTED_BOTS="$DEFAULT_BOTS"
+fi
 
 # --- データ取得 ---
 # 本文を丸ごと持つと jq の引数長上限(ARG_MAX)を超えるため、一時ファイル経由で受け、
@@ -123,14 +155,14 @@ TRUSTED_ASSOC='["OWNER","MEMBER","COLLABORATOR"]'
 jq --argjson ta "$TRUSTED_ASSOC" '[.[] | {number, state, title, pull_request,
             trusted: ((.author_association // "OWNER") as $a | $ta | index($a) != null),
             labels: [.labels[]? | (.name? // .)],
-            deps: [(.body // "") | scan("depends:[^\\n]*"; "i") | scan("#(\\d+)") | .[0] | tonumber] | unique}]' \
+            deps: [(.body // "") | match("depends:[^\\n]*"; "gi").string | scan("#(\\d+)") | .[0] | tonumber] | unique}]' \
   "$TMP/issues.raw" >"$TMP/issues.json" || die "Issue 一覧の整形に失敗した"
 # fork(head が別リポジトリ)の PR は信頼しない。本文に Closes #N と書くだけで誰でも「チケットの PR」を
 # 名乗れるため、通すと autopilot が外部コードに /fix-pr を回す(手元で npm ci / npm test = 任意コード実行)。
 # head.repo は fork が消えると null になるので、その場合も信頼しない。フィクスチャは両方欠けていて一致する
 jq '[.[] | {number, draft: (.draft // false), head: (.head.ref // ""), sha: (.head.sha // ""),
             trusted: ((.head.repo.full_name? // null) == (.base.repo.full_name? // null)),
-            links: [(.body // "") | scan("\\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\\s+#(\\d+)"; "i") | .[0] | tonumber] | unique}]' \
+            links: [(.body // "") | (match("\\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\\s+#(\\d+)"; "gi") | [.captures[].string]) | .[0] | tonumber] | unique}]' \
   "$TMP/prs.raw" >"$TMP/prs.json" || die "PR 一覧の整形に失敗した"
 
 # --- 1 段目: チケットと PR の対応づけ(詳細取得の対象を絞るため先に計算する) ---
@@ -184,7 +216,7 @@ if [ "$FIXTURE" = 0 ]; then
     # mergeable_state は詳細エンドポイントでしか返らない。計算中は "unknown"(= 判定しない)
     ms="$(gh api "repos/$REPO/pulls/$pr" --jq '.mergeable_state // "unknown"' 2>/dev/null)" || { ms=unknown; err="$(jq -c '. + ["pull"]' <<<"$err")"; }
     checks="$(gh api "repos/$REPO/commits/$sha/check-runs?per_page=100" --jq '[.check_runs[].conclusion]' 2>/dev/null)" || { checks='[]'; err="$(jq -c '. + ["checks"]' <<<"$err")"; }
-    reviews="$(gh api --paginate "repos/$REPO/pulls/$pr/reviews?per_page=100" --jq '.[] | {user: .user.login, state, commit_id, assoc: (.author_association // "NONE")}' 2>/dev/null | jq -s -c .)" || { reviews='[]'; err="$(jq -c '. + ["reviews"]' <<<"$err")"; }
+    reviews="$(gh api --paginate "repos/$REPO/pulls/$pr/reviews?per_page=100" --jq '.[] | {user: .user.login, state, commit_id, author_association}' 2>/dev/null | jq -s -c .)" || { reviews='[]'; err="$(jq -c '. + ["reviews"]' <<<"$err")"; }
     jq --arg p "$pr" --arg ms "$ms" --argjson c "$checks" --argjson r "$reviews" --argjson e "$err" \
       '. + {($p): {mergeable_state: $ms, checks: $c, reviews: $r, fetchErrors: $e}}' "$TMP/details.json" >"$TMP/details.next" &&
       mv "$TMP/details.next" "$TMP/details.json"
@@ -193,9 +225,10 @@ fi
 
 # --- 2 段目: 判定 ---
 RESULT="$(jq -n --argjson b "$BASE" --slurpfile dd "$TMP/details.json" --argjson extra "$EXTRA_CLOSED" \
-  --argjson max "$MAX_IN_FLIGHT" --arg mode "$HMODE" '
+  --argjson max "$MAX_IN_FLIGHT" --arg mode "$HMODE" --argjson bots "$TRUSTED_BOTS" '
+  def trusted: (.author_association // "OWNER") as $a | (.user // "") as $u
+    | (["OWNER", "MEMBER", "COLLABORATOR"] | index($a)) != null or ($bots | index($u)) != null;
   $dd[0] as $d
-  | ["OWNER", "MEMBER", "COLLABORATOR"] as $ta
   | ($b.closed + $extra) as $closed
   | ($b.prs | map(. as $p | ($d[($p.number | tostring)] // {}) as $x
       | ([ (if ($x.mergeable_state // "") == "dirty" then "conflict" else empty end),
@@ -206,9 +239,10 @@ RESULT="$(jq -n --argjson b "$BASE" --slurpfile dd "$TMP/details.json" --argjson
            # dismiss まで残り続けるので、**現在の head に対して出たものだけ**を数える。
            # 対応を push した後は人間の再レビュー待ち(= wait)であり、fix を繰り返さない
            # 書き込み権限の無いレビュアーの判定は数えない(公開リポジトリでは誰でも Request changes を出せ、
-           # それだけで /fix-pr が起動して無人の push につながる)。assoc が無いのはフィクスチャだけ
-           (if ([$x.reviews[]? | select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or .state == "DISMISSED")
-                 | select((.assoc // "OWNER") as $a | $ta | index($a) != null)]
+           # それだけで /fix-pr が起動して無人の push につながる)。author_association が無いのはフィクスチャだけ。
+           # trustedBots / trustedReviewBots の和集合に載ったボット(例: GitHub 上の Codex レビュー)は
+           # 権限に関わらず数える。どちらのキーに書いても効く
+           (if ([$x.reviews[]? | select(trusted) | select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or .state == "DISMISSED")]
                  | group_by(.user) | map(last)
                  | map(select(.state == "CHANGES_REQUESTED" and ((.commit_id // $p.sha) == $p.sha))) | length) > 0
               then "changes_requested" else empty end) ]) as $why

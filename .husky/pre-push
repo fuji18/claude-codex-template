@@ -1,3 +1,4 @@
+# shellcheck shell=sh  # husky はこのファイルを sh -e で実行する(shebang は無い)
 # 保護ブランチへの push と、ポリシー外の名前のブランチの push を止める(ベンダー非依存の防衛線)。
 # pre-commit / prepare-commit-msg はコミットを止めるが、`git push origin HEAD:main` は
 # 作業ブランチ上から実行できるためそれらを素通りする。判定の実体は共有スクリプトに一本化。

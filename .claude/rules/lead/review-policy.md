@@ -30,11 +30,15 @@ paths:
   | A(通常) | 司令塔がこの目視を行う + `delegate-codex.sh` 出口検査の警告 |
   | B(節約) | **draft PR を作る前に人間が目視する**(`.claude/rules/mode/econ.md`) |
   | C(縮退) | `delegate-codex.sh` を通らないため出口検査が効かない。`check-guard-integrity.sh degraded` の D4 が報告する(`.claude/rules/mode/degraded.md`) |
-- **実装中(主レビュー)**: `code-reviewer` subagent(read-only、Sonnet)を起動する。docs/ とのスペック整合もここで確認する
+- **実装中(主レビュー)**: **担当は `route.sh review` で決める**(既定は `code-reviewer` subagent(read-only、Sonnet)。`codex` なら `delegate-codex.sh review`、`claude:opus` などは `code-reviewer` を `model` 指定で起動。`auto` は実装と別ベンダー)。docs/ とのスペック整合もここで確認する
 - **PR 時(最終ゲート、自動は 1 回だけ)**: GitHub Actions は **main 向け PR のオープン時と ready_for_review 時のみ**走る。develop 等の統合ブランチ向け PR では走らない(意図的なコスト削減。feature コードの主レビューは実装中の code-reviewer が担う)。push ごとの再レビューも走らない。再レビューが必要なときは PR 上で `@claude` にメンションする
   - テンプレート既定(GitHub Flow / `baseBranch: main`)では、すべての作業 PR がこの 1 回のレビュー対象になる。`develop` 統合ブランチを採るプロジェクトに切り替えた場合は「main 向け PR = リリース単位」となり、feature の主レビューは実装中の code-reviewer だけになる点に注意する(ベースの逸脱自体は CI の `branch-policy` ジョブが検出する)
 - **200 行以上 かつ 重要変更(認証・決済・データ移行・アーキテクチャ変更)のレビュー**(**この判断の単一ソース**。`delegation-policy.md` の粒度表からは 1 行で参照される): **既定は `delegate-codex.sh review`**。`/code-review ultra` と Agent Teams 並行レビューは**昇格先**であって、既定と併用しない(同じ発動条件に 2 つの手段を割り当てると両方回す運用崩れになる。#60 / C4)
   - 理由は起動主体とコスト: `/code-review ultra` は**ユーザー起動 + 課金**で司令塔からは起動できず、温存したい Claude 枠を消費する。`delegate-codex.sh review` は read-only で司令塔が自分で起動でき、別ベンダーの第二意見にもなる
   - `/code-review ultra` を**ユーザーに提案する**のは次の 2 つだけ: (1) **その差分自体を Codex が書いた**(impl 委託の成果。同じベンダーの自己レビューは第二意見にならない)、(2) **Codex が使えない**(`exit 3` / レート上限)
   - 通常の大きめ差分にはどちらも使わない(主レビューは実装中の `code-reviewer`)
+  - **呼び方**: 検証(`/add-feature` ステップ6)で `code-reviewer` と並べて `bash .claude/scripts/delegate-codex.sh review origin/[baseBranch] .steering/[dir]/` を実行する。対象は分岐点から**作業ツリーまで**(未コミット・未追跡を含む)なので、コミット前に回してよい。差分が無ければ codex を起動せず `exit 2` で返る(枠を使わない)
+  - **分岐は終了コードと `findings:` 行だけで行う**: `exit 0` なら `findings: critical=N major=M minor=L`(ホストが数えた件数)を見て、Critical / Major は `code-reviewer` の指摘と同じく修正する(ラベルは共通)。`exit 2` は出力が形式外・空・作業ツリーが変わった等で、**結果として扱わない**(「指摘なし」と読み替えない)。`exit 3` / `4` は上の (2) に当たる
+  - 出力が長いとサマリーは先頭 8000 バイトで切られ、ホスト警告に全文のパス(`.harness/codex-runs/[id].last.txt`)が出る。切られたら全文を読んでから判断する
+- **GitHub 上の Codex レビュー(`@codex review` 等)を使う場合**: そのボットのログイン名を `.claude/autopilot.json` の `trustedReviewBots` に足す(`trustedBots` でもよい。**2 キーは 1 つの概念で、どちらに書いても和集合として両方のスクリプトで効く** —— 変更要求の検出(`autopilot-next.sh`)と本文の受け渡し(`pr-feedback.sh`)が揃う)。`/fix-pr` と autopilot の判定は、書き込み権限のあるレビュアーとこのリストのボットの指摘だけを扱う。ボットのレビューがコメント(COMMENTED)として投稿される場合、ローカルの autopilot はそれを「要対応」として検出しない(クラウドの子セッションは PR イベントで拾う)。ローカルで拾いたいときは `/fix-pr [PR番号]` を手で回す。Codex の GitHub レビューは `AGENTS.md` §8(Review guidelines)を読む
 - **UI/画面のレビュー**: `docs/ui-design-guidelines.md`(スタック非依存の UI 基準)を参照し、§6 のチェックリストを `code-reviewer` または Design プラグイン(`/design:critique`)で当てる。**Design プラグインは画面作成があるプロジェクトのときだけ `/kickoff` フェーズ1.5 で導入を判断する**(画面が無いプロジェクトには入れない)
