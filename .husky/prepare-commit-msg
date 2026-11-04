@@ -1,3 +1,4 @@
+# shellcheck shell=sh  # husky はこのファイルを sh -e で実行する(shebang は無い)
 # 保護ブランチ上で「コミットを作る」操作のうち、pre-commit が捕まえられないものを止める。
 #
 # 実測(git 2.53): pre-commit が発火するのは git commit と git commit --amend だけで、

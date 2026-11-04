@@ -46,6 +46,7 @@
       "Bash(bash .claude/scripts/autopilot-preflight.sh:*)",
       "Bash(bash .claude/scripts/autopilot-loop.sh:*)",
       "Bash(bash .claude/scripts/harness-mode.sh:*)",
+      "Bash(bash .claude/scripts/check-shell.sh:*)",
       "Bash(bash .claude/scripts/delegate-codex.sh impl:*)",
       "Bash(bash .claude/scripts/delegate-codex.sh review:*)",
       "Bash(bash .claude/scripts/codex-run.sh list:*)",

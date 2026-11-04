@@ -14,6 +14,31 @@
 
 ---
 
+## 2026-11-04
+
+- **[manual]** **シェルスクリプトの静的検査(shellcheck)を足しました。** ハーネスの判定の実体(委託の入口・保護ブランチ判定・autopilot の選定)はほぼ全部シェルなのに、
+  機械的な検査が `bash -n`(構文エラーだけ)しかなく、クォート漏れや `cd` 失敗の取りこぼしは通っていました。入れたものは 3 つです:
+  - **`.claude/scripts/check-shell.sh`(新規)= 検査の唯一の実行経路。** 対象の選定(git 追跡下の `*.sh` と `.husky/pre-commit` / `.husky/prepare-commit-msg`。
+    `.husky/_/` は husky の生成物、`.steering/` は過去の作業記録なので除外)と引数(`shellcheck -x -P SCRIPTDIR --severity=warning`)をここに集約しています。
+    終了コードは **0 = 指摘なし / 1 = 指摘あり / 2 = 実行できない**(shellcheck 未インストール・対象 0 件)。`--list` で対象一覧だけ出せます
+  - **CI(`ci.yml` の `harness-integrity` ジョブ)がこのスクリプトを呼びます。** 非ゼロはすべて失敗 —— 指摘だけでなく「shellcheck が無い」でも落とします
+    (他のハーネス層はフェイルオープンですが、CI のゲートは止めるのが仕事で、黙って通るとゲートが消えたことに誰も気づきません)
+  - **devcontainer に shellcheck が入ります**(`.devcontainer/post_create.sh`。失敗しても警告だけでセットアップは続きます)。`/check`(`test-runner`)も
+    `check-shell.sh` があれば同じコマンドを回すので、**手元と CI で結果が一致します**。`exit 2`(未インストール)はスキップとして報告され、失敗にはなりません
+  深刻度を warning 以上に絞っているのは、note に**意図して使っている書き方**(`set -e` を発火させないための `A && B || C` = SC2015 / 共有ライブラリの source = SC1091)が多く、
+  全部拾うと「赤いのが普通」の鳴りっぱなしゲートになるためです。個別に抑止したいものは、その場に `# shellcheck disable=SCxxxx` と理由を書きます(深刻度は下げない)。
+  あわせて、これで出た 11 件を直しました:
+  - `cd` の失敗を明示的に扱う(SC2164): `session-start.sh`(Claude / Codex)は `|| exit 0` でフェイルオープン、`harness-mode.sh` と `check-guard-integrity.sh` は
+    `|| true`(現在地のまま続ける)、`test-sync-template.sh` は `|| exit 1`(違う場所で検査すると結果が無意味になる)
+  - `autopilot-preflight.sh` の未使用変数 `OPEN` を削除(SC2034。値は同じ行の `SUM` に入っています)
+  - `.husky/pre-commit` / `.husky/prepare-commit-msg` の先頭に `# shellcheck shell=sh` を足す(SC2148。husky はこの 2 つを shebang 無しの `sh -e` で実行します)
+  **取り込む側の作業**: `.github/workflows/ci.yml` / `.husky/*` / `.devcontainer/post_create.sh` はいずれも `merge`(手動統合)区分です。3 つを写したうえで、
+  **自プロジェクトのシェルスクリプトに出る指摘を潰してください**(`bash .claude/scripts/check-shell.sh` を手元で回すと CI と同じ結果になります)。
+  `.claude/settings.json` の allow に `Bash(bash .claude/scripts/check-shell.sh:*)` を足すと、`/check` で許可を聞かれなくなります。
+  **シェルを一切使わない構成のプロジェクトでは、CI のステップごと落として構いません**(対象 0 件は `exit 2` = 失敗として扱われるため)
+
+---
+
 ## 2026-11-03
 
 - **[auto]** ⚠️ **`delegate-codex.sh review` が未コミットの変更を見ていなかった不具合を直しました。** 従来は `git diff <base>...HEAD`(コミット済みだけ)をレビューさせており、
@@ -33,6 +58,12 @@
   (OWNER / MEMBER / COLLABORATOR)だけを数えたうえで、ここに載せたボットのログイン名(GitHub 上の Codex レビュー等)を例外として数えます。`/fix-pr` も同じキーで判断します。
   **既存の `trustedBots`(`/fix-pr` が本文まで読む Bot。`pr-feedback.sh`)とは別のキー**で、両方が併存します。`autopilot-preflight.sh` は両方を「文字列の配列か」で検証します。
   **取り込む側の作業**: `.claude/autopilot.json`(merge 対象)に `"trustedReviewBots": []` を足し、GitHub 上の Codex レビュー等を使うならボットのログイン名を入れてください
+- **[auto]** **`trustedBots` と `trustedReviewBots` を「信頼するボット」という 1 つの概念にまとめ、`pr-feedback.sh` と `autopilot-next.sh` の両方が 2 キーの和集合を読むようにしました。**
+  従来は Codex ボット(例: `chatgpt-codex-connector[bot]`)を `trustedReviewBots` にだけ入れると、`autopilot-next.sh` が変更要求を要対応と数えて `/fix-pr` を起動するのに、
+  `pr-feedback.sh` がそのボットの本文を `untrusted` に回すため、`/fix-pr` が直す対象を受け取れず何も push せずに終わっていました(`review-policy.md` の案内どおりに設定すると必ずこの状態になっていました)。
+  **ボットはどちらのキーに足しても両方で効きます。** キーは互換のため 2 つとも残し、既定値も変えていません(`trustedReviewBots` は `[]` のまま)。
+  あわせて `autopilot-next.sh` の `trustedBots` にも `trustedReviewBots` と同じ型検査(文字列の配列でなければ `exit 2`)と、同じ既定値(キーが無ければ `claude[bot]` / `github-actions[bot]`)を入れました。
+  Bot 種別(`user.type == "Bot"`)の確認はそのまま残しているので、名前が一致するだけの人間のアカウントは信頼されません
 - **[auto]** `/fix-pr` が **fork からの PR を触らない**ようにしました(`isCrossRepository` が `true` なら早期終了。ブランチを取得できず、外部のコードを無人でテスト実行することになるため)。
   判定側(`autopilot-next.sh`)が fork の PR を枠・要対応に数えないのは 2026-10-08 のとおりで、`--summary` には「⚠️ fork の PR は対象外」、JSON では `untrustedPrs` に出ます
 - **[auto]** `/fix-pr` が PR のブランチに移った直後に `git merge --ff-only origin/[head]` で追いつくようにしました(GitHub の画面で修正案をコミットされると push が拒否されていた)

@@ -110,7 +110,7 @@ Agent Teams を有効化した場合は、`/config` で **Default teammate model
 > /fix-pr 42                             # 既存 PR のコンフリクト・CI 失敗・レビュー指摘を直す
 > /add-feature ユーザープロフィール編集   # 機能追加(計画→実装→検証→PR まで)
 > /fix-issue 42                          # GitHub Issue の修正と PR 作成
-> /check                                 # lint・型チェック・テスト・フォーマット一括実行&自動修正
+> /check                                 # lint・型・テスト・フォーマット・シェル検査を一括実行&自動修正
 > /commit                                # 変更を適切な粒度でコミット
 > /resume-work                           # 中断した .steering/ の作業を再開
 > /sync-docs                             # 実装と docs/ の乖離を検出・更新

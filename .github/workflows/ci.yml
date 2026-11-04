@@ -184,6 +184,20 @@ jobs:
           done
           exit 0
 
+      # シェルスクリプトの静的検査。ハーネスの判定の実体(委託の入口・保護ブランチ判定・
+      # autopilot の選定)はほぼ全部シェルなので、クォート漏れや cd 失敗の取りこぼしは
+      # ここで機械的に止める。同じジョブの `bash -n` は構文エラーしか見ず、意味的な欠陥は通す。
+      #
+      # 対象の選定と shellcheck の引数は .claude/scripts/check-shell.sh に一本化してある。
+      # devcontainer にも shellcheck を入れてあり(post_create.sh)、**手元で同じコマンドを
+      # 回すと同じ結果が出ることが要件**。CI だけが知っている引数を持たせてはいけない。
+      #
+      # 非ゼロはすべて失敗として扱う。指摘(exit 1)だけでなく「shellcheck が無い」
+      # (exit 2)でも落とす: 他のハーネス層はフェイルオープンだが、CI のゲートは
+      # 止めるのが仕事で、黙って通るとゲートが消えたことに誰も気づかない。
+      - name: ShellCheck
+        run: bash .claude/scripts/check-shell.sh
+
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 10

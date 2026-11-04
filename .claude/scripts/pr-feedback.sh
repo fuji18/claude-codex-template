@@ -7,8 +7,12 @@
 #
 # 信頼する書き手:
 #   - author_association が OWNER / MEMBER / COLLABORATOR(= 書き込み権限相当)
-#   - .claude/autopilot.json の trustedBots に載った Bot(既定: claude[bot] / github-actions[bot])。
-#     GitHub App はインストールされたリポジトリにしか書けないため、Bot 種別 + 名前の一致で足りる
+#   - .claude/autopilot.json の trustedBots と trustedReviewBots の**和集合**に載った Bot
+#     (既定: claude[bot] / github-actions[bot])。GitHub App はインストールされたリポジトリにしか
+#     書けないため、Bot 種別 + 名前の一致で足りる
+# この 2 キーは「信頼するボット」という 1 つの概念で、どちらに書いても pr-feedback.sh と
+# autopilot-next.sh の両方で効く。片方にだけ足すと、autopilot-next.sh は変更要求を要対応と数えるのに
+# このスクリプトが本文を返さず、/fix-pr が直す対象を受け取れないまま空振りする。
 # 信頼しない書き手の本文は出さず、件数と書き手の名前だけを出す(人間が気づけるように)。
 #
 # GitHub へは REST(gh api)だけで触る(Claude Code on the web では GraphQL が 403 になるため)。
@@ -34,9 +38,14 @@ command -v gh >/dev/null 2>&1 || die "gh が見つからない"
 REPO="$(gh_resolve_repo)" || die "リポジトリを特定できない(AUTOPILOT_REPO=owner/repo で指定できる)"
 
 CONF=.claude/autopilot.json
+# 信頼するボットは trustedBots と trustedReviewBots の和集合。型が配列でないキーは既定値側に倒す
+# (型の不正を exit 2 で止めるのは autopilot-next.sh 側の役割で、そちらが先に鳴る)
 BOTS='["claude[bot]","github-actions[bot]"]'
-if [ -f "$CONF" ] && jq -e '.trustedBots | type == "array"' "$CONF" >/dev/null 2>&1; then
-  BOTS="$(jq -c '.trustedBots' "$CONF")"
+if [ -f "$CONF" ]; then
+  BOTS="$(jq -c '
+    (if (.trustedBots | type) == "array" then .trustedBots else ["claude[bot]", "github-actions[bot]"] end)
+    + (if (.trustedReviewBots | type) == "array" then .trustedReviewBots else [] end)
+    | unique' "$CONF" 2>/dev/null)" || die "$CONF の trustedBots / trustedReviewBots を読めない"
 fi
 
 TMP="$(mktemp -d)" || die "一時ディレクトリを作れない"

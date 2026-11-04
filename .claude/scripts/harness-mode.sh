@@ -16,7 +16,8 @@
 set -uo pipefail
 
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
-[ -n "$ROOT" ] && cd "$ROOT" 2>/dev/null
+# cd に失敗しても続ける(現在地のまま読む)。モードの読み取りで作業が止まる方が害が大きい
+if [ -n "$ROOT" ]; then cd "$ROOT" 2>/dev/null || true; fi
 
 MODE="${CODEX_HARNESS_MODE:-}"
 if [ -z "$MODE" ] && [ -f .harness/mode ]; then
