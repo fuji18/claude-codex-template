@@ -57,7 +57,7 @@
 - [x] `test-runner.md` に検出項目を足す(`check-shell.sh` があるときだけ回す / `exit 2` はスキップ / 自動修正はしない)
 - [x] `check.md` の description と README のコマンド早見表を「シェル検査」込みに直す
 - [x] `docs/template-dev/CHANGELOG.md` の `## 2026-11-04` を最終形(3 点セット + 取り込む側の作業)に書き換える
-- [ ] ~~`.claude/settings.json` の allow に `Bash(bash .claude/scripts/check-shell.sh:*)` を足す~~ (理由: auto モードの分類器が**自己改変として拒否**した。足さなくても動くが `/check` のたびに許可を聞かれる。**人間が 1 行足す**)
+- [x] `.claude/settings.json` の allow に `Bash(bash .claude/scripts/check-shell.sh:*)` を足す(**人間が手で追加**。auto モードの分類器が Claude の編集を自己改変として拒否したため。挿入位置・JSON の妥当性・重複なし・`autopilot-preflight.sh` の許可検査 ✅ を確認済み)
 
 ### 第2ラウンドの検証
 

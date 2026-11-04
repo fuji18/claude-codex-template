@@ -116,8 +116,12 @@ mapfile -t FILES < <(git ls-files | grep -E '\.sh$|^\.husky/[a-z-]+$' | grep -v 
 (失敗にしない)。**指摘の自動修正はしない** —— ガードレールのシェルを機械的に書き換えると
 挙動が変わるため、要約だけ司令塔に返す。
 
-### やり残し
+### 5) `.claude/settings.json` の allow(人間が手で追加)
 
-`.claude/settings.json` の allow に `Bash(bash .claude/scripts/check-shell.sh:*)` を足せなかった
-(auto モードの分類器が自己改変として拒否した)。足さなくても動くが、`/check` のたびに許可を聞かれる。
-**人間が 1 行足す**(`harness-mode.sh` の行の次が自然)。
+`Bash(bash .claude/scripts/check-shell.sh:*)` を `harness-mode.sh` の行の次に足す。
+無いと `/check` のたびに許可を聞かれる。
+
+**Claude はこの 1 行を自分で入れられなかった** —— auto モードの分類器が
+`.claude/settings.json`(= 自分の許可リスト)の編集を**自己改変として拒否する**。
+ガードとしては正しい挙動なので、**allow の追加は人間の担当**として扱う。
+同種の作業(allow / hook 定義の追加)が今後も出るなら、同じ経路で止まる前提で計画する。
