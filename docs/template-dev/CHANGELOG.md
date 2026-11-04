@@ -16,6 +16,19 @@
 
 ## 2026-11-04
 
+- **[manual]** **Codex 側のスキル置き場(`.agents/skills/`)を `.claude/skills/` からの生成物にしました。**
+  Claude Code がスキルを読むのは `.claude/skills/` だけ、Codex CLI が読むのは `.agents/skills/` だけなので、
+  同じスキルを両方から使うには一方を正にしてもう一方を追従させる必要があります。正は `.claude/skills/` です。
+  - **`.claude/scripts/sync-agents-skills.sh`(新規)= 生成と検査の唯一の経路。** 引数なしで生成、`--check` で乖離検査(0 = 一致 / 1 = 乖離)、`--list` で対象一覧。
+    対象は**ベンダー中立なスキルだけ**で、Claude 固有の起動機構を前提にするもの(`implement-ticket` = `context: fork` / `harness-setup` = `.claude/agents/` と settings.json・hooks の書き換え)は
+    スクリプト冒頭の `EXCLUDED` で明示的に外しています。足し引きはこの 1 箇所だけを直します
+  - **CI(`ci.yml` の `harness-integrity` ジョブ)が `--check` を呼びます。** 正を直して生成し忘れた・生成物を手で編集した・対象外のスキルが残っている、の 3 方向すべてで落ちます
+  - **生成物も git で追跡します**(Codex は clone 直後のワークツリーから読むため)。`template-manifest.json` では `never`(同期対象外)—— 各プロジェクトが自分の `.claude/skills/` から生成するものなので、テンプレートから上書き配布しません
+  - シンボリックリンクは採りません。Windows ホスト + Linux devcontainer の構成では片側で解決できず壊れます
+  **取り込む側の作業**: `.github/workflows/ci.yml`(merge 対象)に `Check generated agent skills` ステップを写し、`.prettierignore`(merge 対象)に `.agents/` を、
+  `.claude/template-manifest.json`(merge 対象)の `never` に `.agents/` を足してください。そのうえで
+  `bash .claude/scripts/sync-agents-skills.sh` を 1 回実行してコミットします。**Codex を使わないプロジェクトでは、CI のステップごと落として構いません**(`.agents/` を作らなければスクリプトも検査も不要です)。
+
 - **[auto]** **README の HTML 版(`README.html`)を足しました。** `README.md` と同じ内容を、章ごとの図(「きっかけ / 動かす人 / すること」のレーン図・委託の判定フロー・禁止領域の一覧・選べるモデル)つきでブラウザから読めるようにしたものです。
   `README.md` と同じく `template-manifest.json` の `never`(同期対象外)なので、**取り込む側の作業はありません**。プロダクト側では `/kickoff` フェーズ5 が `README.md` を書き換えるときに、不要なら削除してください。
 

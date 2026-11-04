@@ -49,6 +49,7 @@
     "CLAUDE.md",
     "README.md",
     "README.html",
+    ".agents/",
     "LICENSE",
     "docs/",
     ".steering/",
