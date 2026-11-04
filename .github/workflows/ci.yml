@@ -184,6 +184,41 @@ jobs:
           done
           exit 0
 
+      # シェルスクリプトの静的検査。ハーネスの判定の実体(委託の入口・保護ブランチ判定・
+      # autopilot の選定)はほぼ全部シェルなので、クォート漏れや cd 失敗の取りこぼしは
+      # ここで機械的に止める。同じジョブの `bash -n` は構文エラーしか見ず、意味的な欠陥は通す。
+      #
+      # 深刻度は warning 以上に絞る。note には、このリポジトリが**意図して**使っている
+      # 書き方が多く含まれる(set -e を発火させないための `A && B || C` リスト = SC2015 /
+      # 共有ライブラリの source = SC1091 など)。全部拾うと鳴りっぱなしになり、
+      # 「赤いのが普通」のゲートは誰も読まなくなる。個別に抑止したいものは、その場に
+      # `# shellcheck disable=SCxxxx` と理由を書くこと(ここの深刻度は下げない)。
+      #
+      #   -x            source された共有ライブラリも追う
+      #   -P SCRIPTDIR  `# shellcheck source=` をスクリプト自身のディレクトリ基準で解決する
+      #                 (呼び出しはリポジトリルート相対で書かれているため、これが無いと
+      #                  lib-*.sh が毎回「追えない」で埋まる)
+      - name: ShellCheck
+        run: |
+          # ツールが無いときに黙って通さない。ゲートが消えたことに気づけない状態が、
+          # ゲートが無い状態より悪い(ubuntu-latest には shellcheck が同梱されている)
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            echo "::error::shellcheck が見つかりません。ランナーイメージの変更を確認してください"
+            exit 1
+          fi
+          shellcheck --version | sed -n 2p
+
+          # 追跡ファイルだけを見る。.husky/_/ は husky の生成物で git 追跡外、
+          # .steering/ は過去の作業記録(再現用スクリプト)なので修正対象にしない。
+          # .husky/pre-commit と .husky/prepare-commit-msg は拡張子が無いので別に拾う。
+          mapfile -t FILES < <(git ls-files | grep -E '\.sh$|^\.husky/[a-z-]+$' | grep -v '^\.steering/')
+          if [ "${#FILES[@]}" -eq 0 ]; then
+            echo "::error::検査対象のシェルスクリプトが 1 つも見つかりません(git ls-files の結果が空)"
+            exit 1
+          fi
+          echo "検査対象: ${#FILES[@]} ファイル"
+          shellcheck -x -P SCRIPTDIR --severity=warning "${FILES[@]}"
+
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 10

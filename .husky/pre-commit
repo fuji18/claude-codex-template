@@ -1,3 +1,4 @@
+# shellcheck shell=sh  # husky はこのファイルを sh -e で実行する(下記【重要】)
 # 保護ブランチへの直接コミットを止める(ベンダー非依存の防衛線)。
 # Claude の PreToolUse hook は Claude 以外の経路(Codex・手動 git・他ツール)に
 # 効かないため、git hook 側にも同じ検査を置く。判定の実体は共有スクリプトに一本化。

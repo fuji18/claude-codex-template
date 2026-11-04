@@ -14,6 +14,24 @@
 
 ---
 
+## 2026-11-04
+
+- **[manual]** **CI(`ci.yml` の `harness-integrity` ジョブ)に `shellcheck` のステップを足しました。** ハーネスの判定の実体(委託の入口・保護ブランチ判定・autopilot の選定)は
+  ほぼ全部シェルなのに、機械的な検査が `bash -n`(構文エラーだけ)しかありませんでした。`shellcheck -x -P SCRIPTDIR --severity=warning` を **git 追跡下のシェルスクリプト全量**
+  (`*.sh` と `.husky/pre-commit` / `.husky/prepare-commit-msg`。`.husky/_/` は husky の生成物、`.steering/` は過去の作業記録なので除外)に当てます。
+  深刻度を warning 以上に絞っているのは、note に**意図して使っている書き方**(`set -e` を発火させないための `A && B || C` = SC2015 / 共有ライブラリの source = SC1091)が多く、
+  全部拾うと鳴りっぱなしのゲートになるためです。個別に抑止したいものは、その場に `# shellcheck disable=SCxxxx` と理由を書きます。`shellcheck` が見つからないときは
+  **黙って通さず `exit 1`** にしてあります(ゲートが消えたことに気づけない状態の方が悪い。`ubuntu-latest` には同梱されています)。
+  あわせて、これで出た 11 件を直しました:
+  - `cd` の失敗を明示的に扱う(SC2164): `session-start.sh`(Claude / Codex)は `|| exit 0` でフェイルオープン、`harness-mode.sh` と `check-guard-integrity.sh` は
+    `|| true`(現在地のまま続ける)、`test-sync-template.sh` は `|| exit 1`(違う場所で検査すると結果が無意味になる)
+  - `autopilot-preflight.sh` の未使用変数 `OPEN` を削除(SC2034。値は同じ行の `SUM` に入っています)
+  - `.husky/pre-commit` / `.husky/prepare-commit-msg` の先頭に `# shellcheck shell=sh` を足す(SC2148。husky はこの 2 つを shebang 無しの `sh -e` で実行します)
+  **取り込む側の作業**: `.github/workflows/ci.yml` と `.husky/*` は `merge`(手動統合)区分です。ステップを写したうえで、**自プロジェクトのシェルスクリプトに出る指摘を潰してください**
+  (`shellcheck -x -P SCRIPTDIR --severity=warning $(git ls-files | grep -E '\.sh$')` を手元で回すと同じ結果になります)。シェルを使わないプロジェクトではステップごと落として構いません
+
+---
+
 ## 2026-11-03
 
 - **[auto]** ⚠️ **`delegate-codex.sh review` が未コミットの変更を見ていなかった不具合を直しました。** 従来は `git diff <base>...HEAD`(コミット済みだけ)をレビューさせており、

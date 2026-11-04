@@ -212,7 +212,6 @@ fi
 
 # --- チケット ---
 if [ -n "$REPO" ] && J="$(bash .claude/scripts/autopilot-next.sh 2>/dev/null)"; then
-  OPEN="$(printf '%s' "$J" | jq -r .openTickets)"
   ACTION="$(printf '%s' "$J" | jq -r .action)"
   SUM="$(printf '%s' "$J" | jq -r '"残り \(.openTickets) 件 / 着手可能 \(.ready | length) / 進行中 \(.inFlight | length)/\(.maxInFlight) / 依存待ち \(.blocked | length)"')"
   case "$ACTION" in

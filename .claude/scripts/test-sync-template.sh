@@ -64,7 +64,7 @@ printf 'on: workflow_dispatch\n' > .github/workflows/claude.yml
 git add -A && git commit -q -m "project setup"
 
 # --- テンプレートを v2 に進める ---
-cd "$T"
+cd "$T" || exit 1
 printf 'rule v2\n' > .claude/rules/a.md
 printf 'new rule\n' > .claude/rules/b.md
 git rm -q .claude/rules/obsolete.md
@@ -82,7 +82,7 @@ git add -A && git commit -q -m v2
 V2="$(git rev-parse HEAD)"
 
 # --- dry-run は何も変えない ---
-cd "$P"
+cd "$P" || exit 1
 node "$SCRIPT" --dry-run >/dev/null 2>&1
 check "dry-run で作業ツリーが変わらない" test -z "$(git status --porcelain)"
 
@@ -120,10 +120,10 @@ check "[manual] 項目を出力" jq -e '.manual | length == 1' "$WORK/out.json"
 git add -A && git commit -q -m sync
 printf '# AGENTS\n\n## 検証\nflutter test --coverage\n\n## 禁止\n- a\n- b\n' > AGENTS.md
 git commit -qam "local change"
-cd "$T"
+cd "$T" || exit 1
 printf '# AGENTS\n\n## 検証\nnpm test -- --run\n\n## 禁止\n- a\n- b\n' > AGENTS.md
 git commit -qam v3
-cd "$P"
+cd "$P" || exit 1
 node "$SCRIPT" --json > "$WORK/out3.json" 2>/dev/null; RC=$?
 check "競合時は exit 2" test "$RC" = 2
 check "競合ファイルを報告" jq -e '.conflicts[0].path == "AGENTS.md"' "$WORK/out3.json"
