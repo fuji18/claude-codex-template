@@ -1,0 +1,19 @@
+{
+  "$comment": "GitHub Projects(v2)へのダッシュボード同期の設定。実体は .claude/scripts/project-sync.sh、起動は .github/workflows/project-sync.yml。**Project は表示専用**で、チケットの状態の正はラベルと PR のまま(判定は autopilot-next.sh が REST だけで行う。Projects v2 は GraphQL 専用なので判定経路には入れない)。ボードのフィールド名・オプション名はプロジェクトごとに違うため、候補を配列で持ち**先頭から順に、大小文字と前後空白を無視して照合する**。見つからないオプションはその 1 項目だけ飛ばす(In Review 列が無いボードでも Todo / In Progress / Done は動く)。Status フィールド自体が見つからないときは失敗(ボードの指定ミス)。Priority フィールドが無いのは正常で警告も出さない。projectUrl は board の場所で、秘密ではないのでここに書いてよい(リポジトリ variable PROJECT_URL が優先する)。トークンは secret PROJECT_SYNC_TOKEN（classic PAT なら project + repo scope。GITHUB_TOKEN は Projects にアクセスできない）。",
+  "projectUrl": "",
+  "ticketLabel": "ticket",
+  "inProgressLabel": "in-progress",
+  "statusField": ["Status", "ステータス"],
+  "status": {
+    "todo": ["Todo", "To do", "未着手"],
+    "inProgress": ["In Progress", "In progress", "進行中"],
+    "inReview": ["In Review", "In review", "レビュー中"],
+    "done": ["Done", "完了"]
+  },
+  "priorityField": ["Priority", "優先度"],
+  "priority": {
+    "P0": ["P0", "High"],
+    "P1": ["P1", "Medium"],
+    "P2": ["P2", "Low"]
+  }
+}
