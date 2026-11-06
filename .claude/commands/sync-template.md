@@ -59,6 +59,8 @@ node .claude/scripts/sync-template.mjs --json > /tmp/sync-template.json
 
 終了コード: `0` = 完了 / `2` = 完了したが競合あり / `1` = 実行できなかった(メッセージに従う)。
 
+出力の `execBitStaged` に挙がったファイルは、**実行ビットを index に記録するためにすでに staged になっている**(`core.fileMode=false` の環境では chmod が git に載らないため)。差分を見るときは `git diff` ではなく `git diff --cached` を使う。**staged を解除しない** —— `git reset` すると実行ビットごと落ち、取り込んだ側の CI(`harness-integrity`)が「hook スクリプトに実行権限がありません」で落ちる。
+
 ### 競合がある場合(終了コード 2)
 
 `conflicts` に挙がったファイルだけを開いて解消する。

@@ -14,6 +14,29 @@
 
 ---
 
+## 2026-11-06
+
+- **[manual]** ⚠️ **`/sync-template` が新規スクリプトの実行ビットを落としていたのを直しました。**
+  `sync-template.mjs` はファイルシステム上で `chmod 755` していましたが、**`core.fileMode=false`(Windows の
+  既定)の git はそれを見ず、新規ファイルを `100644` で index に記録します**。CI の `harness-integrity` が
+  見るのは index の mode なので、取り込んだ側が「hook スクリプトに実行権限がありません」で落ちていました。
+  同期時に `git update-index --add --chmod=+x` で index へ明示的に記録するようにし、
+  `core.fileMode=false` を再現するテストを `test-sync-template.sh` に足してあります。
+  - **すでに取り込み済みで CI が落ちているプロジェクトは、落ちているファイルの実行ビットを付け直してください。**
+    対象はエラーメッセージに出ます(典型例は `check-push-policy.sh` / `check-shell.sh` / `project-sync.sh` /
+    `route.sh` / `sync-agents-skills.sh` / `test-project-sync.sh` / `test-route.sh`):
+
+    ```bash
+    git update-index --chmod=+x .claude/scripts/*.sh .claude/hooks/*.sh && git commit -m "fix: スクリプトの実行ビットを付け直す"
+    ```
+
+    `lib-*.sh` は **source 専用で非実行が正**なので、上のコマンドを流したあとに
+    `git update-index --chmod=-x .claude/scripts/lib-*.sh` で戻してください。
+  - 今後の `/sync-template` では、実行ビットを記録したファイルが **staged の状態で**出てきます
+    (出力の `execBitStaged`)。差分は `git diff --cached` で見てください。`git reset` すると実行ビットごと落ちます
+
+---
+
 ## 2026-11-04 (2)
 
 - **[manual]** **GitHub Projects(v2)へのダッシュボード同期を足しました。** チケット Issue を board に載せ、
