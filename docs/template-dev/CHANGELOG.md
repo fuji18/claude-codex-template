@@ -16,6 +16,52 @@
 
 ## 2026-11-04 (2)
 
+- **[manual]** **GitHub Projects(v2)へのダッシュボード同期を足しました。** チケット Issue を board に載せ、
+  Status(Todo / In Progress / In Review / Done)と Priority を開発サイクルに合わせて動かします。
+  **board は表示専用で、チケットの状態の正は Issue のラベルと PR のままです** —— 自動進行の判定
+  (`autopilot-next.sh`)は「Claude Code on the web で GraphQL が 403 になる」ため REST 限定で書かれており、
+  GraphQL しか無い Projects v2 を判定経路に入れるとその前提が壊れます。`autopilot-next.sh` /
+  `autopilot-loop.sh` / `autopilot-board.sh` は一切変更していません。入れたものは 4 つです:
+  - **`.claude/scripts/project-sync.sh`(新規)= 同期の唯一の経路。** `sync-issue N` / `sync-pr N`(本文の
+    `Closes #N` を辿る)/ `backfill [--all]` / `--check`(書き込まずに board の列名との対応を表示)/
+    `--resolve-status`(フィクスチャで Status 決定だけを出す)。終了コードは **0 = 成功または未設定でスキップ /
+    2 = 設定・取得・更新の失敗**
+  - **Status は「イベント種別」ではなく「Issue の現在の状態」から毎回決め直します**(closed → Done /
+    紐づく open PR あり → In Review(draft も含む)/ `in-progress` ラベル → In Progress / それ以外 → Todo)。
+    イベントの取りこぼしや順序の入れ替わりで board がずれません。`Closes #N` の正規表現と
+    **fork の PR を紐づけない境界は `autopilot-next.sh` と同じ**です
+  - **`.github/workflows/project-sync.yml`(新規)**: Issue / PR のイベントと手動実行(初回投入)で走ります。
+    `concurrency` は `cancel-in-progress: false`(全イベントを順に反映したいので古い実行を捨てない)
+  - **`.claude/docs/project-sync-guide.html`(新規)**: 人間向けの手順書(ブラウザで開く)。board の作り方・PAT の
+    scope・列名が違うときの直し方・`--check` の読み方・なぜ表示専用なのかを 1 ページにまとめてある
+    (`autopilot-guide.html` と同じ体裁)。**しくみの説明はインライン SVG の図 4 点**
+    —— サイクルと列の対応 / Status の判定フロー / 情報の流れ(board へ片方向で、赤い点線が「あえて作っていない経路」)/
+    fork の PR を止める 2 段の境界。**色は既存のテーマ変数だけを使う**(SVG に直書きするとダークで読めなくなる)
+  - **`.claude/docs/project-sync-setup.html`(新規)**: 導入作業の**操作手順書**。しくみではなく
+    **「どの画面でどのボタンを押すか」**だけを扱う(Project の作り方 → classic PAT の発行 → リポジトリへの登録 →
+    手動実行 → 確認、つまずき表つき)。**図 2 点** —— GitHub の紛らわしい 3 つの設定画面(個人 / リポジトリ / Project)の
+    位置関係と、初回投入のチェックの有無による board の違い。**すでに開発が進んでいるリポジトリへの後入れ**を前提に書いてある
+  - **`.claude/project-sync.json`(新規)**: ラベル名と Status / Priority の**名前の候補**。board の列名は
+    プロジェクトごとに違うので、候補の順に大小文字と前後空白を無視して照合します(日本語の board も動く)。
+    見つからない列はその 1 項目だけ飛ばし、`Status` フィールド自体が無いときだけ失敗します
+  **取り込む側の作業**: `.claude/project-sync.json` は `merge`(手動統合)、`.github/workflows/project-sync.yml` は
+  `owned` なので `/sync-template` で入ります。そのうえで **board 側の用意が要ります**:
+  (1) Project を作り `Status` に 4 つの列を用意する(`Priority` は任意)、
+  (2) **classic PAT(`project` + `repo` scope)**を `PROJECT_SYNC_TOKEN` として Actions シークレットに登録する
+  (**`GITHUB_TOKEN` は Projects にアクセスできない**ため別途必要)、
+  (3) Actions の Variables に `PROJECT_URL` を登録する(`.claude/project-sync.json` の `projectUrl` でもよい)、
+  (4) Actions タブから Project Sync を手動実行して既存チケットを投入する。
+  **すでに開発が進んでいるプロジェクトにも後から入れられます** —— Status は Issue の現在の状態から毎回決め直すので
+  過去のイベントを再生する必要がなく、(4) で **`include_closed` にチェックを入れる**と closed のチケットも `Done` 列に載ります
+  (= `backfill --all`)。`backfill` は REST を全ページ辿るので 100 件を超えても全部入り、`addProjectV2ItemById` が冪等なので
+  何度流し直しても重複しません。**着手済みのチケットは `in-progress` ラベルが付いていなければ `Todo` に入ります**
+  (PR が開いていれば `In Review`)。`ticket` / `in-progress` 以外のラベル名を使っているプロジェクトは
+  `.claude/project-sync.json` の `ticketLabel` / `inProgressLabel` を書き換えてください。
+  **`PROJECT_SYNC_TOKEN` が未設定の間はワークフローが notice を出して skip するだけなので、設定しなくても CI は赤くなりません。**
+  あわせて `.github/workflows/ci.yml`(`merge` 区分)に `Test project sync` ステップを写してください
+  (`.claude/scripts/test-project-sync.sh` が GitHub に触らない部分 20 件を検査します)。**Projects を使わない構成では、
+  ワークフローとステップごと落として構いません。**
+
 - **[manual]** 💸 **司令塔専用ルール(`.claude/rules/lead/`)とモード別ルール(`.claude/rules/mode/`)が全サブエージェントに自動ロードされていた問題を直しました。**
   Claude Code は `.claude/rules/` をサブディレクトリまで自動ロードするため、`lead/` と `mode/` が SessionStart hook とは無関係に
   全エージェントへ載り、normal モードでも `econ.md` と `degraded.md` の「現在のハーネスモード」が同時に載っていました。
