@@ -46,12 +46,19 @@ printf 'node_modules/\n' > .gitignore
 printf '# AGENTS\n\n## 検証\nnpm test\n\n## 禁止\n- a\n' > AGENTS.md
 printf 'template claude\n' > CLAUDE.md
 printf '# CHANGELOG\n\n## 2000-01-01\n\n- **[auto]** 初版\n' > docs/template-dev/CHANGELOG.md
-git add -A && git commit -q -m v1
+git add -A
+# 実行ビットは index に明示的に載せる。core.fileMode はホストの OS とファイルシステムで
+# 変わるため、chmod +x だけに頼るとこのフィクスチャ自体が Windows で 100644 になる。
+git update-index --chmod=+x .claude/scripts/run.sh .claude/scripts/lint-on-edit.sh
+git commit -q -m v1
 V1="$(git rev-parse HEAD)"
 
 # --- プロジェクトを v1 から作り、ローカルで手を入れる ---
 git clone -q "$T" "$P"
 cd "$P" && git remote remove origin && git remote add origin https://github.com/example/project.git
+# 取り込み側を Windows と同じ条件にする。core.fileMode=false の git は chmod を見ず、
+# 新規ファイルを 100644 で index に記録する(#116 の取り込み先で実際に起きた)。
+git config core.fileMode false
 jq --arg s "$V1" '.syncedAt=$s | .syncedDate="2000-01-01" | .never += [".github/workflows/claude.yml"]' \
   .claude/template-manifest.json > m && mv m .claude/template-manifest.json
 jq '.permissions.allow += ["Bash(flutter test:*)"] | .enabledPlugins = {"x": true}' .claude/settings.json > s && mv s .claude/settings.json
@@ -78,7 +85,10 @@ printf 'template claude v2\n' > CLAUDE.md
 jq '.merge += [".prettierignore"]' .claude/template-manifest.json > m && mv m .claude/template-manifest.json
 printf 'dist/\n' > .prettierignore
 printf '# CHANGELOG\n\n## 2000-01-02\n\n- **[manual]** AGENTS.md に b を足す\n\n## 2000-01-01\n\n- **[auto]** 初版\n' > docs/template-dev/CHANGELOG.md
-git add -A && git commit -q -m v2
+printf '#!/bin/bash\necho added\n' > .claude/scripts/added.sh && chmod +x .claude/scripts/added.sh
+git add -A
+git update-index --chmod=+x .claude/scripts/added.sh
+git commit -q -m v2
 V2="$(git rev-parse HEAD)"
 
 # --- dry-run は何も変えない ---
@@ -98,6 +108,11 @@ check "owned を上書き" grep -qx 'rule v2' .claude/rules/a.md
 check "owned の追加" test -f .claude/rules/b.md
 check "owned の削除(ローカル未変更)" test ! -e .claude/rules/obsolete.md
 check "owned の実行権限を維持" test -x .claude/scripts/run.sh
+check "新規 owned スクリプトを追加" test -f .claude/scripts/added.sh
+check "新規スクリプトの実行ビットが index に載る(core.fileMode=false でも)" \
+  bash -c 'git ls-files -s -- .claude/scripts/added.sh | grep -q "^100755 "'
+check "実行ビットを記録したことを報告" jq -e '.execBitStaged | index(".claude/scripts/added.sh")' "$WORK/out.json"
+check "既に 100755 の追跡ファイルは staged にしない" jq -e '.execBitStaged | index(".claude/scripts/run.sh") == null' "$WORK/out.json"
 check "ローカル書き換えを上書きしたことを報告" jq -e '.driftOverwritten | index(".claude/rules/a.md")' "$WORK/out.json"
 check "プロジェクトの never 指定(claude.yml)は触らない" grep -qx 'on: workflow_dispatch' .github/workflows/claude.yml
 check "never(CLAUDE.md)は触らない" grep -qx 'project claude' CLAUDE.md
