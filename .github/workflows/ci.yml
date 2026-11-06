@@ -171,6 +171,14 @@ jobs:
             bash .claude/scripts/test-route.sh
           fi
 
+      # GitHub Projects への同期(project-sync.sh)のうち、GitHub に触らない部分の動作確認。
+      # Status の決定(ラベル / PR / fork の境界)と設定の読み込みを一時ディレクトリ内で検査する
+      - name: Test project sync
+        run: |
+          if [ -f .claude/scripts/test-project-sync.sh ]; then
+            bash .claude/scripts/test-project-sync.sh
+          fi
+
       # 委託禁止領域の単一ソース(delegate-codex.sh の FORBIDDEN_PATHS)と
       # .claude/rules/lead/delegation-policy.md の一覧のずれを**双方向**で検出する。
       # マーカーを持たない旧版の delegation-policy.md を抱えた下流プロジェクトで

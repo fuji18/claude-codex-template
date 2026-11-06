@@ -1,0 +1,1282 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Project 同期 手順書</title>
+    <style>
+      :root {
+        --bg: #f7f7f5;
+        --surface: #ffffff;
+        --surface-2: #f0f0ec;
+        --text: #1f2328;
+        --muted: #5b616b;
+        --border: #dcdcd6;
+        --accent: #3b5bdb;
+        --accent-soft: #e7ecff;
+        --ok: #2b8a3e;
+        --ok-soft: #e6f4ea;
+        --warn: #b35c00;
+        --warn-soft: #fff1e0;
+        --danger: #c92a2a;
+        --danger-soft: #fdecec;
+        --code-bg: #f3f3ef;
+        --radius: 10px;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --bg: #15171a;
+          --surface: #1d2024;
+          --surface-2: #24282d;
+          --text: #e6e8eb;
+          --muted: #a0a7b0;
+          --border: #343a41;
+          --accent: #8ea6ff;
+          --accent-soft: #232b45;
+          --ok: #69c27f;
+          --ok-soft: #1c2e22;
+          --warn: #f0a050;
+          --warn-soft: #33271a;
+          --danger: #ff8787;
+          --danger-soft: #3a1f21;
+          --code-bg: #24282d;
+        }
+      }
+      :root[data-theme="dark"] {
+        --bg: #15171a;
+        --surface: #1d2024;
+        --surface-2: #24282d;
+        --text: #e6e8eb;
+        --muted: #a0a7b0;
+        --border: #343a41;
+        --accent: #8ea6ff;
+        --accent-soft: #232b45;
+        --ok: #69c27f;
+        --ok-soft: #1c2e22;
+        --warn: #f0a050;
+        --warn-soft: #33271a;
+        --danger: #ff8787;
+        --danger-soft: #3a1f21;
+        --code-bg: #24282d;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          15px/1.75 -apple-system,
+          BlinkMacSystemFont,
+          "Hiragino Sans",
+          "Noto Sans JP",
+          "Yu Gothic UI",
+          sans-serif;
+      }
+      .wrap {
+        display: grid;
+        grid-template-columns: 220px minmax(0, 1fr);
+        gap: 32px;
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 32px 24px 80px;
+      }
+      nav {
+        position: sticky;
+        top: 24px;
+        align-self: start;
+        font-size: 13.5px;
+      }
+      nav .title {
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+      nav a {
+        display: block;
+        color: var(--muted);
+        text-decoration: none;
+        padding: 3px 0 3px 10px;
+        border-left: 2px solid var(--border);
+      }
+      nav a:hover {
+        color: var(--accent);
+        border-left-color: var(--accent);
+      }
+      main {
+        min-width: 0;
+      }
+      header h1 {
+        margin: 0 0 4px;
+        font-size: 28px;
+        line-height: 1.3;
+      }
+      header p {
+        margin: 0 0 24px;
+        color: var(--muted);
+      }
+      section {
+        margin-top: 44px;
+      }
+      h2 {
+        font-size: 20px;
+        margin: 0 0 12px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid var(--border);
+      }
+      h3 {
+        font-size: 16px;
+        margin: 22px 0 8px;
+      }
+      p {
+        margin: 8px 0;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.9em;
+        background: var(--code-bg);
+        padding: 1px 5px;
+        border-radius: 4px;
+      }
+      .cmd {
+        position: relative;
+        background: var(--code-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px 84px 12px 14px;
+        margin: 10px 0;
+        overflow-x: auto;
+      }
+      .cmd pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-all;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 13.5px;
+        line-height: 1.6;
+      }
+      .cmd .c {
+        color: var(--muted);
+      }
+      .copy {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        font: inherit;
+        font-size: 12px;
+        padding: 3px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+      }
+      .copy:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 10px;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 14px 16px;
+      }
+      .card .k {
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 4px;
+      }
+      .card .v {
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+      .card .cmd {
+        margin: 6px 0 0;
+      }
+      .note {
+        border-radius: var(--radius);
+        padding: 10px 14px;
+        margin: 12px 0;
+        border: 1px solid var(--border);
+        background: var(--surface);
+      }
+      .note.info {
+        background: var(--accent-soft);
+        border-color: transparent;
+      }
+      .note.warn {
+        background: var(--warn-soft);
+        border-color: transparent;
+      }
+      .note.danger {
+        background: var(--danger-soft);
+        border-color: transparent;
+      }
+      .note strong:first-child {
+        margin-right: 4px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+        font-size: 14px;
+        margin: 10px 0;
+      }
+      th,
+      td {
+        text-align: left;
+        vertical-align: top;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border);
+      }
+      th {
+        background: var(--surface-2);
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      tr:last-child td {
+        border-bottom: 0;
+      }
+      .tablewrap {
+        overflow-x: auto;
+      }
+      ol.steps {
+        list-style: none;
+        counter-reset: s;
+        padding: 0;
+        margin: 10px 0;
+      }
+      ol.steps > li {
+        counter-increment: s;
+        position: relative;
+        padding: 10px 14px 10px 50px;
+        margin-bottom: 8px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+      }
+      ol.steps > li::before {
+        content: counter(s);
+        position: absolute;
+        left: 14px;
+        top: 10px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: var(--accent);
+        color: var(--surface);
+        font-size: 13px;
+        font-weight: 700;
+        text-align: center;
+        line-height: 24px;
+      }
+      .flow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 8px;
+        margin: 12px 0;
+      }
+      .flow .box {
+        flex: 1 1 150px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 10px 12px;
+        font-size: 13.5px;
+      }
+      .flow .box b {
+        display: block;
+        margin-bottom: 2px;
+      }
+      .flow .box.claude {
+        border-top: 3px solid var(--accent);
+      }
+      .flow .box.shell {
+        border-top: 3px solid var(--ok);
+      }
+      .flow .box.human {
+        border-top: 3px solid var(--warn);
+      }
+      .flow .arrow {
+        align-self: center;
+        color: var(--muted);
+      }
+      .legend {
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+      .legend span {
+        display: inline-block;
+        margin-right: 14px;
+      }
+      .legend i {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+        margin-right: 4px;
+        vertical-align: -1px;
+      }
+      details {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 8px 14px;
+        margin: 8px 0;
+      }
+      summary {
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .theme {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        font: inherit;
+        font-size: 12px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+      }
+      footer {
+        margin-top: 56px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      @media (max-width: 860px) {
+        .wrap {
+          grid-template-columns: minmax(0, 1fr);
+          padding: 20px 16px 72px;
+          gap: 0;
+        }
+        nav {
+          position: static;
+          margin-bottom: 8px;
+        }
+        nav a {
+          display: inline-block;
+          border-left: 0;
+          padding: 2px 8px 2px 0;
+        }
+        .cards {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .flow .arrow {
+          transform: rotate(90deg);
+          width: 100%;
+          text-align: center;
+        }
+      }
+      /* --- 図(インライン SVG)--- */
+      /* 色はすべてテーマ変数に乗せる。SVG に直書きするとダークで読めなくなる */
+      figure.fig {
+        margin: 16px 0 18px;
+      }
+      figure.fig svg {
+        display: block;
+        width: 100%;
+        height: auto;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+      }
+      figure.fig figcaption {
+        font-size: 12.5px;
+        color: var(--muted);
+        margin-top: 6px;
+      }
+      .fig text {
+        fill: var(--text);
+        font-family:
+          -apple-system,
+          BlinkMacSystemFont,
+          "Hiragino Sans",
+          "Noto Sans JP",
+          "Yu Gothic UI",
+          sans-serif;
+        font-size: 13px;
+      }
+      .fig text.b {
+        font-weight: 700;
+      }
+      .fig text.sm {
+        font-size: 11.5px;
+        fill: var(--muted);
+      }
+      .fig text.mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 11px;
+        fill: var(--muted);
+      }
+      .fig .nbox {
+        fill: var(--surface-2);
+        stroke: var(--border);
+        stroke-width: 1;
+      }
+      .fig .nbox.accent {
+        fill: var(--accent-soft);
+        stroke: var(--accent);
+      }
+      .fig .nbox.ok {
+        fill: var(--ok-soft);
+        stroke: var(--ok);
+      }
+      .fig .nbox.warn {
+        fill: var(--warn-soft);
+        stroke: var(--warn);
+      }
+      .fig .nbox.danger {
+        fill: var(--danger-soft);
+        stroke: var(--danger);
+      }
+      .fig .ln {
+        stroke: var(--muted);
+        stroke-width: 1.5;
+        fill: none;
+      }
+      .fig .ln.dash {
+        stroke-dasharray: 5 4;
+      }
+      .fig .ln.no {
+        stroke: var(--danger);
+      }
+      .fig .hd {
+        fill: var(--muted);
+        stroke: none;
+      }
+      .fig .hd.no {
+        fill: var(--danger);
+      }
+      .fig text.no {
+        fill: var(--danger);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <nav aria-label="目次">
+        <div class="title">目次</div>
+        <a href="#quick">早見(何が起きるか)</a>
+        <a href="#setup">やること(初回だけ)</a>
+        <a href="#status">Status が動く条件</a>
+        <a href="#check">確認とつまずき</a>
+        <a href="#how">しくみ(なぜこの形か)</a>
+        <a href="#commands">コマンド一覧</a>
+        <a href="#limits">制約と注意</a>
+        <a href="#faq">よくある質問</a>
+      </nav>
+
+      <main>
+        <header>
+          <h1>Project 同期 手順書</h1>
+          <p>
+            README の開発サイクル(着手 → 実装 → レビュー → マージ)を GitHub Projects の board で追えるようにする仕組み。<b>board は表示専用</b>で、チケットの状態の正は Issue のラベルと PR のまま。
+          </p>
+        </header>
+
+        <section id="quick">
+          <h2>早見 — 何が起きるか</h2>
+          <div class="flow">
+            <div class="box human">
+              <b>1. 人間(1 回だけ)</b>
+              GitHub で Project を作り、<code>Status</code> に 4 つの列を用意する
+            </div>
+            <div class="arrow">→</div>
+            <div class="box human">
+              <b>2. 人間(1 回だけ)</b>
+              PAT を <code>PROJECT_SYNC_TOKEN</code>、board の URL を <code>PROJECT_URL</code> に登録する
+            </div>
+            <div class="arrow">→</div>
+            <div class="box shell">
+              <b>3. あとは自動</b>
+              Issue / PR が動くたび Actions が board の Status を合わせる
+            </div>
+          </div>
+          <p class="legend">
+            <span><i style="background: var(--warn)"></i>人間がやること(初回のみ・約 10 分)</span>
+            <span><i style="background: var(--ok)"></i>以降は GitHub Actions が自動で回す</span>
+          </p>
+
+          <div class="note info">
+            <strong>未設定の間は何も起きない。</strong>
+            <code>PROJECT_SYNC_TOKEN</code> が登録されるまで、ワークフローは notice を 1 行出して skip するだけ。<b>CI が赤くなることはない</b>ので、Projects を使わないプロジェクトはこのページを無視してよい。
+          </div>
+
+          <h3>この変更で入ったもの</h3>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ファイル</th>
+                  <th>役割</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>.claude/scripts/project-sync.sh</code></td>
+                  <td>同期の<b>唯一の経路</b>。Status の決定もここに集約してある</td>
+                </tr>
+                <tr>
+                  <td><code>.github/workflows/project-sync.yml</code></td>
+                  <td>Issue / PR のイベントと手動実行(初回投入)で上のスクリプトを呼ぶ</td>
+                </tr>
+                <tr>
+                  <td><code>.claude/project-sync.json</code></td>
+                  <td>ラベル名と Status / Priority の<b>列名の候補</b>(board ごとに違うので設定で持つ)</td>
+                </tr>
+                <tr>
+                  <td><code>.claude/scripts/test-project-sync.sh</code></td>
+                  <td>GitHub に触らない部分の検査 20 件。<code>ci.yml</code> から呼ばれる</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <b>既存の自動進行(<code>autopilot-next.sh</code> / <code>autopilot-loop.sh</code> / <code>autopilot-board.sh</code>)は 1 行も変えていない。</b>
+            理由は<a href="#how">しくみ</a>の節にある。
+          </p>
+        </section>
+
+        <section id="setup">
+          <h2>やること(初回だけ)</h2>
+          <div class="note info">
+            <strong>画面とボタンまで書いた手順は別紙にある。</strong>
+            <code>.claude/docs/project-sync-setup.html</code> —— <b>すでに開発が進んでいるリポジトリに後から入れる</b>場合は、下の要約ではなくそちらを開く。
+          </div>
+          <ol class="steps">
+            <li>
+              <b>Project を作り、<code>Status</code> に 4 つの列を用意する</b>
+              <p>
+                <code>https://github.com/users/&lt;自分のログイン名&gt;/projects</code> → <b>New project</b> → <b>Board</b>。
+                Board テンプレートの既定は <code>Todo</code> / <code>In Progress</code> / <code>Done</code> の 3 つなので、<b><code>In Review</code> を自分で足す</b>。
+              </p>
+              <div class="note info">
+                <strong>任意:</strong>
+                <code>Priority</code> という single select フィールドを作り <code>P0</code> / <code>P1</code> / <code>P2</code> を入れると、チケットの優先度ラベルがそこに入る。<b>作らなくてもよい</b>(無いときは何も警告せず優先度だけ飛ばす)。
+              </div>
+            </li>
+            <li>
+              <b>classic PAT(<code>project</code> + <code>repo</code> scope)を作る</b>
+              <p>
+                <b>Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token</b>。
+                scope は <code>project</code>(board の読み書き)と <code>repo</code>(Issue / PR の読み取り)の 2 つ。
+              </p>
+              <div class="note warn">
+                <strong>GITHUB_TOKEN では動かない。</strong>
+                GitHub の docs に「<code>GITHUB_TOKEN</code> is scoped to the repository level and cannot access projects」と明記されている。<b>この手順は省略できない。</b>
+              </div>
+            </li>
+            <li>
+              <b>リポジトリに登録する</b>
+              <p><b>Settings → Secrets and variables → Actions</b> で 2 つ登録する。</p>
+              <div class="tablewrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>タブ</th>
+                      <th>名前</th>
+                      <th>値</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Secrets</td>
+                      <td><code>PROJECT_SYNC_TOKEN</code></td>
+                      <td>手順 2 で作った PAT</td>
+                    </tr>
+                    <tr>
+                      <td>Variables</td>
+                      <td><code>PROJECT_URL</code></td>
+                      <td><code>https://github.com/users/&lt;login&gt;/projects/3</code></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p>
+                board の URL は秘密ではないので、<b>リポジトリに固定でよければ <code>.claude/project-sync.json</code> の <code>projectUrl</code> に書いてコミットしてもよい</b>(variable が優先する)。organization の Project なら URL は <code>.../orgs/&lt;org&gt;/projects/3</code> の形で、スクリプトが自動で切り替える。
+              </p>
+            </li>
+            <li>
+              <b>列名が既定と違うなら候補を足す(日本語の board など)</b>
+              <p>
+                照合は<b>候補の順に、大小文字と前後の空白を無視して</b>行う。既定で用意してある候補は次のとおり。
+              </p>
+              <div class="cmd">
+                <pre># .claude/project-sync.json(抜粋)
+"statusField": ["Status", "ステータス"],
+"status": {
+  "todo":       ["Todo", "To do", "未着手"],
+  "inProgress": ["In Progress", "In progress", "進行中"],
+  "inReview":   ["In Review", "In review", "レビュー中"],
+  "done":       ["Done", "完了"]
+}</pre>
+              </div>
+              <p>
+                見つからない列は<b>その 1 項目だけ飛ばして警告</b>する(<code>In Review</code> 列が無い board でも残り 3 つは動く)。<code>Status</code> フィールド自体が見つからないときだけ失敗する ——
+                board の指定間違いを黙って通さないため。
+              </p>
+            </li>
+            <li>
+              <b>既存のチケットをまとめて board に載せる</b>
+              <p>
+                <b>Actions タブ → Project Sync → Run workflow</b>。<code>include_closed</code> にチェックを入れると closed の Issue も載る(過去分を Done 列に並べたいとき)。
+              </p>
+              <p>手元から回すこともできる(<code>jq</code> と <code>gh</code> が要る。devcontainer には入っている)。</p>
+              <div class="cmd"><pre>bash .claude/scripts/project-sync.sh backfill</pre></div>
+            </li>
+          </ol>
+        </section>
+
+        <section id="status">
+          <h2>Status が動く条件</h2>
+
+          <figure class="fig">
+            <svg
+              viewBox="0 0 820 250"
+              role="img"
+              aria-label="開発サイクルの 4 つのきっかけ(/setup-tickets・/next-ticket・PR 作成・PR マージ)が、それぞれ board の Todo・In Progress・In Review・Done に対応することを示す図"
+            >
+              <defs>
+                <marker id="f3h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+                  <path d="M0,0 L10,5 L0,10 z" class="hd" />
+                </marker>
+              </defs>
+
+              <rect class="nbox" x="12" y="14" width="182" height="86" rx="10" />
+              <text class="b" x="103" y="40" text-anchor="middle">/setup-tickets</text>
+              <text class="sm" x="103" y="60" text-anchor="middle">ticket ラベルで発行</text>
+              <text class="mono" x="103" y="80" text-anchor="middle">issues: opened</text>
+
+              <rect class="nbox" x="218" y="14" width="182" height="86" rx="10" />
+              <text class="b" x="309" y="40" text-anchor="middle">/next-ticket</text>
+              <text class="sm" x="309" y="60" text-anchor="middle">in-progress を付ける</text>
+              <text class="mono" x="309" y="80" text-anchor="middle">issues: labeled</text>
+
+              <rect class="nbox" x="424" y="14" width="182" height="86" rx="10" />
+              <text class="b" x="515" y="40" text-anchor="middle">PR 作成</text>
+              <text class="sm" x="515" y="60" text-anchor="middle">本文に Closes #N</text>
+              <text class="mono" x="515" y="80" text-anchor="middle">pull_request: opened</text>
+
+              <rect class="nbox" x="630" y="14" width="182" height="86" rx="10" />
+              <text class="b" x="721" y="40" text-anchor="middle">PR マージ</text>
+              <text class="sm" x="721" y="60" text-anchor="middle">Issue が closed になる</text>
+              <text class="mono" x="721" y="80" text-anchor="middle">issues: closed</text>
+
+              <path class="ln" d="M103,100 L103,136" marker-end="url(#f3h)" />
+              <path class="ln" d="M309,100 L309,136" marker-end="url(#f3h)" />
+              <path class="ln" d="M515,100 L515,136" marker-end="url(#f3h)" />
+              <path class="ln" d="M721,100 L721,136" marker-end="url(#f3h)" />
+
+              <rect class="nbox" x="12" y="142" width="182" height="52" rx="10" />
+              <text class="b" x="103" y="173" text-anchor="middle">Todo</text>
+
+              <rect class="nbox warn" x="218" y="142" width="182" height="52" rx="10" />
+              <text class="b" x="309" y="173" text-anchor="middle">In Progress</text>
+
+              <rect class="nbox accent" x="424" y="142" width="182" height="52" rx="10" />
+              <text class="b" x="515" y="173" text-anchor="middle">In Review</text>
+
+              <rect class="nbox ok" x="630" y="142" width="182" height="52" rx="10" />
+              <text class="b" x="721" y="173" text-anchor="middle">Done</text>
+
+              <text class="sm" x="12" y="222" text-anchor="start">開発サイクルの進行</text>
+              <path class="ln" d="M12,234 L806,234" marker-end="url(#f3h)" />
+            </svg>
+            <figcaption>
+              図 1: 開発サイクルのきっかけと board の列の対応。上段が「人とコマンドがやること」、下段が「board に映るもの」。
+            </figcaption>
+          </figure>
+
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>board の Status</th>
+                  <th>そうなる条件</th>
+                  <th>きっかけ</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Todo</td>
+                  <td><code>ticket</code> ラベルがあり、まだ着手していない</td>
+                  <td><code>/setup-tickets</code> が Issue を発行したとき</td>
+                </tr>
+                <tr>
+                  <td>In Progress</td>
+                  <td><code>in-progress</code> ラベルがある</td>
+                  <td><code>/next-ticket</code> が着手時にラベルを付けたとき</td>
+                </tr>
+                <tr>
+                  <td>In Review</td>
+                  <td>
+                    <code>Closes #N</code> で紐づく open PR がある(<b>draft も含む</b>)
+                  </td>
+                  <td>PR を作ったとき</td>
+                </tr>
+                <tr>
+                  <td>Done</td>
+                  <td>Issue が closed</td>
+                  <td>PR マージで Issue が自動クローズされたとき</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>判定の順番</h3>
+          <p>
+            上の表は<b>上から順に当てる</b>。複数の条件に当たる Issue(着手済みで PR もある、など)でも結果が 1 つに決まるのは、この順番があるから。
+          </p>
+
+          <figure class="fig">
+            <svg
+              viewBox="0 0 780 376"
+              role="img"
+              aria-label="Status を決める判定フロー。Issue が closed なら Done、紐づく open PR があれば In Review、in-progress ラベルがあれば In Progress、どれでもなければ Todo"
+            >
+              <defs>
+                <marker id="f2h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+                  <path d="M0,0 L10,5 L0,10 z" class="hd" />
+                </marker>
+              </defs>
+
+              <rect class="nbox" x="24" y="14" width="330" height="64" rx="10" />
+              <text class="b" x="189" y="40" text-anchor="middle">Issue が closed か?</text>
+              <text class="sm" x="189" y="60" text-anchor="middle">PR マージで自動クローズされた</text>
+
+              <rect class="nbox" x="24" y="102" width="330" height="64" rx="10" />
+              <text class="b" x="189" y="128" text-anchor="middle">紐づく open PR があるか?</text>
+              <text class="sm" x="189" y="148" text-anchor="middle">fork の PR は数えない</text>
+
+              <rect class="nbox" x="24" y="190" width="330" height="64" rx="10" />
+              <text class="b" x="189" y="216" text-anchor="middle">in-progress ラベルがあるか?</text>
+              <text class="sm" x="189" y="236" text-anchor="middle">/next-ticket が着手時に付ける</text>
+
+              <rect class="nbox ok" x="500" y="14" width="256" height="64" rx="10" />
+              <text class="b" x="628" y="42" text-anchor="middle">Done</text>
+              <text class="sm" x="628" y="62" text-anchor="middle">完了</text>
+
+              <rect class="nbox accent" x="500" y="102" width="256" height="64" rx="10" />
+              <text class="b" x="628" y="130" text-anchor="middle">In Review</text>
+              <text class="sm" x="628" y="150" text-anchor="middle">draft PR も含む</text>
+
+              <rect class="nbox warn" x="500" y="190" width="256" height="64" rx="10" />
+              <text class="b" x="628" y="218" text-anchor="middle">In Progress</text>
+              <text class="sm" x="628" y="238" text-anchor="middle">実装中</text>
+
+              <rect class="nbox" x="500" y="278" width="256" height="64" rx="10" />
+              <text class="b" x="628" y="306" text-anchor="middle">Todo</text>
+              <text class="sm" x="628" y="326" text-anchor="middle">未着手</text>
+
+              <path class="ln" d="M354,46 L494,46" marker-end="url(#f2h)" />
+              <text class="sm" x="424" y="36" text-anchor="middle">はい</text>
+              <path class="ln" d="M189,78 L189,96" marker-end="url(#f2h)" />
+              <text class="sm" x="199" y="94" text-anchor="start">いいえ</text>
+
+              <path class="ln" d="M354,134 L494,134" marker-end="url(#f2h)" />
+              <text class="sm" x="424" y="124" text-anchor="middle">はい</text>
+              <path class="ln" d="M189,166 L189,184" marker-end="url(#f2h)" />
+              <text class="sm" x="199" y="182" text-anchor="start">いいえ</text>
+
+              <path class="ln" d="M354,222 L494,222" marker-end="url(#f2h)" />
+              <text class="sm" x="424" y="212" text-anchor="middle">はい</text>
+              <path class="ln" d="M189,254 L189,310 L494,310" marker-end="url(#f2h)" />
+              <text class="sm" x="199" y="272" text-anchor="start">いいえ</text>
+            </svg>
+            <figcaption>
+              図 2: Status の判定フロー。<b>見るのは Issue の現在の状態だけ</b>で、どのイベントで呼ばれたかは一切見ない。
+            </figcaption>
+          </figure>
+
+          <div class="note info">
+            <strong>イベント種別ではなく「Issue の現在の状態」から毎回決め直す。</strong>
+            ラベルが付いた・PR が開いたという<b>出来事</b>を追うのではなく、呼ばれた時点の Issue(open/closed・ラベル・紐づく open PR)を見て図 2 を上から当てる。だから<b>イベントを取りこぼしても、順序が入れ替わっても board がずれない</b>し、同じ Issue に何度流しても結果が変わらない。
+          </div>
+
+          <p>
+            draft PR も <code>In Review</code> に入れているのは、econ(節約)モードが <b>draft で積んで枠の回復後にまとめてレビューする</b>運用だから。draft を In Progress に残すと、実装中のものと区別できなくなる。
+          </p>
+        </section>
+
+        <section id="check">
+          <h2>確認とつまずき</h2>
+          <p>
+            まず <code>--check</code> を回す。<b>board には何も書き込まず</b>、設定・権限・列名の対応だけを表示する。
+          </p>
+          <div class="cmd"><pre>bash .claude/scripts/project-sync.sh --check</pre></div>
+          <p>うまくいっているときの出力(例):</p>
+          <div class="cmd">
+            <pre class="c">project-sync.sh: repo: owner/repo
+project-sync.sh: project: https://github.com/users/owner/projects/3(user=owner / number=3)
+project-sync.sh: token: PROJECT_SYNC_TOKEN を使う
+project-sync.sh: project id: PVT_xxxx / title: 開発サイクル
+project-sync.sh: Status フィールド: Status
+project-sync.sh:   todo → Todo
+project-sync.sh:   inProgress → In Progress
+project-sync.sh:   inReview → In Review
+project-sync.sh:   done → Done
+project-sync.sh: Priority フィールドは board に無い(優先度は反映しない)
+project-sync.sh: ラベル: ticket=ticket / in-progress=in-progress</pre>
+          </div>
+
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>症状</th>
+                  <th>原因</th>
+                  <th>直し方</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Actions が notice だけ出して終わる</td>
+                  <td><code>PROJECT_SYNC_TOKEN</code> が未登録</td>
+                  <td>手順 2・3 を行う(これは設計どおりの挙動。失敗ではない)</td>
+                </tr>
+                <tr>
+                  <td><code>PROJECT_URL が未設定のため何もしない</code></td>
+                  <td>variable も <code>projectUrl</code> も空</td>
+                  <td>手順 3 で登録する</td>
+                </tr>
+                <tr>
+                  <td><code>Project を取得できない</code></td>
+                  <td>PAT に <code>project</code> scope が無い / 別アカウントの board を指している</td>
+                  <td>PAT の scope を見直す。URL のログイン名が board の持ち主と一致しているか確認する</td>
+                </tr>
+                <tr>
+                  <td><code>Status フィールドが board に無い</code></td>
+                  <td>列名が候補と一致しない</td>
+                  <td><code>.claude/project-sync.json</code> の <code>statusField</code> に board の実際の名前を足す</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>Status 'inReview' に対応する列が board に無い</code>
+                  </td>
+                  <td><code>In Review</code> 列を作っていない</td>
+                  <td>列を足す。または放置してよい(残り 3 つは動き続ける)</td>
+                </tr>
+                <tr>
+                  <td>fork からの PR で board が動かない</td>
+                  <td>仕様(信頼境界)</td>
+                  <td>直さない。<a href="#how">しくみ</a>の節を参照</td>
+                </tr>
+                <tr>
+                  <td>手元で <code>jq が見つからない</code></td>
+                  <td>ホストに jq が無い</td>
+                  <td>devcontainer の中で回す。または Actions の手動実行で済ませる</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="how">
+          <h2>しくみ(なぜこの形か)</h2>
+
+          <h3>board を「表示専用」に留めた理由</h3>
+          <p>
+            GitHub Projects(v2)の API は <b>GraphQL しか無い</b>。いっぽう、次に何をするかを決める <code>autopilot-next.sh</code> は
+            <b>REST だけで書かれている</b> —— Claude Code on the web のリモート環境では GraphQL が 403 になり、<code>gh issue list</code> すら使えないからだ。
+            board を判定の入力に入れると、この前提ごと壊れて<b>クラウドで自動進行が動かなくなる</b>。
+          </p>
+          <p>
+            そこで、情報は<b>左から右へ片方向にしか流れない</b>ようにしてある。board は終着点で、そこから誰も読み返さない。
+          </p>
+
+          <figure class="fig">
+            <svg
+              viewBox="0 0 820 336"
+              role="img"
+              aria-label="Issue のラベルと PR が状態の正であり、そこから REST で autopilot-next.sh と project-sync.sh が読む。project-sync.sh だけが GraphQL で board に書き込み、board からは誰も読み返さない"
+            >
+              <defs>
+                <marker id="f1h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+                  <path d="M0,0 L10,5 L0,10 z" class="hd" />
+                </marker>
+              </defs>
+
+              <rect class="nbox accent" x="12" y="118" width="184" height="90" rx="10" />
+              <text class="b" x="104" y="152" text-anchor="middle">Issue のラベル / PR</text>
+              <text class="sm" x="104" y="174" text-anchor="middle">状態の正</text>
+              <text class="sm" x="104" y="192" text-anchor="middle">(ここだけが真実)</text>
+
+              <path class="ln" d="M196,163 L296,163" />
+              <text class="sm" x="246" y="152" text-anchor="middle">REST で読む</text>
+              <path class="ln" d="M296,163 L296,70 L314,70" marker-end="url(#f1h)" />
+              <path class="ln" d="M296,163 L296,256 L314,256" marker-end="url(#f1h)" />
+
+              <rect class="nbox" x="320" y="26" width="230" height="88" rx="10" />
+              <text class="b" x="435" y="60" text-anchor="middle">autopilot-next.sh</text>
+              <text class="sm" x="435" y="82" text-anchor="middle">判定 — 次に何をするか</text>
+              <text class="sm" x="435" y="100" text-anchor="middle">決める(REST のみ)</text>
+
+              <rect class="nbox" x="320" y="212" width="230" height="88" rx="10" />
+              <text class="b" x="435" y="246" text-anchor="middle">project-sync.sh</text>
+              <text class="sm" x="435" y="268" text-anchor="middle">表示を作る</text>
+              <text class="sm" x="435" y="286" text-anchor="middle">(このページの仕組み)</text>
+
+              <path class="ln" d="M550,256 L634,256" marker-end="url(#f1h)" />
+              <text class="sm" x="592" y="245" text-anchor="middle">GraphQL</text>
+              <text class="sm" x="592" y="277" text-anchor="middle">で書く</text>
+
+              <rect class="nbox ok" x="640" y="212" width="168" height="88" rx="10" />
+              <text class="b" x="724" y="250" text-anchor="middle">Projects board</text>
+              <text class="sm" x="724" y="272" text-anchor="middle">人が眺める面</text>
+
+              <path class="ln dash no" d="M724,212 L724,150 L566,150 L566,70 L556,70" />
+              <path class="ln no" d="M637,142 L653,158" />
+              <path class="ln no" d="M653,142 L637,158" />
+              <text class="sm no" x="645" y="130" text-anchor="middle">board は誰も読み返さない(この経路を作らない)</text>
+            </svg>
+            <figcaption>
+              図 3: 情報の流れ。<b>赤い点線は「あえて作っていない経路」</b>。ここを繋ぐと、判定が GraphQL に依存してクラウドで動かなくなる。
+            </figcaption>
+          </figure>
+
+          <p>役割で言うと 3 層に分かれている。<b>同じ状態を 2 箇所で持たない</b>のが要点。</p>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>層</th>
+                  <th>実体</th>
+                  <th>役割</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>状態の正</td>
+                  <td>Issue のラベル / PR</td>
+                  <td>ここだけが真実。board を手で動かしても状態は変わらない</td>
+                </tr>
+                <tr>
+                  <td>判定</td>
+                  <td><code>autopilot-next.sh</code>(REST)</td>
+                  <td>次に何をするかを決める。<b>board を読まない</b></td>
+                </tr>
+                <tr>
+                  <td>表示</td>
+                  <td>Project board / 全体管理 Issue</td>
+                  <td>人間が眺めるための面。<b>片方向に書き込まれるだけ</b></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            これは既存の<b>全体管理 Issue</b>(<code>autopilot</code> ラベル)と同じ方針で、board はその「もう 1 つの面」にあたる。二重管理にはならない。
+          </p>
+
+          <h3>何度流しても壊れない理由</h3>
+          <p>
+            item の追加に使う <code>addProjectV2ItemById</code> は、<b>既に board にある内容を渡すと既存の item の ID を返す</b>(重複を作らない)。
+            そこに図 2 の「Status は現在の状態から毎回決め直す」を重ねているので、<b>再同期は常に安全</b>。取りこぼしが疑わしいときは <code>backfill</code> を回し直せばよい。
+          </p>
+
+          <h3>信頼の境界</h3>
+          <p>
+            入口は <code>ticket</code> ラベル。書き込み権限が無いと Issue 作成時にラベルを付けられないので、<b>ラベル自体が境界になる</b>(外部からの Issue が勝手に board に載ることはない)。
+            そのうえで、<b>fork からの PR は 2 段で止めてある</b> —— 本文に <code>Closes #N</code> と書くだけで外部の人が board を動かせてはならないからだ。
+          </p>
+
+          <figure class="fig">
+            <svg
+              viewBox="0 0 820 216"
+              role="img"
+              aria-label="同じリポジトリの PR は board を更新できるが、fork からの PR はワークフローで secret が渡らず、さらにスクリプトの head と base の比較でも除外される"
+            >
+              <defs>
+                <marker id="f4h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+                  <path d="M0,0 L10,5 L0,10 z" class="hd" />
+                </marker>
+              </defs>
+
+              <rect class="nbox" x="12" y="16" width="170" height="72" rx="10" />
+              <text class="b" x="97" y="46" text-anchor="middle">同じリポジトリの PR</text>
+              <text class="sm" x="97" y="68" text-anchor="middle">書き込み権限のある人</text>
+              <path class="ln" d="M182,52 L206,52" marker-end="url(#f4h)" />
+
+              <rect class="nbox" x="212" y="16" width="200" height="72" rx="10" />
+              <text class="b" x="312" y="46" text-anchor="middle">ワークフロー</text>
+              <text class="sm" x="312" y="68" text-anchor="middle">secret が渡る</text>
+              <path class="ln" d="M412,52 L436,52" marker-end="url(#f4h)" />
+
+              <rect class="nbox" x="442" y="16" width="200" height="72" rx="10" />
+              <text class="b" x="542" y="46" text-anchor="middle">スクリプト</text>
+              <text class="sm" x="542" y="68" text-anchor="middle">head == base で通す</text>
+              <path class="ln" d="M642,52 L666,52" marker-end="url(#f4h)" />
+
+              <rect class="nbox ok" x="672" y="16" width="136" height="72" rx="10" />
+              <text class="b" x="740" y="58" text-anchor="middle">board 更新</text>
+
+              <rect class="nbox warn" x="12" y="124" width="170" height="72" rx="10" />
+              <text class="b" x="97" y="154" text-anchor="middle">fork の PR</text>
+              <text class="sm" x="97" y="176" text-anchor="middle">外部の人</text>
+              <path class="ln" d="M182,160 L206,160" marker-end="url(#f4h)" />
+
+              <rect class="nbox danger" x="212" y="124" width="200" height="72" rx="10" />
+              <text class="b" x="312" y="154" text-anchor="middle">secret が渡らない</text>
+              <text class="sm" x="312" y="176" text-anchor="middle">1 段目: step ごと skip</text>
+
+              <path class="ln dash no" d="M412,160 L436,160" />
+              <path class="ln no" d="M417,152 L431,168" />
+              <path class="ln no" d="M431,152 L417,168" />
+
+              <rect class="nbox danger" x="442" y="124" width="200" height="72" rx="10" />
+              <text class="b" x="542" y="154" text-anchor="middle">head ≠ base で除外</text>
+              <text class="sm" x="542" y="176" text-anchor="middle">2 段目: 1 段目が破れた時用</text>
+
+              <path class="ln dash no" d="M642,160 L666,160" />
+              <path class="ln no" d="M647,152 L661,168" />
+              <path class="ln no" d="M661,152 L647,168" />
+
+              <rect class="nbox" x="672" y="124" width="136" height="72" rx="10" />
+              <text class="sm" x="740" y="166" text-anchor="middle">board は動かない</text>
+            </svg>
+            <figcaption>
+              図 4: fork の PR を止める 2 段の境界。1 段目(secret が渡らない)だけでも止まるが、2 段目を<code>project-sync.sh</code> 側にも置いてある。
+            </figcaption>
+          </figure>
+
+          <p>
+            <code>Closes #N</code> の正規表現は <code>autopilot-next.sh</code> と<b>同じもの</b>を使っている。同じ概念に 2 つの実装を持たせると、判定と board が食い違う。
+          </p>
+        </section>
+
+        <section id="commands">
+          <h2>コマンド一覧</h2>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>コマンド</th>
+                  <th>何をするか</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>project-sync.sh --check</code></td>
+                  <td>設定・権限・列名の対応を表示する(<b>書き込まない</b>)。困ったら最初にこれ</td>
+                </tr>
+                <tr>
+                  <td><code>project-sync.sh backfill</code></td>
+                  <td><code>ticket</code> ラベルの open Issue をまとめて board に載せる</td>
+                </tr>
+                <tr>
+                  <td><code>project-sync.sh backfill --all</code></td>
+                  <td>closed の Issue も含める(過去分を Done 列に並べたいとき)</td>
+                </tr>
+                <tr>
+                  <td><code>project-sync.sh sync-issue N</code></td>
+                  <td>Issue 1 件だけ同期する</td>
+                </tr>
+                <tr>
+                  <td><code>project-sync.sh sync-pr N</code></td>
+                  <td>PR の本文の <code>Closes #N</code> を辿って、紐づく Issue を同期する</td>
+                </tr>
+                <tr>
+                  <td><code>project-sync.sh --resolve-status --issue F</code></td>
+                  <td>フィクスチャで Status の決定だけを出す(テスト用。GitHub に触らない)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            終了コードは <b>0 = 成功または未設定でスキップ / 2 = 設定・取得・更新の失敗</b>。
+            ワークフローは未設定なら notice で skip し、<b>設定済みで失敗したときは赤くする</b> —— board が黙って古くなる方が困るため。
+          </p>
+        </section>
+
+        <section id="limits">
+          <h2>制約と注意</h2>
+          <div class="note warn">
+            <strong><code>baseBranch</code> を <code>develop</code> にしている構成では Done が遅れる。</strong>
+            GitHub の <code>Closes #N</code> は<b>既定ブランチへのマージでしか Issue を自動クローズしない</b>。feature → develop のマージ時点では Issue が open のままなので、board は
+            <code>In Progress</code> に戻る(<code>in-progress</code> ラベルが残っている限り)。<code>Done</code> はリリース PR が <code>main</code> に入った時点で付く。<b>テンプレート既定(GitHub Flow / <code>baseBranch: main</code>)では起きない。</b>
+          </div>
+          <ul>
+            <li>
+              <b>board に載るのは Issue だけ。</b>PR 自体は item にしない(PR は Issue の Status を動かすための材料として読む)
+            </li>
+            <li>
+              <b>board への書き込みは PAT の持ち主として記録される。</b>板の更新履歴はその人の名前になる
+            </li>
+            <li>
+              <b>手元から回すには <code>jq</code> と <code>gh</code> が要る。</b>無い環境では Actions の手動実行(<code>backfill</code>)で代替する
+            </li>
+            <li>
+              <b>Project 自体は作らない。</b>board とフィールドの用意は人間の担当(API で作ると列の ID が毎回変わり、手順が追えなくなる)
+            </li>
+            <li>
+              <b>organization の Project では GitHub App が推奨される。</b>GitHub の docs は org の Projects に対して PAT ではなく App の installation token を勧めている。URL が <code>/orgs/</code> 形式ならスクリプトは対応しているが、権限は「organization projects の読み書き」が要る(repository projects では足りない)
+            </li>
+          </ul>
+        </section>
+
+        <section id="faq">
+          <h2>よくある質問</h2>
+
+          <details open>
+            <summary>もう走っているプロジェクトに後から入れられる?</summary>
+            <p>
+              入れられる。<b>この同期は「今までに何が起きたか」を一切見ない</b> ——
+              図 2 のとおり Issue の現在の状態(open / closed・ラベル・紐づく PR)から Status を毎回決め直すので、途中から載せても
+              <b>いまの姿がそのまま board に出る</b>。過去のイベントを再生する必要はない。
+            </p>
+            <ol class="steps">
+              <li>
+                <b>ファイルを取り込む。</b>このテンプレートから作ったプロジェクトなら <code>/sync-template</code> で入る
+                (<code>.github/workflows/project-sync.yml</code> と <code>.claude/scripts/project-sync.sh</code> は
+                <code>owned</code> = 上書き、<code>.claude/project-sync.json</code> は <code>merge</code> = 手動統合。
+                <code>ci.yml</code> も <code>merge</code> なので <code>Test project sync</code> ステップは提示に従って足す)
+              </li>
+              <li><b>上の「やること(初回だけ)」を踏む。</b>board の用意 → PAT → <code>PROJECT_URL</code> → 列名の照合</li>
+              <li>
+                <b>closed も含めて投入する。</b>Actions の手動実行で <code>include_closed</code> にチェックを入れる(= <code>backfill --all</code>)。
+                これを省くと open のチケットしか載らず、終わった分が <code>Done</code> 列に並ばない
+              </li>
+            </ol>
+            <div class="note">
+              <strong>載らないチケットがあるとき。</strong>拾う条件は <b><code>ticket</code> ラベルが付いていること</b>だけ。
+              テンプレート外のリポジトリで別のラベル名を使っているなら
+              <code>.claude/project-sync.json</code> の <code>ticketLabel</code> / <code>inProgressLabel</code> を書き換える。
+              <b>すでに着手済みのチケットは、<code>in-progress</code> ラベルが付いていなければ <code>Todo</code> に入る</b>
+              (PR が開いていれば <code>In Review</code> になる)。ラベルを足せば次の同期で動く。
+            </div>
+            <p>
+              件数は気にしなくてよい。<code>backfill</code> は REST を全ページ辿るので 100 件を超えても全部載り、
+              <code>addProjectV2ItemById</code> が冪等なので<b>何度流し直しても重複しない</b>。
+            </p>
+          </details>
+
+          <details>
+            <summary>Projects を使わない。消せる?</summary>
+            <p>
+              消せる。<code>.github/workflows/project-sync.yml</code> と <code>ci.yml</code> の
+              <code>Test project sync</code> ステップを落とすだけでよい。
+              <b>消さずに放置してもよい</b> —— <code>PROJECT_SYNC_TOKEN</code> が無い間は notice を 1 行出すだけで、CI も赤くならない。
+            </p>
+          </details>
+
+          <details>
+            <summary>既存の「全体管理 Issue」はどうなる?</summary>
+            <p>
+              そのまま残る。全体管理 Issue は<b>一時停止の操作</b>と<b>人手が要る停止の通知先</b>を持っていて、board にはその機能が無い。どちらも図 3 の「表示」層で、状態の正はラベルと PR のまま
+              —— だから二重管理にはならない。
+            </p>
+          </details>
+
+          <details>
+            <summary>board のカードを動かして autopilot を操作したい</summary>
+            <p>
+              いまはできない(意図的)。図 3 の<b>赤い点線を実線にする</b>ということなので、先に
+              <code>autopilot-next.sh</code> の <b>REST 限定</b>という前提(Claude Code on the web で GraphQL が 403)を解く必要がある。board を判定に入れた時点で、クラウドのリモート環境では自動進行が動かなくなる。
+            </p>
+          </details>
+
+          <details>
+            <summary>手で board のカードを動かしてしまった</summary>
+            <p>
+              次にその Issue にイベントが起きた時点で、Status は<b>ラベルと PR から決め直された値に戻る</b>(図 2)。すぐ揃えたいなら
+              <code>project-sync.sh sync-issue N</code> か <code>backfill</code> を回す。
+            </p>
+          </details>
+
+          <details>
+            <summary>fine-grained PAT でもよい?</summary>
+            <p>
+              動く可能性はあるが、<b>GitHub の docs が Projects 用の権限名を示していない</b>ため、このページでは
+              classic PAT(<code>project</code> + <code>repo</code>)を案内している。fine-grained を使うなら、まず
+              <code>--check</code> で疎通を確かめてから登録すること。
+            </p>
+          </details>
+        </section>
+
+        <footer>
+          実体: <code>.claude/scripts/project-sync.sh</code>(同期)/
+          <code>.github/workflows/project-sync.yml</code>(起動)/
+          <code>.claude/project-sync.json</code>(列名の候補)。検査は
+          <code>.claude/scripts/test-project-sync.sh</code>。設計の経緯は
+          <code>.steering/20261104-github-project-sync/design.md</code>、取り込み手順は
+          <code>docs/template-dev/CHANGELOG.md</code>。
+        </footer>
+      </main>
+    </div>
+
+    <button class="theme" type="button" id="theme">表示: 自動</button>
+
+    <script>
+      // コマンド枠にコピーボタンを付ける(コメント行 # ... は除いてコピーする)
+      document.querySelectorAll(".cmd").forEach(function (box) {
+        var pre = box.querySelector("pre");
+        if (!pre) return;
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "copy";
+        btn.textContent = "コピー";
+        btn.addEventListener("click", function () {
+          var text = pre.innerText
+            .split("\n")
+            .filter(function (l) {
+              return !/^\s*#/.test(l);
+            })
+            .map(function (l) {
+              return l.replace(/\s+#\s.*$/, "");
+            })
+            .join("\n")
+            .trim();
+          var done = function () {
+            btn.textContent = "コピーした";
+            setTimeout(function () {
+              btn.textContent = "コピー";
+            }, 1400);
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done, function () {
+              btn.textContent = "選択してコピー";
+            });
+          } else {
+            btn.textContent = "選択してコピー";
+          }
+        });
+        box.appendChild(btn);
+      });
+
+      // 表示テーマの切り替え(自動 → ライト → ダーク)
+      (function () {
+        var order = ["auto", "light", "dark"];
+        var label = { auto: "表示: 自動", light: "表示: ライト", dark: "表示: ダーク" };
+        var btn = document.getElementById("theme");
+        var cur = "auto";
+        try {
+          cur = localStorage.getItem("project-sync-guide-theme") || "auto";
+        } catch (e) {}
+        function apply(t) {
+          if (t === "auto") document.documentElement.removeAttribute("data-theme");
+          else document.documentElement.setAttribute("data-theme", t);
+          btn.textContent = label[t];
+        }
+        apply(cur);
+        btn.addEventListener("click", function () {
+          cur = order[(order.indexOf(cur) + 1) % order.length];
+          apply(cur);
+          try {
+            localStorage.setItem("project-sync-guide-theme", cur);
+          } catch (e) {}
+        });
+      })();
+    </script>
+  </body>
+</html>

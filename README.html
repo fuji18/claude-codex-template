@@ -1823,8 +1823,124 @@
             </li>
           </ul>
 
+          <h3>2.5 GitHub Projects でサイクルを見る(任意)</h3>
+          <p>
+            開発サイクルを GitHub Projects の board で追える。<b
+              >board は表示専用</b
+            >で、チケットの状態の正は Issue のラベルと PR のまま(<code
+              >autopilot-next.sh</code
+            >
+            の判定は REST だけで動く必要があり、GraphQL しか無い Projects v2
+            は判定経路に入れない)。未設定なら何も起きず、CI
+            も赤くならない。人間向けの資料は 2 つあり、どちらもブラウザで開く ——
+            しくみは
+            <b><code>.claude/docs/project-sync-guide.html</code></b
+            >、<b>どの画面でどのボタンを押すか</b>は
+            <b><code>.claude/docs/project-sync-setup.html</code></b
+            >(導入作業はこちらを見ながら進める)。
+          </p>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>board の Status</th>
+                  <th>そうなる条件</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Todo</td>
+                  <td><code>ticket</code> ラベルがあり、まだ着手していない</td>
+                </tr>
+                <tr>
+                  <td>In Progress</td>
+                  <td>
+                    <code>in-progress</code> ラベルがある(<code
+                      >/next-ticket</code
+                    >
+                    が着手時に付ける)
+                  </td>
+                </tr>
+                <tr>
+                  <td>In Review</td>
+                  <td>
+                    <code>Closes #N</code> で紐づく open PR がある(<b
+                      >draft も含む</b
+                    >)
+                  </td>
+                </tr>
+                <tr>
+                  <td>Done</td>
+                  <td>Issue が closed(PR マージで自動クローズ)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <b>イベント種別ではなく Issue の現在の状態から決める</b
+            >ので、イベントの取りこぼしや順序の入れ替わりで board
+            がずれない。fork の PR は本文に
+            <code>Closes #N</code> と書いても紐づけない(<code
+              >autopilot-next.sh</code
+            >
+            の信頼境界と同じ)。
+          </p>
+          <ul>
+            <li>
+              GitHub で Project を作り、<b
+                ><code>Status</code> に <code>Todo</code> /
+                <code>In Progress</code> / <code>In Review</code> /
+                <code>Done</code> を用意する</b
+              >(<code>Priority</code> に <code>P0</code> / <code>P1</code> /
+              <code>P2</code> を作れば優先度も入る。無くてもよい)
+            </li>
+            <li>
+              <b>classic PAT(<code>project</code> + <code>repo</code> scope)</b
+              >を <code>PROJECT_SYNC_TOKEN</code> として Actions
+              シークレットに登録する。<b
+                ><code>GITHUB_TOKEN</code> は Projects にアクセスできない</b
+              >ため別途必要
+            </li>
+            <li>
+              Variables に
+              <code>PROJECT_URL</code> を登録する。リポジトリに固定でよければ
+              <code>.claude/project-sync.json</code> の
+              <code>projectUrl</code> に書いてもよい
+            </li>
+            <li>
+              列名が既定と違う(日本語の board など)場合は
+              <code>.claude/project-sync.json</code> の候補を足す
+            </li>
+            <li>
+              Actions タブから
+              <b>Project Sync を手動実行</b>すると、既存のチケットがまとめて
+              board に載る(<code>backfill</code>)
+            </li>
+          </ul>
+          <p>
+            <b>進行中のプロジェクトに後から入れてよい。</b>Status は Issue
+            の現在の状態から毎回決め直すので、過去のイベントを再生する必要がない。手順
+            5 の手動実行で
+            <b><code>include_closed</code> にチェックを入れる</b>と closed
+            のチケットも <code>Done</code> 列に載る(=
+            <code>backfill --all</code>)。REST を全ページ辿るので 100
+            件を超えても全部入り、<code>addProjectV2ItemById</code>
+            が冪等なので何度流し直しても重複しない。<b
+              >すでに着手済みのチケットは
+              <code>in-progress</code> ラベルが付いていなければ
+              <code>Todo</code> に入る</b
+            >(PR が開いていれば
+            <code>In Review</code>)。テンプレートから作ったプロジェクトなら
+            <code>/sync-template</code> でファイルが入る。
+          </p>
+          <p>
+            確認とトラブルシュート:
+            <code>bash .claude/scripts/project-sync.sh --check</code
+            >(書き込まない。board の列名とスクリプトの対応を表示する)。
+          </p>
+
           <h3>
-            2.5 ブランチ戦略(単一ソース =
+            2.6 ブランチ戦略(単一ソース =
             <code>.claude/branch-policy.json</code>)
           </h3>
           <p>
@@ -2165,6 +2281,16 @@
                     を作る(競合・ワークフロー変更時は Issue)
                   </td>
                   <td>不要(<b>Claude を起動しない</b>)</td>
+                </tr>
+                <tr>
+                  <td><code>project-sync.yml</code></td>
+                  <td>Issue / PR のイベント + 手動実行(初回投入)</td>
+                  <td>
+                    チケット Issue を GitHub Projects の board に載せ、Status /
+                    Priority を動かす(<b>表示専用</b>。<a href="#flow">2.5 節</a
+                    >)
+                  </td>
+                  <td><code>PROJECT_SYNC_TOKEN</code>(任意)</td>
                 </tr>
               </tbody>
             </table>
@@ -3611,6 +3737,14 @@ bash .claude/scripts/route.sh implement --set 実装=sonnet</pre>
                   <td>
                     テンプレート同期の実体(<code>--check-drift</code>
                     でドリフト検出)
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>project-sync.sh</code></td>
+                  <td>
+                    GitHub Projects の board 同期(<code>sync-issue</code> /
+                    <code>sync-pr</code> / <code>backfill</code> /
+                    <code>--check</code>)
                   </td>
                 </tr>
                 <tr>

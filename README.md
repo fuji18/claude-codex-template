@@ -201,6 +201,31 @@ flowchart TD
 - **econ(モード B)でも動く**(ローカルのみ): 計画だけ `claude -p` → 実装はループがシェルから Codex に委託 → draft PR だけ `claude -p`(`/ship-ticket`)。検収は CI に委ね、`package.json` のライフサイクル差分があれば止まる。degraded では止まる
 - **クラウド**: 司令塔セッションがチケットごとに子セッションを起動する(コンテナ・ブランチ・コンテキストが別)。子は PR を購読して CI・レビューに対応し、作成・マージを親に通知する
 
+### GitHub Projects でサイクルを見る(任意)
+
+開発サイクルを GitHub Projects の board で追える。**board は表示専用**で、チケットの状態の正は Issue のラベルと PR のまま(`autopilot-next.sh` の判定は REST だけで動く必要があり、GraphQL しか無い Projects v2 は判定経路に入れない)。未設定なら何も起きず、CI も赤くならない。人間向けの資料は 2 つあり、どちらもブラウザで開く —— しくみは **`.claude/docs/project-sync-guide.html`**、**どの画面でどのボタンを押すか**は **`.claude/docs/project-sync-setup.html`**(導入作業はこちらを見ながら進める)。
+
+| board の Status | そうなる条件(`project-sync.sh` が Issue の現在の状態から毎回決め直す) |
+| --------------- | --------------------------------------------------------------------- |
+| Todo            | `ticket` ラベルがあり、まだ着手していない                             |
+| In Progress     | `in-progress` ラベルがある(`/next-ticket` が着手時に付ける)           |
+| In Review       | `Closes #N` で紐づく open PR がある(**draft も含む**)                 |
+| Done            | Issue が closed(PR マージで自動クローズ)                              |
+
+**イベント種別ではなく Issue の現在の状態から決める**ので、イベントの取りこぼしや順序の入れ替わりで board がずれない。fork の PR は本文に `Closes #N` と書いても紐づけない(`autopilot-next.sh` の信頼境界と同じ)。
+
+有効にする手順:
+
+1. GitHub で Project を作り、**`Status` に `Todo` / `In Progress` / `In Review` / `Done` を用意する**(`Priority` に `P0` / `P1` / `P2` を作れば優先度も入る。無くてもよい)
+2. **classic PAT(`project` + `repo` scope)**を作り、Settings → Secrets and variables → Actions に `PROJECT_SYNC_TOKEN` として登録する。**`GITHUB_TOKEN` は Projects にアクセスできない**ため別途必要
+3. 同じ画面の Variables に `PROJECT_URL`(例 `https://github.com/users/<login>/projects/3`)を登録する。リポジトリに固定でよければ `.claude/project-sync.json` の `projectUrl` に書いてもよい
+4. 列名が既定と違う(日本語の board など)場合は `.claude/project-sync.json` の候補を足す
+5. Actions タブから **Project Sync を手動実行**すると、既存のチケットがまとめて board に載る(`backfill`)
+
+**進行中のプロジェクトに後から入れてよい。** Status は Issue の現在の状態から毎回決め直すので、過去のイベントを再生する必要がない。手順 5 の手動実行で **`include_closed` にチェックを入れる**と closed のチケットも `Done` 列に載る(= `backfill --all`)。REST を全ページ辿るので 100 件を超えても全部入り、`addProjectV2ItemById` が冪等なので何度流し直しても重複しない。**すでに着手済みのチケットは `in-progress` ラベルが付いていなければ `Todo` に入る**(PR が開いていれば `In Review`)。テンプレートから作ったプロジェクトなら `/sync-template` でファイルが入る。
+
+確認とトラブルシュート: `bash .claude/scripts/project-sync.sh --check`(書き込まない。board の列名とスクリプトの対応を表示する)。
+
 ### ブランチ戦略(単一ソース = `.claude/branch-policy.json`)
 
 機械が読む値はポリシーファイルだけを正とする。テンプレート既定は GitHub Flow(`baseBranch: main` / 保護ブランチは `main` / 許可プレフィックスは `feature/` `fix/` `release/` `hotfix/` `claude/` `dependabot/`)。
@@ -248,6 +273,7 @@ flowchart TD
 | `claude-code-review.yml`    | **`main` 向け** PR の opened / ready_for_review(**draft では走らない**) | Claude による自動レビュー                                                                                                                                                     | `CLAUDE_CODE_OAUTH_TOKEN`     |
 | `claude.yml`                | `@claude` メンション(OWNER / MEMBER / COLLABORATOR のみ)                | 指示に応じた作業                                                                                                                                                              | 同上                          |
 | `template-update-check.yml` | 毎月 1 日 + 手動実行                                                    | テンプレートの更新を同期スクリプトで取り込み、PR を作る(競合・ワークフロー変更時は Issue)                                                                                     | 不要(**Claude を起動しない**) |
+| `project-sync.yml`          | Issue / PR のイベント + 手動実行(初回投入)                              | チケット Issue を GitHub Projects の board に載せ、Status / Priority を動かす(**表示専用**)                                                                                   | `PROJECT_SYNC_TOKEN`(任意)    |
 
 **CI は Claude の枠を一切消費しない**ので、機械的検証はできるだけ CI に寄せる。`record-hygiene.yml` を `ci.yml` に同居させていないのは、ラベル操作のたびに `npm ci` から再実行させないため。
 
@@ -432,21 +458,22 @@ Codex CLI が無い・未認証の環境では `delegate-codex.sh` が `exit 3` 
 
 ### スクリプト早見表(`.claude/scripts/`)
 
-| スクリプト                                                                                                 | 役割                                                                        |
-| ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `delegate-codex.sh`                                                                                        | Codex 委託の唯一の入口(`explore` / `review` / `impl` / `--print-forbidden`) |
-| `codex-run.sh`                                                                                             | run record の一覧・検収・状態更新・剪定                                     |
-| `harness-mode.sh`                                                                                          | ハーネスモード読み取りの唯一の経路                                          |
-| `route.sh <implement\|review> [--issue N] [--set 工程=担当]`                                               | 担当AI(実装・レビュー)の判定の唯一の経路                                    |
-| `check-guard-integrity.sh`                                                                                 | ガードレール健全性(引数なし / `degraded` / `hooks-path`)                    |
-| `check-protected-branch.sh`                                                                                | 保護ブランチ判定の実体(強制 3 層が共有)                                     |
-| `latest-steering.sh`                                                                                       | 最新 `.steering/` の判定(hook・fork・SessionStart が共有)                   |
-| `check-record-hygiene.sh`                                                                                  | CHANGELOG / decisions.jsonl の記録漏れ判定(CI と手元で同じ結果)             |
-| `check-forbidden-paths-doc.sh`                                                                             | 委託禁止領域の記述乖離の双方向照合                                          |
-| `autopilot-next.sh`                                                                                        | チケット自動進行の判定(`/next-ticket` / `/autopilot` / ループが共有)        |
-| `autopilot-loop.sh` / `autopilot-preflight.sh` / `autopilot-board.sh`                                      | 自動進行のループ / 開始前チェック / 全体管理 Issue                          |
-| `block-dangerous-cmds.sh` / `check-branch-policy.sh` / `check-implementation-phase.sh` / `lint-on-edit.sh` | hook の実体                                                                 |
-| `lib-record.sh` / `lib-github.sh`                                                                          | source 専用の共有ライブラリ(**実行権限を付けない**。CI が検査する)          |
+| スクリプト                                                                                                 | 役割                                                                             |
+| ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `delegate-codex.sh`                                                                                        | Codex 委託の唯一の入口(`explore` / `review` / `impl` / `--print-forbidden`)      |
+| `codex-run.sh`                                                                                             | run record の一覧・検収・状態更新・剪定                                          |
+| `harness-mode.sh`                                                                                          | ハーネスモード読み取りの唯一の経路                                               |
+| `route.sh <implement\|review> [--issue N] [--set 工程=担当]`                                               | 担当AI(実装・レビュー)の判定の唯一の経路                                         |
+| `check-guard-integrity.sh`                                                                                 | ガードレール健全性(引数なし / `degraded` / `hooks-path`)                         |
+| `check-protected-branch.sh`                                                                                | 保護ブランチ判定の実体(強制 3 層が共有)                                          |
+| `latest-steering.sh`                                                                                       | 最新 `.steering/` の判定(hook・fork・SessionStart が共有)                        |
+| `check-record-hygiene.sh`                                                                                  | CHANGELOG / decisions.jsonl の記録漏れ判定(CI と手元で同じ結果)                  |
+| `check-forbidden-paths-doc.sh`                                                                             | 委託禁止領域の記述乖離の双方向照合                                               |
+| `autopilot-next.sh`                                                                                        | チケット自動進行の判定(`/next-ticket` / `/autopilot` / ループが共有)             |
+| `autopilot-loop.sh` / `autopilot-preflight.sh` / `autopilot-board.sh`                                      | 自動進行のループ / 開始前チェック / 全体管理 Issue                               |
+| `project-sync.sh`                                                                                          | GitHub Projects の board 同期(`sync-issue` / `sync-pr` / `backfill` / `--check`) |
+| `block-dangerous-cmds.sh` / `check-branch-policy.sh` / `check-implementation-phase.sh` / `lint-on-edit.sh` | hook の実体                                                                      |
+| `lib-record.sh` / `lib-github.sh`                                                                          | source 専用の共有ライブラリ(**実行権限を付けない**。CI が検査する)               |
 
 ---
 

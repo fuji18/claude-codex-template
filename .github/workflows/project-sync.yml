@@ -1,0 +1,90 @@
+name: Project Sync
+
+# チケット Issue を GitHub Projects(v2)の board に載せ、Status / Priority を
+# 開発サイクルに合わせて動かす。**board は表示専用**で、状態の正は Issue のラベルと PR のまま
+# (自動進行の判定 autopilot-next.sh は REST だけで動く必要があり、GraphQL が要る
+# Projects は判定経路に入れない)。判断の実体は .claude/scripts/project-sync.sh。
+#
+# 設定(どちらも未設定ならこのワークフローは何もしない):
+#   secrets.PROJECT_SYNC_TOKEN  Projects への書き込み権限を持つトークン(classic PAT なら
+#                               project + repo scope)。**GITHUB_TOKEN は Projects に
+#                               アクセスできない**ため別途必要
+#   vars.PROJECT_URL            board の URL。リポジトリに固定でよければ
+#                               .claude/project-sync.json の projectUrl に書いてもよい
+
+on:
+  issues:
+    types: [opened, reopened, closed, labeled, unlabeled]
+  pull_request:
+    types: [opened, reopened, closed, ready_for_review, converted_to_draft]
+  workflow_dispatch:
+    inputs:
+      include_closed:
+        description: closed の Issue も board に投入する
+        type: boolean
+        default: false
+
+# 同じ Issue への連続イベントは**直列化する(古いほうを捨てない)**。
+# claude-code-review.yml が cancel-in-progress: true なのは「最新の差分だけ見ればよい」ため。
+# こちらは全イベントを順に反映したいので、途中を捨てると board が最終状態からずれる。
+concurrency:
+  group: project-sync-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # テンプレートから作った直後のリポジトリでは未設定なので、空ならスキップする
+      # (下の step の if を参照)。fork からの PR では secret が渡らないため同じ経路で止まる
+      PROJECT_SYNC_TOKEN: ${{ secrets.PROJECT_SYNC_TOKEN }}
+      PROJECT_URL: ${{ vars.PROJECT_URL }}
+    permissions:
+      # board への書き込みは PROJECT_SYNC_TOKEN が担うので、GITHUB_TOKEN は読み取りだけ
+      contents: read
+      issues: read
+      pull-requests: read
+
+    steps:
+      - name: Checkout repository
+        if: env.PROJECT_SYNC_TOKEN != ''
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - name: Sync issue
+        if: github.event_name == 'issues' && env.PROJECT_SYNC_TOKEN != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: bash .claude/scripts/project-sync.sh sync-issue "$ISSUE_NUMBER"
+
+      - name: Sync pull request
+        # fork の PR は対象外(secret が渡らないので実際には上で止まるが、境界を明示する。
+        # project-sync.sh 側でも head リポジトリを見ている = 二重の境界)
+        if: >-
+          github.event_name == 'pull_request'
+          && env.PROJECT_SYNC_TOKEN != ''
+          && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: bash .claude/scripts/project-sync.sh sync-pr "$PR_NUMBER"
+
+      - name: Backfill all tickets
+        if: github.event_name == 'workflow_dispatch' && env.PROJECT_SYNC_TOKEN != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INCLUDE_CLOSED: ${{ inputs.include_closed }}
+        run: |
+          if [ "$INCLUDE_CLOSED" = "true" ]; then
+            bash .claude/scripts/project-sync.sh backfill --all
+          else
+            bash .claude/scripts/project-sync.sh backfill
+          fi
+
+      - name: Notify sync skipped
+        if: env.PROJECT_SYNC_TOKEN == ''
+        run: |
+          echo "::notice title=Project 同期は無効::PROJECT_SYNC_TOKEN が未設定のため board には何も反映していません。有効にする手順は README の「GitHub Projects でサイクルを見る」節にあります。"
