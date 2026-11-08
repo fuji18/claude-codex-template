@@ -14,6 +14,23 @@
 
 ---
 
+## 2026-11-08 (2)
+
+- **[auto]** **Projects 同期の手順書に、後入れで実際に詰まった 2 点を足しました。**
+  既存プロジェクト(`fuji18/mogulog`)へ導入した作業で出たもので、どちらも「失敗に見えない」のが共通点です。
+  - **`ticket` / `in-progress` ラベルがそもそも無いケース。** `/setup-tickets` を通さずに育ったリポジトリ
+    (既存プロジェクトをあとからハーネスへ移行した場合など)にはラベルが存在せず、`backfill` は
+    「`ticket` ラベルの Issue が無い」と言って**正常終了**します。確かめ方と、ラベルを作って付けるまでの
+    コマンドを `project-sync-guide.html` の FAQ と `project-sync-setup.html` のつまずき表に追加
+  - **`baseBranch` が `develop` のプロジェクト。** 取り込みの PR をマージしても既定ブランチ(`main`)には
+    ワークフローが無いため、手動実行のボタンが出ないだけでなく **`issues` イベントも動きません**
+    (既定ブランチ側の定義で動くため。`pull_request` だけは PR のブランチ側で動くので、PR 起因の実行だけが
+    成功して見える)。リリースを出す / `releasePrefixes` の接頭辞で `main` へ先行投入する / ローカルから
+    `backfill` だけ流す、の 3 択を `project-sync-setup.html` の手順 1 に追加
+  - README(md / html)の 2.5 節にも同じ 2 点を要約して追加
+
+---
+
 ## 2026-11-08
 
 - **[manual]** ⚠️ **`project-sync.sh` が open PR の多いリポジトリで Status を設定できなかったのを直しました。**
