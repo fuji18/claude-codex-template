@@ -347,6 +347,7 @@ function main() {
     conflicts: [],
     skipped: [],
     driftOverwritten: [],
+    execBitStaged: [],
   };
 
   if (target === base) {
@@ -355,11 +356,17 @@ function main() {
     return 0;
   }
 
+  // テンプレート側で実行ビットの付いていたファイル。chmodSync はファイルシステム上の
+  // 話でしかなく、core.fileMode=false(Windows の既定)の git は新規ファイルを 100644 で
+  // index に記録する。CI の harness-integrity が見るのは index の mode なので、
+  // ここで揃えないと取り込んだ側が「hook スクリプトに実行権限がありません」で落ちる。
+  const execPaths = [];
   const write = (path, buf, mode) => {
     if (opt.dryRun) return;
     mkdirSync(dirname(path) || '.', { recursive: true });
     writeFileSync(path, buf);
     if (mode) chmodSync(path, mode === '100755' ? 0o755 : 0o644);
+    if (mode === '100755') execPaths.push(path);
   };
   const remove = (path) => {
     if (!opt.dryRun && existsSync(path)) unlinkSync(path);
@@ -428,7 +435,7 @@ function main() {
         m = null;
       }
       if (m) {
-        write(path, m.content);
+        write(path, m.content, mode);
         result.merged.push(path);
         if (m.conflicts.length)
           result.conflicts.push({ path, detail: m.conflicts });
@@ -436,7 +443,7 @@ function main() {
       }
     }
     const m = mergeText(baseBuf, local, theirs, UNION_FILES.test(path));
-    write(path, m.content);
+    write(path, m.content, mode);
     result.merged.push(path);
     if (m.conflicts > 0) {
       result.conflicts.push({
@@ -464,6 +471,20 @@ function main() {
   write(MANIFEST, Buffer.from(JSON.stringify(nextManifest, null, 2) + '\n'));
   if (m.conflicts.length)
     result.conflicts.push({ path: MANIFEST, detail: m.conflicts });
+
+  // 実行ビットを index に記録する(上の execPaths のコメントを参照)。
+  // 既に 100755 なら触らない —— index に載せる = stage することなので、
+  // 必要なファイルだけに絞って差分レビューを壊さないようにする。
+  for (const p of execPaths) {
+    const cur = git(['ls-files', '-s', '--', p], {
+      allowFail: true,
+    }).stdout.trim();
+    if (cur.startsWith('100755 ')) continue;
+    const r = git(['update-index', '--add', '--chmod=+x', '--', p], {
+      allowFail: true,
+    });
+    if (r.status === 0) result.execBitStaged.push(p);
+  }
 
   // CHANGELOG のうち前回同期より後の日付の節(取り込み側の [manual] 作業の材料)
   const baseDate =
@@ -503,6 +524,7 @@ function main() {
       result.driftOverwritten
     );
     line('スキップ', result.skipped);
+    line('実行ビットを index に記録(staged)', result.execBitStaged);
     if (result.conflicts.length) {
       console.log(`⚠️ 競合 (${result.conflicts.length}):`);
       for (const c of result.conflicts)

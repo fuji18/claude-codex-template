@@ -77,6 +77,29 @@ status_is "fork の PR は紐づけない(ラベルがあれば inProgress)" inP
 status_is "closed の PR は紐づけない" inProgress "$OPEN_WIP" "$(pr "Closes #7" o/r closed)"
 status_is "PR 一覧が空でも落ちない" todo "$OPEN_PLAIN" "[]"
 
+# --- 大きな PR 一覧(argv の上限を超える) ---
+# open PR の本文は長い。この一覧を jq に --argjson で渡していたころは
+# "Argument list too long" で jq の起動ごと落ち、Status が空のまま board に
+# 載っていた(実リポジトリの open PR 10 本で 245KB)。Linux の 1 引数の上限は
+# 128KiB なので、それを確実に超える大きさで検査する。
+BIG_PRS="$WORK/prs-big.json"
+{
+  BODY="$(head -c 20000 /dev/zero | tr '\0' 'x')"
+  printf '['
+  for i in $(seq 1 30); do
+    [ "$i" -gt 1 ] && printf ','
+    printf '{"number":%d,"state":"open","body":"%s Closes #7","head":{"repo":{"full_name":"o/r"}},"base":{"repo":{"full_name":"o/r"}}}' \
+      "$i" "$BODY"
+  done
+  printf ']'
+} >"$BIG_PRS"
+printf '%s' "$OPEN_PLAIN" >"$WORK/issue.json"
+GOT_BIG="$(LC_ALL=C bash "$SYNC" --resolve-status --issue "$WORK/issue.json" --prs "$BIG_PRS" 2>/dev/null)"
+[ "$GOT_BIG" = inReview ] || {
+  echo "NG: $(wc -c <"$BIG_PRS") バイトの PR 一覧でも Status を決められる(期待 inReview / 実際 ${GOT_BIG:-<空>})"
+  FAILS=1
+}
+
 # --- 設定 ---
 printf '{"inProgressLabel":"wip"}\n' >"$CONF"
 status_is "inProgressLabel を差し替えられる" inProgress '{"number":7,"state":"open","labels":["wip"]}' ""

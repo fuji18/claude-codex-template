@@ -642,9 +642,17 @@
               </div>
             </li>
             <li>
-              <b>(任意)優先度の列を足す。</b>右上の <b>⋯</b> → <b>Settings</b> → 左の <b>Fields</b> →
+              <b>(任意)優先度のフィールドを足す。</b>右上の <b>⋯</b> → <b>Settings</b> → 左の <b>Fields</b> →
               <b>New field</b>。名前を <code>Priority</code>、種類を <b>Single select</b> にして、選択肢に
               <code>P0</code> <code>P1</code> <code>P2</code> を作る。<b>作らなくても動く</b>(優先度を反映しないだけ)
+              <div class="note">
+                <strong>列ではなくフィールド。</strong>
+                board の列を決めるのは <code>Status</code> だけなので、これを足しても<b>列は 4 つのまま</b>。
+                カードに出したいときは board に戻って <b>View</b> → <b>Fields</b> で <code>Priority</code> を表示に切り替える。
+                また、値が入るのは <b>Issue に <code>P0</code> / <code>P1</code> / <code>P2</code> のラベルが付いているとき</b>だけ
+                (<code>/setup-tickets</code> が発行したチケットには付いている)。選択肢の名前は大小文字と前後の空白を無視して
+                照合するので、<code>High</code> / <code>Medium</code> / <code>Low</code> でも通る。
+              </div>
             </li>
             <li>
               <b>URL を控える。</b>board を開いた状態でブラウザのアドレス欄をコピーする。次のどちらかの形になっている

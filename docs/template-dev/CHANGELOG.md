@@ -14,6 +14,45 @@
 
 ---
 
+## 2026-11-08
+
+- **[manual]** ⚠️ **`project-sync.sh` が open PR の多いリポジトリで Status を設定できなかったのを直しました。**
+  open PR の一覧を `jq --argjson` で渡していたため、**本文の合計が argv の上限(Linux は 1 引数 128KiB)を
+  超えると jq の起動ごと `Argument list too long` で落ちて**いました。open PR 10 本で 245KB に達した実例が
+  あります。さらに `decide_status` の `die` はコマンド置換の子シェルを終わらせるだけだったので、
+  **失敗しても気づかれず Status が空のまま board に載って**いました。`--slurpfile` でファイルから
+  読むようにし、呼び出し側で終了コードを見るようにしてあります。603KB の PR 一覧を使う検査を
+  `test-project-sync.sh` に足してあります。
+  - **すでに board に載せたあとでこの不具合を踏んだプロジェクトは、取り込み後に再投入してください。**
+    Status が空のまま載った item は、`backfill` を流し直せば正しい列に入ります(`addProjectV2ItemById`
+    は冪等なので重複しません)。Actions → Project Sync → `Run workflow`、または
+    `bash .claude/scripts/project-sync.sh backfill`
+
+---
+
+## 2026-11-06
+
+- **[manual]** ⚠️ **`/sync-template` が新規スクリプトの実行ビットを落としていたのを直しました。**
+  `sync-template.mjs` はファイルシステム上で `chmod 755` していましたが、**`core.fileMode=false`(Windows の
+  既定)の git はそれを見ず、新規ファイルを `100644` で index に記録します**。CI の `harness-integrity` が
+  見るのは index の mode なので、取り込んだ側が「hook スクリプトに実行権限がありません」で落ちていました。
+  同期時に `git update-index --add --chmod=+x` で index へ明示的に記録するようにし、
+  `core.fileMode=false` を再現するテストを `test-sync-template.sh` に足してあります。
+  - **すでに取り込み済みで CI が落ちているプロジェクトは、落ちているファイルの実行ビットを付け直してください。**
+    対象はエラーメッセージに出ます(典型例は `check-push-policy.sh` / `check-shell.sh` / `project-sync.sh` /
+    `route.sh` / `sync-agents-skills.sh` / `test-project-sync.sh` / `test-route.sh`):
+
+    ```bash
+    git update-index --chmod=+x .claude/scripts/*.sh .claude/hooks/*.sh && git commit -m "fix: スクリプトの実行ビットを付け直す"
+    ```
+
+    `lib-*.sh` は **source 専用で非実行が正**なので、上のコマンドを流したあとに
+    `git update-index --chmod=-x .claude/scripts/lib-*.sh` で戻してください。
+  - 今後の `/sync-template` では、実行ビットを記録したファイルが **staged の状態で**出てきます
+    (出力の `execBitStaged`)。差分は `git diff --cached` で見てください。`git reset` すると実行ビットごと落ちます
+
+---
+
 ## 2026-11-04 (2)
 
 - **[manual]** **GitHub Projects(v2)へのダッシュボード同期を足しました。** チケット Issue を board に載せ、
