@@ -224,6 +224,11 @@ flowchart TD
 
 **進行中のプロジェクトに後から入れてよい。** Status は Issue の現在の状態から毎回決め直すので、過去のイベントを再生する必要がない。手順 5 の手動実行で **`include_closed` にチェックを入れる**と closed のチケットも `Done` 列に載る(= `backfill --all`)。REST を全ページ辿るので 100 件を超えても全部入り、`addProjectV2ItemById` が冪等なので何度流し直しても重複しない。**すでに着手済みのチケットは `in-progress` ラベルが付いていなければ `Todo` に入る**(PR が開いていれば `In Review`)。テンプレートから作ったプロジェクトなら `/sync-template` でファイルが入る。
 
+後入れで詰まるのは次の 2 つ。どちらも `.claude/docs/project-sync-setup.html` に手順を書いてある。
+
+- **`ticket` / `in-progress` ラベルがそもそも無い**(既存プロジェクトをあとからハーネスへ移行した場合)。`backfill` は「`ticket` ラベルの Issue が無い」と言って**正常終了する**ので失敗に見えない。`gh label list` で確かめる
+- **`baseBranch` が `develop` のプロジェクト**では、取り込みの PR をマージしても既定ブランチ(`main`)にワークフローが無い。手動実行のボタンが出ないだけでなく、**`issues` イベントも動かない**(既定ブランチ側の定義で動くため)。リリースを出すか、`releasePrefixes` の接頭辞で `main` 向けに先行投入する
+
 確認とトラブルシュート: `bash .claude/scripts/project-sync.sh --check`(書き込まない。board の列名とスクリプトの対応を表示する)。
 
 ### ブランチ戦略(単一ソース = `.claude/branch-policy.json`)

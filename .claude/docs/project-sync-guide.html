@@ -1148,10 +1148,30 @@ project-sync.sh: ラベル: ticket=ticket / in-progress=in-progress</pre>
                 これを省くと open のチケットしか載らず、終わった分が <code>Done</code> 列に並ばない
               </li>
             </ol>
+            <div class="note warn">
+              <strong>1 件も載らないときは、まずラベルの有無を疑う。</strong>
+              <code>/setup-tickets</code> を通さずに育ったリポジトリ(既存プロジェクトをあとからテンプレートのハーネスへ
+              移行した場合など)には、<b><code>ticket</code> ラベルがそもそも存在しない</b>。
+              <code>backfill</code> は「<code>ticket</code> ラベルの Issue が無い」と言って正常終了するので、
+              <b>失敗に見えない</b>のがたちが悪い。確かめ方:
+              <div class="cmd">
+                <pre>gh label list --limit 50 | grep -E 'ticket|in-progress'</pre>
+              </div>
+              無ければ作って、board に載せたい Issue に付ける。<code>in-progress</code> も作らないと
+              <b><code>In Progress</code> 列が永久に空になる</b>(着手中でも <code>Todo</code> に入る)。
+              <div class="cmd">
+                <pre>gh label create ticket --color 0E8A16 --description "実装チケット"
+gh label create in-progress --color 1D76DB --description "着手中"
+for n in 12 34 56; do gh issue edit "$n" --add-label ticket; done</pre>
+              </div>
+              <b>ラベルを付けた時点で同期が走る</b>(<code>issues: labeled</code>)。手動実行を待たなくてよい。
+            </div>
             <div class="note">
-              <strong>載らないチケットがあるとき。</strong>拾う条件は <b><code>ticket</code> ラベルが付いていること</b>だけ。
-              テンプレート外のリポジトリで別のラベル名を使っているなら
-              <code>.claude/project-sync.json</code> の <code>ticketLabel</code> / <code>inProgressLabel</code> を書き換える。
+              <strong>一部だけ載らないとき。</strong>拾う条件は <b><code>ticket</code> ラベルが付いていること</b>だけ。
+              別のラベル名で運用しているなら
+              <code>.claude/project-sync.json</code> の <code>ticketLabel</code> / <code>inProgressLabel</code> を書き換える
+              (<b>指定できるのは 1 つだけ</b>なので、<code>bug</code> と <code>enhancement</code> のような
+              2 系統を同時には拾えない。<code>ticket</code> を足すほうが素直)。
               <b>すでに着手済みのチケットは、<code>in-progress</code> ラベルが付いていなければ <code>Todo</code> に入る</b>
               (PR が開いていれば <code>In Review</code> になる)。ラベルを足せば次の同期で動く。
             </div>

@@ -610,7 +610,26 @@
           <div class="note warn">
             <strong>取り込んだら既定ブランチ(ふつうは <code>main</code>)までマージしておく。</strong>
             GitHub は<b>既定ブランチにあるワークフローしか手動実行のボタンを出さない</b>。作業ブランチに置いたままだと、手順 6 で
-            <code>Run workflow</code> が見つからず詰まる。
+            <code>Run workflow</code> が見つからず詰まる。<b>手動実行だけの話ではない</b> —— <code>issues</code>
+            イベントも既定ブランチ側の定義で動くので、届くまでは board が丸ごと動かない
+            (<code>pull_request</code> だけは PR のブランチ側で動くため、PR 起因の実行だけが成功して見える)。
+          </div>
+          <div class="note warn">
+            <strong><code>develop</code> を使うリポジトリは、ここがリリースのタイミングになる。</strong>
+            <code>baseBranch</code> が <code>develop</code> のプロジェクトでは、取り込みの PR をマージしても
+            <b>既定ブランチ(<code>main</code>)にはまだ無い</b>。board を先に動かしたいなら、次のどちらかを選ぶ。
+            <ul>
+              <li><b><code>develop</code> → <code>main</code> のリリースを出す。</b>本筋。これで手動実行も <code>issues</code> も同時に効く</li>
+              <li>
+                <b>ワークフローとスクリプトだけ先に <code>main</code> へ入れる。</b>
+                <code>hotfix/</code> など <code>branch-policy.json</code> の <code>releasePrefixes</code> にある接頭辞で
+                <code>main</code> 向けの PR を出す。<b>マージ後は <code>main</code> を <code>develop</code> に戻す</b> ——
+                戻さないと次のリリースで巻き戻る
+              </li>
+            </ul>
+            リリースを待つあいだでも、<b>初回投入だけはローカルから流せる</b>(ボタンは要らない):
+            <code>PROJECT_SYNC_TOKEN</code> と <code>PROJECT_URL</code> を環境変数に置いて
+            <code>bash .claude/scripts/project-sync.sh backfill</code>。
           </div>
         </section>
 
@@ -884,12 +903,18 @@ project-sync.sh:   done → Done</pre>
                 <tr>
                   <td>Actions に <code>Run workflow</code> ボタンが無い</td>
                   <td>ワークフローが既定ブランチに入っていない</td>
-                  <td>手順 1 の変更を <code>main</code> までマージする</td>
+                  <td>
+                    手順 1 の変更を <code>main</code> までマージする。
+                    <code>develop</code> 運用なら手順 1 の警告を読む
+                  </td>
                 </tr>
                 <tr>
                   <td>実行はされたが board が空</td>
                   <td><code>ticket</code> ラベルの付いた Issue が無い</td>
-                  <td>Issues でラベルを確かめる。別のラベル名なら手順 5</td>
+                  <td>
+                    <code>gh label list | grep ticket</code>。
+                    <b>ラベル自体が無い</b>なら作って付ける。別のラベル名なら手順 5
+                  </td>
                 </tr>
                 <tr>
                   <td>終わったチケットが <code>Done</code> に無い</td>

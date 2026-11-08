@@ -1934,6 +1934,38 @@
             <code>/sync-template</code> でファイルが入る。
           </p>
           <p>
+            後入れで詰まるのは次の 2 つ。どちらも
+            <code>.claude/docs/project-sync-setup.html</code>
+            に手順を書いてある。
+          </p>
+          <ul>
+            <li>
+              <b
+                ><code>ticket</code> /
+                <code>in-progress</code> ラベルがそもそも無い</b
+              >(既存プロジェクトをあとからハーネスへ移行した場合)。<code
+                >backfill</code
+              >
+              は「<code>ticket</code> ラベルの Issue
+              が無い」と言って<b>正常終了する</b>ので失敗に見えない。<code
+                >gh label list</code
+              >
+              で確かめる
+            </li>
+            <li>
+              <b
+                ><code>baseBranch</code> が
+                <code>develop</code> のプロジェクト</b
+              >では、取り込みの PR
+              をマージしても既定ブランチ(<code>main</code>)にワークフローが無い。手動実行のボタンが出ないだけでなく、<b
+                ><code>issues</code> イベントも動かない</b
+              >(既定ブランチ側の定義で動くため)。リリースを出すか、<code
+                >releasePrefixes</code
+              >
+              の接頭辞で <code>main</code> 向けに先行投入する
+            </li>
+          </ul>
+          <p>
             確認とトラブルシュート:
             <code>bash .claude/scripts/project-sync.sh --check</code
             >(書き込まない。board の列名とスクリプトの対応を表示する)。
