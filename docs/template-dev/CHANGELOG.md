@@ -14,6 +14,22 @@
 
 ---
 
+## 2026-11-08
+
+- **[manual]** ⚠️ **`project-sync.sh` が open PR の多いリポジトリで Status を設定できなかったのを直しました。**
+  open PR の一覧を `jq --argjson` で渡していたため、**本文の合計が argv の上限(Linux は 1 引数 128KiB)を
+  超えると jq の起動ごと `Argument list too long` で落ちて**いました。open PR 10 本で 245KB に達した実例が
+  あります。さらに `decide_status` の `die` はコマンド置換の子シェルを終わらせるだけだったので、
+  **失敗しても気づかれず Status が空のまま board に載って**いました。`--slurpfile` でファイルから
+  読むようにし、呼び出し側で終了コードを見るようにしてあります。603KB の PR 一覧を使う検査を
+  `test-project-sync.sh` に足してあります。
+  - **すでに board に載せたあとでこの不具合を踏んだプロジェクトは、取り込み後に再投入してください。**
+    Status が空のまま載った item は、`backfill` を流し直せば正しい列に入ります(`addProjectV2ItemById`
+    は冪等なので重複しません)。Actions → Project Sync → `Run workflow`、または
+    `bash .claude/scripts/project-sync.sh backfill`
+
+---
+
 ## 2026-11-06
 
 - **[manual]** ⚠️ **`/sync-template` が新規スクリプトの実行ビットを落としていたのを直しました。**

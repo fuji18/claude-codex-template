@@ -154,13 +154,21 @@ status_candidates() { # $1=status キー → 候補の JSON 配列
 # --- Status の決定(ここだけは GitHub に触らない = フィクスチャで検証できる) ---
 # $1 = issue JSON のファイル / $2 = open PR 一覧 JSON のファイル(空文字なら PR なし扱い)
 decide_status() {
-  local issue_file="$1" prs_file="${2:-}" prs_arg='[]'
+  local issue_file="$1" prs_file="${2:-}" prs_norm
+  # PR 一覧は **--slurpfile でファイルから読む**。--argjson に渡すと argv に乗るため、
+  # open PR が増えて本文が長くなると jq の起動が "Argument list too long" で落ちる
+  # (open PR 10 本で 245KB に達した実例がある)。ここが落ちると Status が空のまま
+  # board に載るので、引数経由にはしない。
+  prs_norm="$(mktmp)"
   if [ -n "$prs_file" ] && [ -f "$prs_file" ]; then
-    prs_arg="$(jq -c 'if type == "array" then . else [] end' "$prs_file" 2>/dev/null)" ||
+    jq -c 'if type == "array" then . else [] end' "$prs_file" >"$prs_norm" 2>/dev/null ||
       die "PR 一覧の JSON を読めない: $prs_file"
+  else
+    printf '[]\n' >"$prs_norm"
   fi
-  jq -r --argjson prs "$prs_arg" --arg ipl "$INPROGRESS_LABEL" '
-    . as $i
+  jq -r --slurpfile prsw "$prs_norm" --arg ipl "$INPROGRESS_LABEL" '
+    (($prsw[0] // []) | if type == "array" then . else [] end) as $prs
+    | . as $i
     | ($i.number) as $n
     | if ($i.state // "open") == "closed" then "done"
       else
@@ -326,12 +334,15 @@ sync_issue() {
     return 0
   fi
 
+  # decide_status の die はコマンド置換の**子シェル**を終わらせるだけなので、
+  # ここで終了コードを見ないと Status が空のまま先へ進んでしまう(実際に起きた)。
   if [ "$(jq -r '.state // "open"' "$issue_file")" = closed ]; then
-    status="$(decide_status "$issue_file" '')"
+    status="$(decide_status "$issue_file" '')" || die "#$n の Status を決定できない"
   else
     ensure_prs
-    status="$(decide_status "$issue_file" "$PRS_CACHE")"
+    status="$(decide_status "$issue_file" "$PRS_CACHE")" || die "#$n の Status を決定できない"
   fi
+  [ -n "$status" ] || die "#$n の Status が空になった"
 
   resolve_project
 
