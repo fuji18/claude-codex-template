@@ -14,6 +14,30 @@
 
 ---
 
+## 2026-11-11
+
+- **[manual]** **`jq` が無い環境で、ガードが黙って消えていたのを警告するようにしました。**
+  devcontainer の外(ホストで開いたデスクトップアプリなど)では `jq` が無いことがあり、その場合
+  PreToolUse hook 3 本と `.husky/*` の git hook 層が**何も言わずに素通し**になっていました
+  (実測: `git push --force origin main` が `block-dangerous-cmds.sh` を通過)。
+  - SessionStart hook が、効いていない層の一覧と `jq` の入れ方を注入します(`jq` があれば何も出しません)
+  - `check-protected-branch.sh` / `check-push-policy.sh` は、検査を飛ばしたことを標準エラーに 1 行出します
+  - **フェイルオープン設計は変えていません。** `jq` が無くても commit / push / ツール呼び出しは止まりません
+  - **やること**: devcontainer の外でも作業するなら、その環境に `jq` を入れてください
+    (macOS: `brew install jq` / Debian 系: `sudo apt-get install -y jq` / Windows は下記)
+  - **Windows(Git Bash)は `jq` を入れるだけでは足りません。** Windows 版 `jq.exe` は出力の改行を
+    CRLF にするため、`jq -r` の値を比較している検査がエラーを出さずに外れます(実測: `baseBranch` が
+    `main\r` になり、`check-manifest-coverage.sh` が追跡ファイル 381 件中 380 件を未分類と誤判定)。
+    `winget install jqlang.jq` のあと、`-b`(`--binary`)付きで呼ぶラッパーを `~/bin/jq` に置いてください
+    (`~/bin` は Git Bash が PATH の先頭に入れます)。SessionStart hook は CRLF のままの `jq` も検知して警告します
+
+    ```sh
+    #!/bin/sh
+    exec "/c/Users/<ユーザー名>/AppData/Local/Microsoft/WinGet/Packages/jqlang.jq_Microsoft.Winget.Source_8wekyb3d8bbwe/jq.exe" -b "$@"
+    ```
+
+---
+
 ## 2026-11-08 (2)
 
 - **[auto]** **Projects 同期の手順書に、後入れで実際に詰まった 2 点を足しました。**
