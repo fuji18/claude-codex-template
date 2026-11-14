@@ -9,6 +9,7 @@
 #   5) ハーネスモード(.harness/mode)が normal 以外なら .claude/rules/mode/*.md を注入する
 #   7) リモートセッションのブランチがポリシー外なら remoteSessionPrefix 付きへ切り替える
 #   6) 未検収の Codex 委託(.harness/codex-runs/)を注入する
+#   8) jq が無い環境では、ガード hook が素通しになっていることを警告する
 set -uo pipefail
 
 INPUT="$(cat 2>/dev/null || true)"
@@ -27,6 +28,49 @@ if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] && [ -f package.json ] && [ ! -d node_
   else
     echo "⚠️ npm install に失敗した。検証コマンドの実行前に原因を確認すること"
   fi
+fi
+
+# --- jq が無い環境の検知(全 source) ---
+# ガードは入力 JSON とポリシーファイルの読み取りを jq に頼っており、無ければ何も言わずに
+# exit 0 する(フェイルオープン設計)。devcontainer の外(ホストで開いたデスクトップアプリ等)で
+# 起きやすく、実測では `git push --force origin main` が block-dangerous-cmds.sh を通った。
+# 止めはしないが、層が消えていることは必ず伝える。jq があるときは何も出さない。
+if ! command -v jq >/dev/null 2>&1; then
+  cat <<'EOF'
+# ⚠️ jq が無い: ガード hook が効いていない
+
+この環境には `jq` が無く、次の層が**すべて素通し**になっている(エラーは出ない):
+
+- 危険コマンドの検査(`block-dangerous-cmds.sh`)
+- ブランチ戦略の検査(`check-branch-policy.sh`)
+- 司令塔の実装禁止(`check-implementation-phase.sh`)
+- 保護ブランチへの直接コミット / push 先の検査(`.husky/*` の git hook 層)
+
+**`jq` が入るまで、hook が止めていた操作を自分で守ること**: 保護ブランチへの直接コミット、
+force push、`--base` 無しの `gh pr create`、実装フェーズ中の実装コードの直接編集をしない。
+
+**最初の応答でユーザーにこの状態を伝えること。** 入れ方(devcontainer の中で開けば不要):
+
+- Windows(Git Bash): `winget install jqlang.jq` のあと、`jq.exe -b` を呼ぶラッパーを `~/bin/jq` に置く
+  (素の `jq.exe` は出力が CRLF になり判定が狂う。手順は `docs/template-dev/CHANGELOG.md` の 2026-11-11)
+- macOS: `brew install jq`
+- Debian / Ubuntu: `sudo apt-get install -y jq`
+
+EOF
+elif jq -rn '"a"' 2>/dev/null | od -An -c | grep -q '\\r'; then
+  # Windows 版 jq.exe を Git Bash から素で呼ぶと、出力の改行が CRLF になる。
+  # `jq -r` の値を文字列比較している箇所(base の照合・source の判定・manifest の網羅検査)が
+  # エラーを出さずに外れるので、jq が「ある」のにガードが部分的に消える。
+  cat <<'EOF'
+# ⚠️ jq の出力が CRLF: ガードの判定が一部狂っている
+
+この環境の `jq` は改行を CRLF で出力している(Windows 版 `jq.exe` を Git Bash から直接呼んでいる)。
+`jq -r` の値を比較している検査が**エラーを出さずに外れる**(PR の base 照合、manifest の網羅検査など)。
+
+**最初の応答でユーザーにこの状態を伝えること。** 直し方: `jq.exe -b` を呼ぶラッパーを `~/bin/jq` に置く
+(手順は `docs/template-dev/CHANGELOG.md` の 2026-11-11)。devcontainer の中で開けば起きない。
+
+EOF
 fi
 
 # --- ハーネスの自壊検知: hook スクリプトの実行権限が落ちていないか ---

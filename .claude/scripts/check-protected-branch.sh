@@ -22,7 +22,12 @@ cd "$ROOT" || exit 0
 
 POLICY=".claude/branch-policy.json"
 [ -f "$POLICY" ] || exit 0
-command -v jq >/dev/null 2>&1 || exit 0
+# jq が無ければ判定できない。通しはするが、黙っては通さない
+# (層が無いことより、無くなったのに気づけない方が悪い)。
+if ! command -v jq >/dev/null 2>&1; then
+  echo "⚠️ check-protected-branch.sh: jq が無いため保護ブランチの検査を飛ばしました(直接コミットも止まりません)。jq を入れてください" >&2
+  exit 0
+fi
 
 # detached HEAD(rebase / bisect 中など)は空を返す → 判定しない。
 # なお merge / revert / cherry-pick 中は detached にならずブランチに留まるため、
